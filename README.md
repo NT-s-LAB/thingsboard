@@ -41,3 +41,12 @@ Collect and Visualize your IoT data in minutes by following this [guide](https:/
 ## Licenses
 
 This project is released under [Apache 2.0 License](./LICENSE).
+mvn -T 2C clean install -DskipTests
+yarn run build:prod
+
+
+
+java -jar .\thingsboard-4.3.0-SNAPSHOT-boot.jar --spring.datasource.url=jdbc:postgresql://localhost:5432/thingsboard --spring.datasource.username=postgres --spring.datasource.password=01041998@ --server.port=8080
+
+
+mvn spring-boot:run "-Dspring-boot.run.jvmArguments=-Dspring.datasource.username=postgres -Dspring.datasource.password=01041998@ -Dserver.port=9090"

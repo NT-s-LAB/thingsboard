@@ -1,0 +1,1313 @@
+# 📘 THINGSBOARD UI-NGX DOCUMENTATION
+
+> **Version:** 4.3.0  
+> **Framework:** Angular 18.2.13  
+> **Build Tool:** esbuild (via @angular-builders/custom-esbuild)  
+> **Package Manager:** Yarn 1.22.22
+
+---
+
+## 📋 MỤC LỤC
+
+1. [Kiến Trúc Tổng Quan](#-kiến-trúc-tổng-quan)
+2. [Cấu Trúc Thư Mục](#-cấu-trúc-thư-mục)
+3. [Công Nghệ & Dependencies](#-công-nghệ--dependencies)
+4. [Proxy Configuration](#-proxy-configuration)
+5. [Build & Development](#-build--development)
+6. [State Management (NgRx)](#-state-management-ngrx)
+7. [Module Architecture](#-module-architecture)
+8. [Features Chính](#-features-chính)
+9. [Environment Configuration](#-environment-configuration)
+10. [Scripts & Commands](#-scripts--commands)
+
+---
+
+## 🏗️ KIẾN TRÚC TỔNG QUAN
+
+ThingsBoard UI được xây dựng theo **Angular Module Architecture** với các đặc điểm sau:
+
+### **Tech Stack:**
+- **Angular 18.2.13** - Framework frontend hiện đại
+- **TypeScript 5.5.4** - Strong typing & modern JavaScript
+- **RxJS 7.8.1** - Reactive programming
+- **NgRx Store** - Redux pattern state management
+- **Material Design** - UI component library
+- **TailwindCSS 3.4.15** - Utility-first CSS framework
+
+### **Build System:**
+- **esbuild** - Ultra-fast bundler (thay thế Webpack)
+- **AOT Compilation** - Ahead-of-Time compilation
+- **Custom plugins** - Extended với ThingsBoard-specific plugins
+
+### **Architecture Pattern:**
+```
+┌─────────────────────────────────────────┐
+│         Angular Application             │
+├─────────────────────────────────────────┤
+│  ┌──────────┐  ┌──────────┐  ┌────────┐│
+│  │  Core    │  │  Shared  │  │ Modules││
+│  │ Module   │  │  Module  │  │         ││
+│  └──────────┘  └──────────┘  └────────┘│
+├─────────────────────────────────────────┤
+│          NgRx State Management          │
+├─────────────────────────────────────────┤
+│     WebSocket + HTTP Communication      │
+├─────────────────────────────────────────┤
+│         ThingsBoard Backend API         │
+│      (REST API + WebSocket Server)      │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## 📁 CẤU TRÚC THƯ MỤC
+
+```
+ui-ngx/
+│
+├── src/
+│   ├── app/
+│   │   │
+│   │   ├── core/                      # 🔧 Core Module - Services & State
+│   │   │   ├── api/                  # Entity data subscriptions
+│   │   │   │   ├── entity-data.service.ts
+│   │   │   │   ├── alarm-data.service.ts
+│   │   │   │   └── widget-subscription.ts
+│   │   │   │
+│   │   │   ├── auth/                 # Authentication & Authorization
+│   │   │   │   ├── auth.models.ts
+│   │   │   │   ├── auth.reducer.ts
+│   │   │   │   └── auth.effects.ts
+│   │   │   │
+│   │   │   ├── guards/               # Route protection
+│   │   │   ├── http/                 # HTTP client services
+│   │   │   ├── interceptors/         # HTTP interceptors
+│   │   │   │   ├── global-http-interceptor.ts
+│   │   │   │   └── load.reducer.ts
+│   │   │   │
+│   │   │   ├── services/             # Core services
+│   │   │   │   ├── dialog.service.ts
+│   │   │   │   ├── menu.service.ts
+│   │   │   │   ├── utils.service.ts
+│   │   │   │   └── window.service.ts
+│   │   │   │
+│   │   │   ├── ws/                   # WebSocket communication
+│   │   │   ├── translate/            # i18n services
+│   │   │   ├── settings/             # User settings
+│   │   │   └── core.state.ts         # NgRx root state
+│   │   │
+│   │   ├── modules/                   # 📦 Feature Modules
+│   │   │   │
+│   │   │   ├── home/                 # Main application shell
+│   │   │   │   ├── home.component.ts
+│   │   │   │   ├── home-routing.module.ts
+│   │   │   │   └── menu/             # Navigation menu
+│   │   │   │       ├── side-menu.component.ts
+│   │   │   │       ├── menu-link.component.ts
+│   │   │   │       └── menu-toggle.component.ts
+│   │   │   │
+│   │   │   ├── login/                # Authentication UI
+│   │   │   │
+│   │   │   ├── dashboard/            # Dashboard system
+│   │   │   │   ├── dashboard-pages.module.ts
+│   │   │   │   └── dashboard-routing.module.ts
+│   │   │   │
+│   │   │   └── common/               # Common shared modules
+│   │   │
+│   │   ├── shared/                    # 🔄 Shared Components & Services
+│   │   │   │
+│   │   │   ├── components/           # 100+ reusable components
+│   │   │   │   ├── entity/           # Entity selectors/autocomplete
+│   │   │   │   ├── table/            # Data tables
+│   │   │   │   ├── dialog/           # Dialog components
+│   │   │   │   ├── color-picker/     # Color input
+│   │   │   │   ├── image/            # Image upload/display
+│   │   │   │   ├── button/           # Custom buttons
+│   │   │   │   ├── grid/             # Grid layouts
+│   │   │   │   ├── notification/     # Notifications
+│   │   │   │   ├── time/             # Date/time pickers
+│   │   │   │   ├── relation/         # Entity relations
+│   │   │   │   ├── rule-chain/       # Rule chain components
+│   │   │   │   ├── queue/            # Queue management
+│   │   │   │   ├── vc/               # Version control
+│   │   │   │   └── ...               # Many more
+│   │   │   │
+│   │   │   ├── models/               # TypeScript models
+│   │   │   │   ├── ace/              # Code editor configs
+│   │   │   │   └── ...
+│   │   │   │
+│   │   │   ├── directives/           # Custom directives
+│   │   │   ├── pipe/                 # Custom pipes
+│   │   │   ├── services/             # Shared services
+│   │   │   └── shared.module.ts
+│   │   │
+│   │   ├── app.component.ts          # Root component
+│   │   ├── app.module.ts             # Root module
+│   │   └── app-routing.module.ts     # Root routing
+│   │
+│   ├── environments/                  # 🌍 Environment configs
+│   │   ├── environment.ts            # Development
+│   │   └── environment.prod.ts       # Production
+│   │
+│   ├── assets/                        # 🖼️ Static assets
+│   │   ├── help/                     # Help documentation
+│   │   ├── svg/                      # SVG icons
+│   │   └── ...
+│   │
+│   ├── theme/                         # 🎨 Material Design theme
+│   │   ├── theme.scss
+│   │   └── theme-overwrites.scss
+│   │
+│   ├── scss/                          # Global SCSS
+│   ├── styles.scss                    # Global styles
+│   ├── index.html                     # HTML entry point
+│   ├── main.ts                        # TypeScript entry point
+│   └── polyfills.ts                   # Browser polyfills
+│
+├── esbuild/                           # Custom esbuild plugins
+│   └── tb-esbuild-plugins.ts
+│
+├── patches/                           # Package patches (patch-package)
+│
+├── .angular/                          # Angular cache
+├── node_modules/                      # Dependencies
+├── target/                            # Build output
+│
+├── angular.json                       # Angular CLI configuration
+├── package.json                       # NPM dependencies & scripts
+├── tsconfig.json                      # TypeScript configuration
+├── tailwind.config.js                 # TailwindCSS configuration
+├── proxy.conf.js                      # Dev server proxy config
+├── eslint.config.mjs                  # ESLint configuration
+└── yarn.lock                          # Yarn lock file
+```
+
+---
+
+## 🚀 CÔNG NGHỆ & DEPENDENCIES
+
+### **Core Framework**
+```json
+"@angular/core": "18.2.13"
+"@angular/material": "18.2.14"
+"@angular/cdk": "18.2.14"
+"typescript": "5.5.4"
+"rxjs": "7.8.1"
+```
+
+### **State Management**
+```json
+"@ngrx/store": "18.1.1"          // Redux pattern
+"@ngrx/effects": "18.1.1"        // Side effects
+"@ngrx/store-devtools": "18.1.1" // Redux DevTools
+```
+
+### **UI/UX Libraries**
+```json
+"@angular/material": "18.2.14"           // Material Design
+"tailwindcss": "3.4.15"                  // Utility CSS
+"angular-gridster2": "18.0.1"            // Drag-drop grid
+"@iplab/ngx-color-picker": "18.0.1"      // Color picker
+"ngx-daterangepicker-material": "6.0.4"  // Date range picker
+"angular2-hotkeys": "16.0.1"             // Keyboard shortcuts
+"screenfull": "6.0.2"                    // Fullscreen API
+```
+
+### **Data Visualization**
+```json
+"echarts": "5.5.1-TB"              // Charts (ThingsBoard fork)
+"flot": "custom"                   // Legacy charts
+"canvas-gauges": "2.1.7"           // Gauges/meters
+"raphael": "2.3.0"                 // Vector graphics
+```
+
+### **Maps & Geospatial**
+```json
+"leaflet": "1.9.4"                              // Map library
+"leaflet.markercluster": "1.5.3"                // Marker clustering
+"leaflet.gridlayer.googlemutant": "0.15.0"      // Google Maps
+"leaflet-polylinedecorator": "1.6.0"            // Path decorations
+"leaflet-providers": "2.0.0"                    // Map tile providers
+"@geoman-io/leaflet-geoman-free": "2.18.3"      // Drawing tools
+"maplibre-gl": "5.2.0"                          // Modern map rendering
+```
+
+### **Code Editors**
+```json
+"ace-builds": "1.36.5"              // Code editor (JS, JSON, HTML, etc.)
+"ace-diff": "3.0.3"                 // Diff viewer
+"tinymce": "6.8.5"                  // Rich text editor
+"@tinymce/tinymce-angular": "8.0.1" // TinyMCE for Angular
+```
+
+### **Flow Charts & Diagrams**
+```json
+"ngx-flowchart": "custom"           // Rule engine visual editor
+"@svgdotjs/svg.js": "3.2.4"        // SVG manipulation
+```
+
+### **Utilities**
+```json
+"dayjs": "1.11.13"                        // Date/time manipulation
+"moment": "2.30.1"                        // Legacy date handling
+"moment-timezone": "0.5.45"               // Timezone support
+"marked": "12.0.2"                        // Markdown parser
+"ngx-markdown": "18.1.0"                  // Markdown for Angular
+"jquery": "3.7.1"                         // DOM manipulation
+"jquery.terminal": "2.44.1"               // Terminal emulator
+"qrcode": "1.5.4"                         // QR code generator
+"libphonenumber-js": "1.11.15"            // Phone number validation
+"tinycolor2": "1.6.0"                     // Color manipulation
+"js-beautify": "1.15.1"                   // Code formatting
+"jszip": "3.10.1"                         // ZIP file handling
+"html2canvas": "1.4.1"                    // Screenshot capture
+"clipboard": "via ngx-clipboard"          // Clipboard operations
+"split.js": "1.6.5"                       // Split panes
+```
+
+### **i18n & l10n**
+```json
+"@ngx-translate/core": "15.0.0"                          // Translation
+"ngx-translate-messageformat-compiler": "7.0.0"          // ICU format
+"@messageformat/core": "3.4.0"                           // Message formatting
+```
+
+### **File Upload**
+```json
+"@flowjs/flow.js": "2.14.1"         // Chunked file upload
+"@flowjs/ngx-flow": "18.0.1"        // Flow.js for Angular
+```
+
+### **Development Tools**
+```json
+"@angular-builders/custom-esbuild": "18.0.0"  // Custom esbuild builder
+"@angular/cli": "18.2.12"                     // Angular CLI
+"eslint": "9.17.0"                            // Linting
+"typescript-eslint": "8.18.1"                 // TS linting
+"autoprefixer": "10.4.20"                     // CSS autoprefixer
+"patch-package": "8.0.0"                      // Patch node_modules
+```
+
+---
+
+## 🌐 PROXY CONFIGURATION
+
+**File:** `proxy.conf.js`
+
+```javascript
+const forwardUrl = "http://192.168.1.31:8080";      // ⚠️ Backend REST API
+const wsForwardUrl = "ws://192.168.1.31:8080";      // ⚠️ Backend WebSocket
+
+const PROXY_CONFIG = {
+  "/api": {                    // REST API endpoints
+    "target": forwardUrl,
+    "secure": true,
+    "changeOrigin": true
+  },
+  "/api/ws": {                 // WebSocket connection
+    "target": wsForwardUrl,
+    "ws": true,
+    "secure": true,
+    "changeOrigin": true
+  },
+  "/static/rulenode": {        // Rule node UI resources
+    "target": forwardUrl,
+    "secure": true,
+    "changeOrigin": true
+  },
+  "/static/widgets": {         // Widget bundle resources
+    "target": forwardUrl,
+    "secure": true,
+    "changeOrigin": true
+  },
+  "/oauth2": {                 // OAuth2 authentication
+    "target": forwardUrl,
+    "secure": true,
+    "changeOrigin": true
+  },
+  "/login/oauth2": {           // OAuth2 login
+    "target": forwardUrl,
+    "secure": true,
+    "changeOrigin": true
+  }
+};
+```
+
+### **⚙️ Cách Cấu Hình Proxy:**
+
+**Cho Local Development (Backend chạy localhost:9090):**
+```javascript
+const forwardUrl = "http://localhost:9090";
+const wsForwardUrl = "ws://localhost:9090";
+```
+
+**Cho Remote Server:**
+```javascript
+const forwardUrl = "http://192.168.1.31:8080";
+const wsForwardUrl = "ws://192.168.1.31:8080";
+```
+
+---
+
+## 🔨 BUILD & DEVELOPMENT
+
+### **Development Server**
+
+```bash
+# Start dev server
+yarn start
+
+# Hoặc manual
+node --max_old_space_size=8048 ./node_modules/@angular/cli/bin/ng serve \
+  --configuration development \
+  --host 0.0.0.0 \
+  --open \
+  --proxy-config proxy.conf.js
+```
+
+**Result:**
+- Server: `http://localhost:4200`
+- Hot reload: ✅ Enabled
+- Proxy: Theo `proxy.conf.js`
+- Auto open browser: ✅
+
+### **Production Build**
+
+```bash
+# Build for production
+yarn build:prod
+
+# Hoặc manual
+node --max_old_space_size=4096 ./node_modules/@angular/cli/bin/ng build \
+  --configuration production
+```
+
+**Output:**
+- Directory: `target/generated-resources/public/`
+- Optimizations:
+  - AOT compilation
+  - Tree shaking
+  - Minification
+  - Bundle optimization
+
+### **Build Configuration (angular.json)**
+
+```json
+{
+  "builder": "@angular-builders/custom-esbuild:application",
+  "options": {
+    "plugins": ["./esbuild/tb-esbuild-plugins.ts"],
+    "loader": {
+      ".raw": "text"
+    },
+    "outputPath": {
+      "base": "target/generated-resources/public",
+      "media": ".",
+      "browser": ""
+    }
+  }
+}
+```
+
+---
+
+## 🗂️ STATE MANAGEMENT (NgRx)
+
+### **Root State Structure**
+
+```typescript
+// File: src/app/core/core.state.ts
+
+export interface AppState {
+  load: LoadState;               // Loading indicators
+  auth: AuthState;               // Authentication & user session
+  settings: SettingsState;       // User preferences
+  notification: NotificationState; // Notifications
+}
+```
+
+### **1. Auth State**
+
+```typescript
+export interface AuthState {
+  isAuthenticated: boolean;      // Login status
+  isUserLoaded: boolean;         // User data loaded
+  authUser: AuthUser;            // Current user
+  userDetails: User;             // User details
+  allowedDashboardIds: string[]; // Authorized dashboards
+  forceFullscreen: boolean;      // Fullscreen mode
+  // ...
+}
+```
+
+**Actions:**
+- `login()` - User login
+- `logout()` - User logout
+- `updateAuthUser()` - Update user data
+- `loadUser()` - Load user details
+
+**Effects:** `AuthEffects` - Handle async auth operations
+
+### **2. Settings State**
+
+```typescript
+export interface SettingsState {
+  userSettings: UserSettings;    // User-specific settings
+  // Language, timezone, notifications, etc.
+}
+```
+
+**Effects:** `SettingsEffects` - Persist settings to backend
+
+### **3. Load State**
+
+```typescript
+export interface LoadState {
+  isLoading: boolean;            // Global loading indicator
+}
+```
+
+**Reducer:** `loadReducer` - Update from HTTP interceptor
+
+### **4. Notification State**
+
+```typescript
+export interface NotificationState {
+  totalUnreadCount: number;      // Unread notifications
+  notifications: Notification[]; // Notification list
+  // ...
+}
+```
+
+**Effects:** `NotificationEffects` - WebSocket notification updates
+
+### **Meta Reducers**
+
+```typescript
+export const metaReducers: MetaReducer<AppState>[] = [
+  initStateFromLocalStorage,     // Restore state on app load
+  debug,                          // Dev mode logging (non-prod)
+  storeFreeze                     // Prevent state mutations (non-prod)
+];
+```
+
+### **DevTools**
+
+```typescript
+// Enabled in development
+StoreDevtoolsModule.instrument({
+  maxAge: 25,                     // Keep last 25 states
+  logOnly: env.production         // Log-only in production
+})
+```
+
+---
+
+## 🧩 MODULE ARCHITECTURE
+
+### **1. CoreModule** (`@core/`)
+
+**Responsibilities:**
+- Application-wide singleton services
+- State management setup
+- HTTP interceptors
+- Authentication/Authorization
+- WebSocket communication
+- Translation (i18n)
+
+**Key Services:**
+```typescript
+// API Services
+EntityDataService         // Entity subscriptions
+AlarmDataService          // Alarm monitoring
+WidgetSubscription        // Widget data binding
+
+// Core Services
+DialogService             // Modal dialogs
+MenuService               // Navigation menu
+UtilsService              // Utilities
+WindowService             // Window operations
+BroadcastService          // Event broadcasting
+
+// Auth
+AuthService               // Authentication
+AuthGuard                 // Route protection
+```
+
+**HTTP Interceptors:**
+```typescript
+GlobalHttpInterceptor     // Error handling
+EntityConflictInterceptor // Entity conflicts
+LoadInterceptor           // Loading state
+```
+
+### **2. SharedModule** (`@shared/`)
+
+**Responsibilities:**
+- Reusable UI components
+- Custom directives
+- Custom pipes
+- Shared models
+- Helper services
+
+**Component Categories:**
+
+**Entity Management:**
+- Entity autocomplete
+- Entity table
+- Entity select
+- Relation components
+- Attribute components
+
+**Data Input:**
+- Color picker
+- Date/time pickers
+- Image upload
+- File upload
+- JSON editor
+- Code editor (Ace)
+- Markdown editor
+
+**Data Display:**
+- Tables (with sorting, filtering, pagination)
+- Breadcrumbs
+- Tooltips
+- Popovers
+- Badges
+
+**Layout:**
+- Grid components
+- Split panes
+- Dialogs
+- Panels
+- Toolbars
+
+**Forms:**
+- Form validation
+- Custom validators
+- Complex form controls
+
+### **3. HomeModule** (`@home/`)
+
+**Responsibilities:**
+- Main application shell
+- Navigation sidebar
+- Top toolbar
+- User menu
+- Notification bell
+
+**Components:**
+```typescript
+HomeComponent             // Main container
+SideMenuComponent         // Navigation menu
+MenuLinkComponent         // Menu link item
+MenuToggleComponent       // Expandable menu
+NotificationBell          // Notification icon
+UserMenuComponent         // User dropdown
+```
+
+### **4. DashboardModule** (`@modules/dashboard/`)
+
+**Responsibilities:**
+- Dashboard rendering
+- Widget system
+- Grid layout (gridster2)
+- Dashboard states
+- Time-series data
+
+**Features:**
+- Drag-and-drop widgets
+- Responsive layouts
+- Widget configuration
+- Dashboard export/import
+- Public dashboards
+
+### **5. LoginModule** (`@modules/login/`)
+
+**Responsibilities:**
+- Login page
+- OAuth2 flows
+- Password reset
+- User activation
+
+---
+
+## 🎯 FEATURES CHÍNH
+
+### **1. Dashboard System**
+
+**Grid Layout:**
+- Drag-and-drop positioning
+- Responsive breakpoints
+- Mobile-friendly layouts
+- Widget resize
+
+**Widget Types:**
+- Time-series charts
+- Latest values
+- Cards
+- Control widgets
+- Maps
+- Custom HTML/JavaScript
+
+**Real-time Updates:**
+- WebSocket data streaming
+- Auto-refresh intervals
+- Live telemetry
+
+### **2. Entity Management**
+
+**Entity Types:**
+- Devices
+- Assets
+- Customers
+- Users
+- Rule Chains
+- Dashboards
+
+**Features:**
+- CRUD operations
+- Bulk operations
+- Import/Export
+- Entity groups
+- Relations
+- Attributes (server/shared/client)
+- Telemetry data
+
+### **3. Rule Engine**
+
+**Visual Editor:**
+- Node-based flow chart
+- Drag-and-drop nodes
+- Connection routing
+- Node configuration
+
+**Node Types:**
+- Filter nodes
+- Enrichment nodes
+- Transformation nodes
+- Action nodes
+- External nodes
+
+**Debugging:**
+- Test rule chains
+- View node output
+- Error tracking
+
+### **4. Data Visualization**
+
+**Charts (ECharts):**
+- Line charts
+- Bar charts
+- Pie charts
+- Scatter plots
+- Heatmaps
+- Custom configurations
+
+**Maps:**
+- Device tracking
+- Route visualization
+- Geofencing
+- Marker clustering
+- Custom map providers
+
+**Gauges:**
+- Analog gauges
+- Digital displays
+- LED indicators
+
+### **5. Alarms**
+
+**Features:**
+- Alarm rules
+- Severity levels
+- Alarm lifecycle
+- Notifications
+- Alarm dashboard
+
+### **6. Multi-tenancy**
+
+**Hierarchy:**
+```
+System Admin
+  └─ Tenant
+      └─ Customer
+          └─ User
+```
+
+**Permissions:**
+- Role-based access control
+- Resource permissions
+- Dashboard sharing
+
+### **7. White-labeling**
+
+**Customization:**
+- App title
+- Logo
+- Color scheme
+- Custom CSS
+- Email templates
+
+---
+
+## 🌍 ENVIRONMENT CONFIGURATION
+
+### **Development** (`environment.ts`)
+
+```typescript
+export const environment = {
+  appTitle: 'Eitek Iot',         // Custom app title
+  production: false,
+  tbVersion: TB_VERSION,          // Injected at build time
+  supportedLangs: SUPPORTED_LANGS, // From backend
+  defaultLang: 'en_US'
+};
+```
+
+### **Production** (`environment.prod.ts`)
+
+```typescript
+export const environment = {
+  appTitle: 'Eitek Iot',
+  production: true,
+  tbVersion: TB_VERSION,
+  supportedLangs: SUPPORTED_LANGS,
+  defaultLang: 'en_US'
+};
+```
+
+### **Build-time Variables**
+
+Injected trong `angular.json`:
+```json
+"fileReplacements": [
+  {
+    "replace": "src/environments/environment.ts",
+    "with": "src/environments/environment.prod.ts"
+  }
+]
+```
+
+---
+
+## 📜 SCRIPTS & COMMANDS
+
+### **Package.json Scripts**
+
+```json
+{
+  "scripts": {
+    "ng": "ng",
+    "start": "node --max_old_space_size=8048 ./node_modules/@angular/cli/bin/ng serve --configuration development --host 0.0.0.0 --open --proxy-config proxy.conf.js",
+    "build": "ng build",
+    "build:prod": "node --max_old_space_size=4096 ./node_modules/@angular/cli/bin/ng build --configuration production",
+    "build:types": "node generate-types.js",
+    "build:icon-metadata": "node generate-icon-metadata.js",
+    "lint": "ng lint",
+    "prepare": "patch-package"
+  }
+}
+```
+
+### **Common Commands**
+
+#### **Development:**
+```bash
+# Install dependencies
+yarn install
+
+# Start dev server
+yarn start
+
+# Build for development
+yarn build
+
+# Lint code
+yarn lint
+```
+
+#### **Production:**
+```bash
+# Build optimized production bundle
+yarn build:prod
+
+# Output: target/generated-resources/public/
+```
+
+#### **Code Generation:**
+```bash
+# Generate TypeScript types
+yarn build:types
+
+# Generate icon metadata
+yarn build:icon-metadata
+```
+
+#### **Maintenance:**
+```bash
+# Apply package patches
+yarn prepare
+
+# Update dependencies
+yarn upgrade-interactive
+```
+
+---
+
+## 🔌 API COMMUNICATION
+
+### **HTTP Services**
+
+**Base URL:** Configured via proxy (`/api`)
+
+**Example Service:**
+```typescript
+@Injectable()
+export class DeviceService {
+  constructor(private http: HttpClient) {}
+
+  getDevices(pageLink: PageLink): Observable<PageData<Device>> {
+    return this.http.get<PageData<Device>>('/api/devices', {
+      params: pageLink.toQuery()
+    });
+  }
+
+  saveDevice(device: Device): Observable<Device> {
+    return this.http.post<Device>('/api/device', device);
+  }
+}
+```
+
+### **WebSocket Communication**
+
+**Connection:** `/api/ws`
+
+**Message Format:**
+```typescript
+{
+  cmdId: number,
+  data: {
+    keys: string[],        // Telemetry keys
+    tsSubCmds: [...],      // Time-series subscriptions
+    historyCmds: [...],    // Historical data
+    attrSubCmds: [...]     // Attribute subscriptions
+  }
+}
+```
+
+**Subscriptions:**
+- Entity data
+- Alarms
+- Notifications
+- Audit logs
+
+---
+
+## 🎨 THEMING
+
+### **Material Design Theme**
+
+**Files:**
+- `src/theme/theme.scss` - Main theme
+- `src/theme/theme-overwrites.scss` - Component overrides
+- `src/styles.scss` - Global styles
+
+**Custom Palette:**
+```scss
+$tb-primary: mat-palette($mat-indigo);
+$tb-accent: mat-palette($mat-orange);
+$tb-warn: mat-palette($mat-red);
+```
+
+### **TailwindCSS**
+
+**Config:** `tailwind.config.js`
+
+```javascript
+module.exports = {
+  content: [
+    "./src/**/*.{html,ts}",
+  ],
+  theme: {
+    extend: {
+      // Custom colors, spacing, etc.
+    },
+  },
+  plugins: [],
+}
+```
+
+---
+
+## 🔍 DEBUGGING
+
+### **Dev Tools**
+
+**Redux DevTools:**
+```typescript
+// Install Chrome extension: Redux DevTools
+// Auto-enabled in development mode
+```
+
+**Angular DevTools:**
+```bash
+# Install Chrome extension: Angular DevTools
+# Inspect component tree, change detection
+```
+
+### **Console Logging**
+
+**Debug Meta-reducer:**
+```typescript
+// Logs all actions & state changes in dev mode
+// File: src/app/core/meta-reducers/debug.reducer.ts
+```
+
+### **Network Inspection**
+
+**Proxy Logs:**
+```bash
+# Enable verbose proxy logging
+ng serve --proxy-config proxy.conf.js --verbose
+```
+
+---
+
+## 📊 PERFORMANCE
+
+### **Optimization Strategies**
+
+**1. Lazy Loading:**
+```typescript
+// Routes lazy load modules
+const routes: Routes = [
+  {
+    path: 'admin',
+    loadChildren: () => import('./admin/admin.module')
+      .then(m => m.AdminModule)
+  }
+];
+```
+
+**2. OnPush Change Detection:**
+```typescript
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+```
+
+**3. Track By Functions:**
+```html
+<div *ngFor="let item of items; trackBy: trackById">
+```
+
+**4. Virtual Scrolling:**
+```html
+<cdk-virtual-scroll-viewport>
+  <!-- Large lists -->
+</cdk-virtual-scroll-viewport>
+```
+
+**5. AOT Compilation:**
+- Enabled by default in production
+- Faster rendering
+- Smaller bundle size
+
+---
+
+## 🧪 TESTING (Future Enhancement)
+
+**Framework Support:**
+```json
+"@angular/cli": "18.2.12"    // Includes Karma + Jasmine
+```
+
+**Commands:**
+```bash
+# Unit tests
+ng test
+
+# E2E tests
+ng e2e
+```
+
+---
+
+## 📝 BEST PRACTICES
+
+### **Code Style**
+
+**ESLint Config:** `eslint.config.mjs`
+```javascript
+// Extends:
+- @angular-eslint/recommended
+- eslint:recommended
+- plugin:@typescript-eslint/recommended
+```
+
+**TypeScript Strict Mode:**
+```json
+{
+  "strict": true,
+  "noImplicitAny": true,
+  "strictNullChecks": true
+}
+```
+
+### **Component Guidelines**
+
+**1. Single Responsibility:**
+```typescript
+// ✅ Good
+@Component({...})
+export class DeviceListComponent {}
+
+@Component({...})
+export class DeviceDetailsComponent {}
+
+// ❌ Bad
+@Component({...})
+export class DeviceComponent {} // Does everything
+```
+
+**2. Smart vs Dumb Components:**
+```typescript
+// Smart (Container)
+@Component({
+  template: '<app-device-list [devices]="devices$ | async">'
+})
+export class DevicePageComponent {
+  devices$ = this.store.select(selectDevices);
+}
+
+// Dumb (Presentational)
+@Component({...})
+export class DeviceListComponent {
+  @Input() devices: Device[];
+  @Output() deviceClick = new EventEmitter();
+}
+```
+
+**3. Use RxJS Operators:**
+```typescript
+// ✅ Good
+this.http.get('/api/devices').pipe(
+  map(response => response.data),
+  catchError(error => of([])),
+  shareReplay(1)
+);
+
+// ❌ Bad
+this.http.get('/api/devices').subscribe(...)
+```
+
+### **State Management**
+
+**1. Immutable Updates:**
+```typescript
+// ✅ Good
+case UPDATE_DEVICE:
+  return {
+    ...state,
+    devices: state.devices.map(d =>
+      d.id === action.device.id ? action.device : d
+    )
+  };
+
+// ❌ Bad
+case UPDATE_DEVICE:
+  state.devices[index] = action.device;
+  return state;
+```
+
+**2. Selector Composition:**
+```typescript
+export const selectDeviceState = (state: AppState) => state.devices;
+export const selectAllDevices = createSelector(
+  selectDeviceState,
+  state => state.entities
+);
+export const selectActiveDevices = createSelector(
+  selectAllDevices,
+  devices => devices.filter(d => d.active)
+);
+```
+
+---
+
+## 🚀 DEPLOYMENT
+
+### **Build Steps**
+
+```bash
+# 1. Install dependencies
+yarn install
+
+# 2. Build production bundle
+yarn build:prod
+
+# 3. Output location
+# target/generated-resources/public/
+
+# 4. Deploy static files to web server
+# - Nginx
+# - Apache
+# - CDN
+```
+
+### **Integration với Backend**
+
+**Spring Boot Integration:**
+```xml
+<!-- Backend pom.xml -->
+<plugin>
+  <artifactId>maven-resources-plugin</artifactId>
+  <executions>
+    <execution>
+      <id>copy-ui</id>
+      <phase>prepare-package</phase>
+      <goals>
+        <goal>copy-resources</goal>
+      </goals>
+      <configuration>
+        <outputDirectory>
+          ${project.build.directory}/classes/public
+        </outputDirectory>
+        <resources>
+          <resource>
+            <directory>
+              ${project.basedir}/../ui-ngx/target/generated-resources/public
+            </directory>
+          </resource>
+        </resources>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>
+```
+
+**Result:** UI được bundle vào JAR file của backend
+
+---
+
+## 🔐 SECURITY
+
+### **Authentication**
+
+**JWT Token:**
+```typescript
+// Stored in localStorage
+localStorage.setItem('jwt_token', token);
+
+// Attached to requests via interceptor
+@Injectable()
+export class AuthInterceptor implements HttpInterceptor {
+  intercept(req: HttpRequest<any>, next: HttpHandler) {
+    const token = localStorage.getItem('jwt_token');
+    if (token) {
+      req = req.clone({
+        setHeaders: { Authorization: `Bearer ${token}` }
+      });
+    }
+    return next.handle(req);
+  }
+}
+```
+
+### **Route Guards**
+
+```typescript
+@Injectable()
+export class AuthGuard implements CanActivate {
+  canActivate(route: ActivatedRouteSnapshot): boolean {
+    const requiredAuth = route.data.auth;
+    const userAuthority = this.store.selectSnapshot(selectUserAuthority);
+    
+    return userAuthority.includes(requiredAuth);
+  }
+}
+```
+
+### **XSS Protection**
+
+- Angular sanitizes HTML by default
+- Use `DomSanitizer` carefully
+- Avoid `innerHTML` with user input
+
+### **CSRF Protection**
+
+- Backend handles CSRF tokens
+- Frontend includes token in headers
+
+---
+
+## 📚 LEARNING RESOURCES
+
+### **Official Docs**
+- Angular: https://angular.io/docs
+- NgRx: https://ngrx.io/docs
+- Material: https://material.angular.io
+- RxJS: https://rxjs.dev
+
+### **ThingsBoard Docs**
+- API: https://thingsboard.io/docs/reference/rest-api
+- Widgets: https://thingsboard.io/docs/user-guide/ui/widget-library
+- Rule Engine: https://thingsboard.io/docs/user-guide/rule-engine-2-0/overview
+
+---
+
+## 🛠️ TROUBLESHOOTING
+
+### **Common Issues**
+
+**1. Proxy errors:**
+```bash
+# Check backend is running
+curl http://localhost:9090/api/auth/user
+
+# Verify proxy.conf.js points to correct URL
+```
+
+**2. Build errors:**
+```bash
+# Clear cache
+rm -rf .angular node_modules
+yarn install
+
+# Increase memory
+export NODE_OPTIONS="--max-old-space-size=8192"
+yarn build:prod
+```
+
+**3. WebSocket connection fails:**
+```javascript
+// Check proxy supports WebSocket upgrade
+"/api/ws": {
+  "ws": true,  // ← Must be true
+  "target": wsForwardUrl
+}
+```
+
+**4. Module not found:**
+```bash
+# Check path aliases in tsconfig.json
+"paths": {
+  "@app/*": ["src/app/*"],
+  "@core/*": ["src/app/core/*"]
+}
+```
+
+---
+
+## 📞 CONTACT & SUPPORT
+
+**Project:** ThingsBoard IoT Platform  
+**Version:** 4.3.0-SNAPSHOT  
+**License:** Apache 2.0  
+**Website:** https://thingsboard.io
+
+---
+
+**Last Updated:** February 26, 2026  
+**Maintained by:** Eitek Development Team
