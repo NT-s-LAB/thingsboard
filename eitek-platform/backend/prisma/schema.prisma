@@ -1,0 +1,437 @@
+// EITEK Platform - Prisma Schema
+// Single consistent schema for the entire application
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================
+// ENUMS
+// ================================
+
+enum UserRole {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  PROJECT_MANAGER
+  OPERATOR
+  VIEWER
+}
+
+enum DeviceStatus {
+  ACTIVE
+  INACTIVE
+  OFFLINE
+  ERROR
+  MAINTENANCE
+}
+
+enum WidgetType {
+  GAUGE
+  CHART
+  TABLE
+  MAP
+  BUTTON
+  INPUT
+  DISPLAY
+  ALARM
+  IMAGE
+  CUSTOM
+}
+
+enum FileType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  ARCHIVE
+  WIDGET
+  TEMPLATE
+  SYMBOL
+  SCRIPT
+  OTHER
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  IMPORT
+  SYNC
+}
+
+// ================================
+// AUTHENTICATION & AUTHORIZATION
+// ================================
+
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String   @unique
+  description String?
+  settings    Json?
+  isActive    Boolean  @default(true)
+  tbTenantId  String?
+  tbSettings  Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users     User[]
+  projects  Project[]
+  auditLogs AuditLog[]
+
+  @@map("tenants")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  username  String?   @unique
+  firstName String
+  lastName  String
+  password  String
+  avatar    String?
+  phone     String?
+  role      UserRole  @default(VIEWER)
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
+  tbUserId  String?
+  tbToken   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenantId     String
+  tenant       Tenant              @relation(fields: [tenantId], references: [id])
+  userRoles    UserRoleMapping[]
+  userProjects UserProject[]
+  fileUploads  File[]              @relation("FileUploader")
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String              @id @default(uuid())
+  name        String              @unique
+  description String?
+  permissions Json
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  userRoles   UserRoleMapping[]
+
+  @@map("roles")
+}
+
+model UserRoleMapping {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// ================================
+// ORGANIZATIONAL HIERARCHY
+// ================================
+
+model Project {
+  id           String        @id @default(uuid())
+  name         String
+  description  String?
+  settings     Json?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  sites        Site[]
+  userProjects UserProject[]
+  auditLogs    AuditLog[]
+
+  @@unique([tenantId, name])
+  @@map("projects")
+}
+
+model UserProject {
+  userId    String
+  projectId String
+  role      String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+  @@map("user_projects")
+}
+
+model Site {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  address     String?
+  coordinates Json?
+  metadata    Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  areas       Area[]
+
+  @@unique([projectId, name])
+  @@map("sites")
+}
+
+model Area {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  metadata    Json?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  siteId      String
+  site        Site        @relation(fields: [siteId], references: [id])
+  devices     Device[]
+  scadaViews  ScadaView[]
+
+  @@unique([siteId, name])
+  @@map("areas")
+}
+
+// ================================
+// DEVICE MANAGEMENT
+// ================================
+
+model DeviceType {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  description     String?
+  category        String
+  metadata        Json?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  devices         Device[]
+  deviceTemplates DeviceTemplate[]
+
+  @@map("device_types")
+}
+
+model Device {
+  id           String       @id @default(uuid())
+  name         String
+  description  String?
+  tbDeviceId   String       @unique
+  tbEntityId   String?
+  serialNumber String?
+  model        String?
+  firmware     String?
+  metadata     Json?
+  isActive     Boolean      @default(true)
+  isOnline     Boolean      @default(false)
+  lastSeen     DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  areaId       String
+  deviceTypeId String
+  area         Area         @relation(fields: [areaId], references: [id])
+  deviceType   DeviceType   @relation(fields: [deviceTypeId], references: [id])
+  deviceState  DeviceState?
+  auditLogs    AuditLog[]
+
+  @@unique([areaId, name])
+  @@map("devices")
+}
+
+model DeviceTemplate {
+  id           String     @id @default(uuid())
+  name         String
+  description  String?
+  template     Json
+  preview      String?
+  version      String     @default("1.0.0")
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deviceTypeId String
+  deviceType   DeviceType @relation(fields: [deviceTypeId], references: [id])
+
+  @@unique([deviceTypeId, name])
+  @@map("device_templates")
+}
+
+model DeviceState {
+  id            String   @id @default(uuid())
+  telemetryData Json?
+  attributes    Json?
+  alarms        Json?
+  lastUpdate    DateTime @default(now())
+  deviceId      String   @unique
+  device        Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@map("device_states")
+}
+
+// ================================
+// SCADA SYSTEM
+// ================================
+
+model ScadaView {
+  id           String        @id @default(uuid())
+  name         String
+  description  String?
+  layout       Json
+  background   String?
+  canvasSize   Json
+  settings     Json?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  areaId       String
+  area         Area          @relation(fields: [areaId], references: [id])
+  scadaWidgets ScadaWidget[]
+
+  @@unique([areaId, name])
+  @@map("scada_views")
+}
+
+model ScadaWidget {
+  id          String    @id @default(uuid())
+  position    Json
+  properties  Json
+  bindings    Json
+  styles      Json?
+  isVisible   Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  scadaViewId String
+  widgetId    String
+  scadaView   ScadaView @relation(fields: [scadaViewId], references: [id], onDelete: Cascade)
+  widget      Widget    @relation(fields: [widgetId], references: [id])
+
+  @@map("scada_widgets")
+}
+
+// ================================
+// WIDGET SYSTEM
+// ================================
+
+model WidgetCategory {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  icon        String?
+  order       Int     @default(0)
+  isActive    Boolean @default(true)
+  widgets     Widget[]
+
+  @@map("widget_categories")
+}
+
+model Widget {
+  id           String          @id @default(uuid())
+  name         String          @unique
+  description  String?
+  type         String
+  config       Json
+  template     Json
+  preview      String?
+  version      String          @default("1.0.0")
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  categoryId   String?
+  symbolId     String?
+  category     WidgetCategory? @relation(fields: [categoryId], references: [id])
+  symbol       Symbol?         @relation(fields: [symbolId], references: [id])
+  scadaWidgets ScadaWidget[]
+
+  @@map("widgets")
+}
+
+model Symbol {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  svg         String
+  metadata    Json?
+  tags        String[]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  widgets     Widget[]
+
+  @@map("symbols")
+}
+
+model WidgetTemplate {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  template    Json
+  preview     String?
+  tags        String[]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("widget_templates")
+}
+
+// ================================
+// FILE MANAGEMENT
+// ================================
+
+model File {
+  id           String   @id @default(uuid())
+  filename     String
+  originalName String
+  mimetype     String
+  size         Int
+  type         FileType
+  path         String
+  url          String?
+  metadata     Json?
+  isPublic     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  uploadedBy   String
+  uploader     User     @relation("FileUploader", fields: [uploadedBy], references: [id])
+
+  @@map("files")
+}
+
+// ================================
+// AUDIT & LOGGING
+// ================================
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  action    AuditAction
+  entity    String
+  entityId  String
+  oldData   Json?
+  newData   Json?
+  metadata  Json?
+  timestamp DateTime    @default(now())
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id])
+  tenantId  String
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
+  projectId String?
+  project   Project?    @relation(fields: [projectId], references: [id])
+  deviceId  String?
+  device    Device?     @relation(fields: [deviceId], references: [id])
+
+  @@map("audit_logs")
+}
