@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { DeviceFilters } from '@/features/devices/components/DeviceFilters';
 import { DeviceToolbar } from '@/features/devices/components/DeviceToolbar';
 import { DeviceCard } from '@/features/devices/components/DeviceCard';
@@ -11,6 +11,7 @@ import { DeleteDeviceModal } from '@/features/devices/components/DeleteDeviceMod
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { Button } from '@/shared/components/ui/Button';
 import { useDeviceStore } from '@/features/devices/stores/deviceStore';
+import { useDevicesListRealtime } from '@/features/devices/hooks/useDeviceRealtime';
 
 const DevicesPage: React.FC = () => {
   const {
@@ -45,9 +46,32 @@ const DevicesPage: React.FC = () => {
     openRpcModal,
   } = useDeviceStore();
 
+  const updateDeviceRealtimeStatus = useDeviceStore(s => s.updateDeviceRealtimeStatus);
+
   useEffect(() => {
     fetchDevices();
   }, [fetchDevices]);
+
+  // Real-time device status updates via WebSocket
+  const { connected: wsConnected } = useDevicesListRealtime({
+    onStatus: useCallback((event) => {
+      updateDeviceRealtimeStatus(
+        event.deviceId,
+        event.status.isOnline,
+        event.status.lastSeen,
+      );
+    }, [updateDeviceRealtimeStatus]),
+  });
+
+  // Auto-refresh device status every 30 seconds (silent, no loading spinner)
+  const fetchRef = useRef(fetchDevices);
+  fetchRef.current = fetchDevices;
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchRef.current();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleExport = () => {
     // TODO: Implement export functionality
@@ -83,7 +107,15 @@ const DevicesPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Devices</h1>
+          <div className="flex items-center space-x-3">
+            <h1 className="text-2xl font-bold text-gray-900">Devices</h1>
+            {wsConnected && (
+              <span className="flex items-center space-x-1 text-xs text-green-600">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span>Live</span>
+              </span>
+            )}
+          </div>
           <p className="text-gray-600">
             Manage and monitor your IoT devices
           </p>

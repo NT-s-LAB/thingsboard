@@ -16,17 +16,194 @@ const VARIANT_COLORS: Record<string, string> = {
   primary: '#3B82F6', secondary: '#6B7280', success: '#22C55E', warning: '#F59E0B', danger: '#EF4444',
 };
 
+/* ────── Resolve binding value from realtimeData ────── */
+function resolveBindingValue(
+  widget: Widget,
+  realtimeData: Record<string, any>,
+  key?: string,
+): any {
+  for (const b of widget.dataBindings ?? []) {
+    if (b.type === 'static') return b.staticValue ?? b.defaultValue;
+    if (
+      (b.type === 'telemetry' || b.type === 'attribute') &&
+      b.entityId &&
+      (b.telemetryKey || b.attributeKey)
+    ) {
+      const deviceData = realtimeData[b.entityId];
+      if (!deviceData) continue;
+      const bKey = b.telemetryKey || b.attributeKey;
+      if (key && bKey !== key) continue;
+      if (bKey && deviceData[bKey] !== undefined) return deviceData[bKey];
+    }
+  }
+  return undefined;
+}
+
+/* ────── Resolve + format binding value with decimals/unit/prefix/suffix ────── */
+function resolveFormattedValue(
+  widget: Widget,
+  realtimeData: Record<string, any>,
+): string | undefined {
+  for (const b of widget.dataBindings ?? []) {
+    let raw: any;
+
+    if (b.type === 'static') {
+      raw = b.staticValue ?? b.defaultValue;
+    } else if (
+      (b.type === 'telemetry' || b.type === 'attribute') &&
+      b.entityId &&
+      (b.telemetryKey || b.attributeKey)
+    ) {
+      const deviceData = realtimeData[b.entityId];
+      if (!deviceData) continue;
+      const bKey = b.telemetryKey || b.attributeKey;
+      if (bKey && deviceData[bKey] !== undefined) {
+        raw = deviceData[bKey];
+      } else {
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    if (raw === undefined || raw === null) {
+      return b.defaultValue != null ? String(b.defaultValue) : undefined;
+    }
+
+    // Apply format from binding
+    const fmt = b.format;
+    const num = Number(raw);
+    let display = isNaN(num) ? String(raw) : num.toFixed(fmt?.decimals ?? 2);
+    const prefix = fmt?.prefix || '';
+    const suffix = fmt?.suffix || '';
+    const unit = fmt?.unit ? ` ${fmt.unit}` : '';
+    return `${prefix}${display}${suffix}${unit}`;
+  }
+  return undefined;
+}
+
 export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
 
   const {
-    currentDashboard, editorState, isRuntimeMode,
+    currentDashboard, editorState, isRuntimeMode, realtimeData,
     selectWidget, selectWidgets, clearSelection,
     moveWidget, resizeWidget, setViewport,
+    deleteWidget, duplicateWidget,
+    copyWidgets, cutWidgets, pasteWidgets,
+    undo, redo,
   } = useScadaStore();
 
   const [selectedShapes, setSelectedShapes] = useState<string[]>([]);
+
+  /* ── Keyboard shortcuts ── */
+  useEffect(() => {
+    if (isRuntimeMode) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore shortcuts when typing in inputs
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
+
+      const ids = editorState?.selection?.selectedWidgetIds ?? [];
+      const ctrl = e.ctrlKey || e.metaKey;
+
+      switch (e.key) {
+        case 'Delete':
+        case 'Backspace': {
+          if (ids.length > 0) {
+            e.preventDefault();
+            ids.forEach((id) => deleteWidget(id));
+          }
+          break;
+        }
+        case 'c':
+          if (ctrl && ids.length > 0) { e.preventDefault(); copyWidgets(ids); }
+          break;
+        case 'x':
+          if (ctrl && ids.length > 0) { e.preventDefault(); cutWidgets(ids); }
+          break;
+        case 'v':
+          if (ctrl) { e.preventDefault(); pasteWidgets(); }
+          break;
+        case 'd':
+          if (ctrl && ids.length > 0) {
+            e.preventDefault();
+            ids.forEach((id) => duplicateWidget(id));
+          }
+          break;
+        case 'z':
+          if (ctrl && e.shiftKey) { e.preventDefault(); redo(); }
+          else if (ctrl) { e.preventDefault(); undo(); }
+          break;
+        case 'y':
+          if (ctrl) { e.preventDefault(); redo(); }
+          break;
+        case 'a':
+          if (ctrl) {
+            e.preventDefault();
+            const widgets: Widget[] = (currentDashboard as any)?.widgets ?? [];
+            selectWidgets(widgets.map((w) => w.id));
+          }
+          break;
+        case 'Escape':
+          clearSelection();
+          break;
+        case 'ArrowUp': {
+          if (ids.length > 0) {
+            e.preventDefault();
+            const step = e.shiftKey ? 10 : 1;
+            const widgets: Widget[] = (currentDashboard as any)?.widgets ?? [];
+            ids.forEach((id) => {
+              const w = widgets.find((w) => w.id === id);
+              if (w) moveWidget(id, { x: w.transform.position.x, y: w.transform.position.y - step });
+            });
+          }
+          break;
+        }
+        case 'ArrowDown': {
+          if (ids.length > 0) {
+            e.preventDefault();
+            const step = e.shiftKey ? 10 : 1;
+            const widgets: Widget[] = (currentDashboard as any)?.widgets ?? [];
+            ids.forEach((id) => {
+              const w = widgets.find((w) => w.id === id);
+              if (w) moveWidget(id, { x: w.transform.position.x, y: w.transform.position.y + step });
+            });
+          }
+          break;
+        }
+        case 'ArrowLeft': {
+          if (ids.length > 0) {
+            e.preventDefault();
+            const step = e.shiftKey ? 10 : 1;
+            const widgets: Widget[] = (currentDashboard as any)?.widgets ?? [];
+            ids.forEach((id) => {
+              const w = widgets.find((w) => w.id === id);
+              if (w) moveWidget(id, { x: w.transform.position.x - step, y: w.transform.position.y });
+            });
+          }
+          break;
+        }
+        case 'ArrowRight': {
+          if (ids.length > 0) {
+            e.preventDefault();
+            const step = e.shiftKey ? 10 : 1;
+            const widgets: Widget[] = (currentDashboard as any)?.widgets ?? [];
+            ids.forEach((id) => {
+              const w = widgets.find((w) => w.id === id);
+              if (w) moveWidget(id, { x: w.transform.position.x + step, y: w.transform.position.y });
+            });
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isRuntimeMode, editorState?.selection?.selectedWidgetIds, currentDashboard, clearSelection, deleteWidget, duplicateWidget, copyWidgets, cutWidgets, pasteWidgets, undo, redo, moveWidget, selectWidgets]);
 
   /* ── Viewport / zoom / pan ── */
   useEffect(() => {
@@ -155,13 +332,30 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
       }
 
       /* ── Text ── */
-      case 'text':
+      case 'text': {
+        let displayText = p.text || 'Text';
+        if (isRuntimeMode && (w.dataBindings?.length ?? 0) > 0) {
+          // If telemetryPattern is set, replace ${key} placeholders
+          if (p.telemetryPattern) {
+            displayText = p.telemetryPattern.replace(/\$\{(\w+)\}/g, (_: string, key: string) => {
+              const val = resolveBindingValue(w, realtimeData, key);
+              if (val === undefined || val === null) return '---';
+              const num = Number(val);
+              return isNaN(num) ? String(val) : num.toFixed(p.decimals ?? 2);
+            });
+          } else {
+            // Use formatted binding value directly
+            const formatted = resolveFormattedValue(w, realtimeData);
+            if (formatted !== undefined) displayText = formatted;
+          }
+        }
         return (
           <Group key={w.id} {...cp}>
             {s.backgroundColor && <Rect width={W} height={H} fill={s.backgroundColor} cornerRadius={s.borderRadius || 0} />}
-            <Text text={p.text || 'Text'} fontSize={s.fontSize || 14} fontFamily={s.fontFamily || 'Arial'} fontStyle={`${s.fontWeight === 'bold' ? 'bold ' : ''}${s.fontStyle === 'italic' ? 'italic' : ''}`} fill={s.textColor || '#1F2937'} align={s.textAlign || 'left'} verticalAlign="middle" width={W} height={H} wrap={p.wordWrap ? 'word' : 'none'} />
+            <Text text={displayText} fontSize={s.fontSize || 14} fontFamily={s.fontFamily || 'Arial'} fontStyle={`${s.fontWeight === 'bold' ? 'bold ' : ''}${s.fontStyle === 'italic' ? 'italic' : ''}`} fill={s.textColor || '#1F2937'} align={s.textAlign || 'left'} verticalAlign="middle" width={W} height={H} wrap={p.wordWrap ? 'word' : 'none'} />
           </Group>
         );
+      }
 
       /* ── Shape ── */
       case 'shape': {
@@ -189,7 +383,8 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
       case 'gauge': {
         const cx = W / 2, cy = H / 2;
         const r = Math.min(W, H) / 2 - 8;
-        const val = p.value ?? 0;
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const val = rtVal !== undefined ? Number(rtVal) : (p.value ?? 0);
         const min = p.min ?? 0, max = p.max ?? 100;
         const pct = Math.max(0, Math.min(1, (val - min) / (max - min || 1)));
         const angle = -135 + pct * 270;
@@ -221,7 +416,8 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
 
       /* ── Switch ── */
       case 'switch': {
-        const isOn = true; // In runtime, this would come from telemetry
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const isOn = rtVal !== undefined ? Boolean(rtVal) && rtVal !== '0' && rtVal !== 'false' : true;
         const trackW = W, trackH = H;
         const knobR = Math.min(trackH / 2 - 2, trackW / 4);
         const bg = isOn ? (p.onColor || '#22C55E') : (p.offColor || '#9CA3AF');
@@ -236,7 +432,8 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
 
       /* ── Slider ── */
       case 'slider': {
-        const min = p.min ?? 0, max = p.max ?? 100, val = p.value ?? 50;
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const min = p.min ?? 0, max = p.max ?? 100, val = rtVal !== undefined ? Number(rtVal) : (p.value ?? 50);
         const pct = (val - min) / (max - min || 1);
         const trackY = H / 2;
         const thumbX = 6 + pct * (W - 12);
@@ -257,7 +454,8 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
 
       /* ── LED ── */
       case 'led': {
-        const isOn = true;
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const isOn = rtVal !== undefined ? Boolean(rtVal) && rtVal !== '0' && rtVal !== 'false' : true;
         const color = isOn ? (p.onColor || '#22C55E') : (p.offColor || '#6B7280');
         const r = Math.min(W, H) / 2 - 2;
         const cx = W / 2, cy = (p.label ? H / 2 - 6 : H / 2);
@@ -282,23 +480,70 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
 
       /* ── Value Display ── */
       case 'valueDisplay': {
-        const val = p.value ?? '0';
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const rawVal = rtVal !== undefined ? rtVal : (p.value ?? '0');
         const dec = p.decimals ?? 2;
-        const displayVal = isNaN(Number(val)) ? val : Number(val).toFixed(dec);
+        const displayVal = isNaN(Number(rawVal)) ? String(rawVal) : Number(rawVal).toFixed(dec);
+        const numVal = Number(rawVal);
+
+        // Threshold color
+        let thresholdColor: string | null = null;
+        if (p.thresholds && Array.isArray(p.thresholds) && !isNaN(numVal)) {
+          const sorted = [...p.thresholds].sort((a: any, b: any) => b.value - a.value);
+          for (const t of sorted) {
+            if (numVal >= t.value) { thresholdColor = t.color; break; }
+          }
+        }
+
+        const valueColor = thresholdColor || s.textColor || '#1F2937';
+        const hasIcon = !!p.icon;
+        const iconSize = Math.max(14, H * 0.28);
+        const labelY = 6;
+        const labelH = 14;
+        const valueY = labelH + 6;
+        const valueH = H - valueY - (p.showTrend ? 16 : 4);
+
         return (
           <Group key={w.id} {...cp}>
-            <Rect width={W} height={H} fill={s.backgroundColor || '#F9FAFB'} stroke={s.borderColor || '#E5E7EB'} strokeWidth={s.borderWidth || 1} cornerRadius={s.borderRadius || 6} />
-            {/* Label */}
-            <Text text={p.label || 'Value'} fontSize={10} fontFamily={s.fontFamily || 'Arial'} fill="#6B7280" align="center" width={W} y={6} />
-            {/* Value */}
-            <Text text={`${p.prefix || ''}${displayVal}${p.suffix || ''}${p.unit ? ' ' + p.unit : ''}`} fontSize={s.fontSize || Math.max(16, H * 0.35)} fontFamily={s.fontFamily || 'Arial'} fontStyle="bold" fill={s.textColor || '#1F2937'} align="center" verticalAlign="middle" width={W} y={H * 0.25} height={H * 0.55} />
+            <Rect width={W} height={H} fill={s.backgroundColor || '#F9FAFB'} stroke={s.borderColor || '#E5E7EB'} strokeWidth={s.borderWidth || 1} cornerRadius={s.borderRadius || 8} shadowBlur={isRuntimeMode ? 4 : 0} shadowColor="rgba(0,0,0,0.06)" />
+            {/* Label row */}
+            <Text text={p.label || 'Value'} fontSize={10} fontFamily={s.fontFamily || 'Arial'} fill="#6B7280" align="center" width={W} y={labelY} />
+            {/* Icon + Value */}
+            {hasIcon && (
+              <Text text={p.icon} fontSize={iconSize} align="center" width={W} y={valueY} height={valueH} verticalAlign="middle" />
+            )}
+            <Text
+              text={`${p.prefix || ''}${displayVal}${p.suffix || ''}${p.unit ? ' ' + p.unit : ''}`}
+              fontSize={s.fontSize || Math.max(16, H * 0.32)}
+              fontFamily={s.fontFamily || 'Arial'}
+              fontStyle="bold"
+              fill={valueColor}
+              align="center"
+              verticalAlign="middle"
+              x={hasIcon ? iconSize : 0}
+              y={valueY}
+              width={hasIcon ? W - iconSize : W}
+              height={valueH}
+            />
+            {/* Trend arrow */}
+            {p.showTrend && (
+              <Text
+                text={numVal > 0 ? '▲' : numVal < 0 ? '▼' : '●'}
+                fontSize={10}
+                fill={numVal > 0 ? (p.trendUpColor || '#22C55E') : numVal < 0 ? (p.trendDownColor || '#EF4444') : '#9CA3AF'}
+                align="center"
+                width={W}
+                y={H - 16}
+              />
+            )}
           </Group>
         );
       }
 
       /* ── Valve ── */
       case 'valve': {
-        const isOpen = true;
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const isOpen = rtVal !== undefined ? Boolean(rtVal) && rtVal !== '0' && rtVal !== 'false' && rtVal !== 'CLOSED' : true;
         const color = isOpen ? (p.openColor || '#22C55E') : (p.closedColor || '#EF4444');
         const cx = W / 2, cy = H / 2;
         const half = Math.min(W, H) / 2 - 4;
@@ -322,7 +567,8 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
 
       /* ── Tank ── */
       case 'tank': {
-        const level = 65; // In runtime: from telemetry
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const level = rtVal !== undefined ? Number(rtVal) : 65;
         const min = p.minLevel ?? 0, max = p.maxLevel ?? 100;
         const pct = Math.max(0, Math.min(1, (level - min) / (max - min || 1)));
         const tankPad = 3;
@@ -358,7 +604,8 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
 
       /* ── Motor ── */
       case 'motor': {
-        const isRunning = true;
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const isRunning = rtVal !== undefined ? Boolean(rtVal) && rtVal !== '0' && rtVal !== 'false' && rtVal !== 'STOPPED' : true;
         const color = isRunning ? (p.runningColor || '#22C55E') : (p.stoppedColor || '#6B7280');
         const cx = W / 2, cy = H / 2;
         const r = Math.min(W, H) / 2 - 4;
@@ -412,7 +659,8 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
 
       /* ── Pump ── */
       case 'pump': {
-        const isRunning = true;
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const isRunning = rtVal !== undefined ? Boolean(rtVal) && rtVal !== '0' && rtVal !== 'false' && rtVal !== 'STOPPED' : true;
         const color = isRunning ? (p.runningColor || '#22C55E') : (p.stoppedColor || '#6B7280');
         const cx = W / 2, cy = H / 2;
         const r = Math.min(W, H) / 2 - 6;
@@ -434,7 +682,9 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
       /* ── Indicator ── */
       case 'indicator': {
         const states = p.states || [{ value: 0, label: 'Off', color: '#6B7280' }];
-        const currentState = states[0] || { label: 'Unknown', color: '#6B7280' };
+        const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
+        const stateVal = rtVal !== undefined ? rtVal : 0;
+        const currentState = states.find((st: any) => String(st.value) === String(stateVal)) || states[0] || { label: 'Unknown', color: '#6B7280' };
         const cx = W / 2, cy = H / 2;
         if (p.indicatorType === 'traffic-light') {
           const lightR = Math.min(W / 2 - 4, H / 8);

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/shared/components/ui/Button';
 import { deviceService } from '../../services/deviceService';
+import { useDeviceRealtime } from '../../hooks/useDeviceRealtime';
 
 type AttributeScope = 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE';
 
@@ -54,6 +55,18 @@ export const DeviceAttributesTab: React.FC<DeviceAttributesTabProps> = ({ device
   useEffect(() => {
     fetchAttributes();
   }, [fetchAttributes]);
+
+  // Real-time attribute updates via WebSocket
+  const { connected: wsConnected } = useDeviceRealtime({
+    deviceId,
+    onTelemetry: useCallback(() => {
+      // Re-fetch SERVER_SCOPE attributes when telemetry changes
+      // (device activity updates SERVER_SCOPE attrs like 'active', 'lastActivityTime')
+      if (activeScope === 'SERVER_SCOPE') {
+        fetchAttributes();
+      }
+    }, [activeScope, fetchAttributes]),
+  });
 
   const handleAddAttribute = async () => {
     if (!newKey.trim()) return;
@@ -108,6 +121,12 @@ export const DeviceAttributesTab: React.FC<DeviceAttributesTabProps> = ({ device
           </button>
         ))}
         <div className="flex-1" />
+        {wsConnected && (
+          <span className="flex items-center space-x-1 text-xs text-green-600 mr-2">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span>Live</span>
+          </span>
+        )}
         <Button variant="outline" size="sm" onClick={fetchAttributes}>
           Refresh
         </Button>

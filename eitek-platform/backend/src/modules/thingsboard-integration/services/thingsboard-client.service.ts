@@ -158,6 +158,25 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
     );
   }
 
+  async assignDeviceToCustomer(deviceId: string, customerId: string): Promise<TbDevice> {
+    return this.tbRequest<TbDevice>('assignDeviceToCustomer', () =>
+      this.httpService.post(
+        `${this.baseUrl}/api/customer/${customerId}/device/${deviceId}`,
+        {},
+        { headers: this.getHeaders() },
+      ),
+    );
+  }
+
+  async unassignDeviceFromCustomer(deviceId: string): Promise<TbDevice> {
+    return this.tbRequest<TbDevice>('unassignDeviceFromCustomer', () =>
+      this.httpService.delete(
+        `${this.baseUrl}/api/customer/device/${deviceId}`,
+        { headers: this.getHeaders() },
+      ),
+    );
+  }
+
   async getDevices(pageSize = 100, page = 0): Promise<TbDevice[]> {
     const result = await this.tbRequest<any>('getDevices', () =>
       this.httpService.get(

@@ -7,6 +7,7 @@ import { PropertyPanel } from '@/features/scada/components/PropertyPanel';
 import { Button } from '@/shared/components/ui/Button';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { useScadaStore } from '@/features/scada/stores/scadaStore';
+import { useScadaRuntime } from '@/features/scada/hooks/useScadaRuntime';
 
 interface ScadaEditorPageProps {
   params: {
@@ -31,7 +32,12 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
   } = useScadaStore();
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Activate runtime telemetry subscriptions
+  useScadaRuntime();
 
   const updateCanvasSize = useCallback(() => {
     if (canvasContainerRef.current) {
@@ -72,6 +78,25 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
     console.log('Save dashboard');
   };
 
+  const handleToggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      fullscreenContainerRef.current?.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    }
+  }, []);
+
+  // Sync fullscreen state when user presses Escape to exit
+  useEffect(() => {
+    const onFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -111,9 +136,9 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-100 overflow-hidden">
+    <div ref={fullscreenContainerRef} className="h-full flex flex-col bg-gray-100 overflow-hidden">
       {/* Top Toolbar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between">
+      <div className={`bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between ${isFullscreen && isRuntimeMode ? 'hidden' : ''}`}>
         <div className="flex items-center space-x-4">
           <h1 className="text-lg font-semibold text-gray-900 truncate">
             {currentDashboard.name}
@@ -139,6 +164,9 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
         <div className="flex items-center space-x-2">
           <Button size="sm" variant="outline" onClick={handleSave}>
             💾 Save
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleToggleFullscreen} title="Fullscreen (F11)">
+            {isFullscreen ? '⊡ Exit Fullscreen' : '⛶ Fullscreen'}
           </Button>
           
           <div className="flex items-center bg-gray-100 rounded p-1">
@@ -173,7 +201,7 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Widget Palette */}
-        {(editorState?.leftPanelWidth ?? 0) > 0 && (
+        {(editorState?.leftPanelWidth ?? 0) > 0 && !(isFullscreen && isRuntimeMode) && (
           <div 
             className="bg-white border-r border-gray-200 flex-shrink-0"
             style={{ width: editorState?.leftPanelWidth ?? 300 }}
@@ -192,7 +220,7 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
           </div>
 
           {/* Bottom Panel - Properties/Logs */}
-          {(editorState?.bottomPanelHeight ?? 0) > 0 && (
+          {(editorState?.bottomPanelHeight ?? 0) > 0 && !(isFullscreen && isRuntimeMode) && (
             <div 
               className="bg-white border-t border-gray-200 flex-shrink-0"
               style={{ height: editorState?.bottomPanelHeight ?? 200 }}
@@ -216,7 +244,7 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
         </div>
 
         {/* Right Panel - Properties */}
-        {(editorState?.rightPanelWidth ?? 0) > 0 && (
+        {(editorState?.rightPanelWidth ?? 0) > 0 && !(isFullscreen && isRuntimeMode) && (
           <div 
             className="bg-white border-l border-gray-200 flex-shrink-0 overflow-y-auto overflow-x-hidden"
             style={{ width: editorState?.rightPanelWidth ?? 300 }}
@@ -226,14 +254,29 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
         )}
       </div>
 
+      {/* Fullscreen exit floating button */}
+      {isFullscreen && (
+        <button
+          onClick={handleToggleFullscreen}
+          className="fixed top-3 right-3 z-50 bg-black/60 hover:bg-black/80 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg backdrop-blur transition-colors"
+        >
+          ✕ Exit Fullscreen
+        </button>
+      )}
+
       {/* Status Bar */}
-      <div className="bg-gray-50 border-t border-gray-200 px-4 py-1 text-xs text-gray-600 flex items-center justify-between">
+      <div className={`bg-gray-50 border-t border-gray-200 px-4 py-1 text-xs text-gray-600 flex items-center justify-between ${isFullscreen && isRuntimeMode ? 'hidden' : ''}`}>
         <div className="flex items-center space-x-4">
           <span>Mode: {editorState?.mode ?? 'design'}</span>
           <span>Zoom: {Math.round((editorState?.viewport?.zoom ?? 1) * 100)}%</span>
           <span>Widgets: {(currentDashboard.widgets ?? (currentDashboard as any).scadaWidgets ?? []).length}</span>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
+          <span className="text-gray-400">Del: Delete</span>
+          <span className="text-gray-400">Ctrl+C/X/V: Copy/Cut/Paste</span>
+          <span className="text-gray-400">Ctrl+Z/Y: Undo/Redo</span>
+          <span className="text-gray-400">Arrows: Move</span>
+          <span className="mx-2 text-gray-300">|</span>
           <span>Grid: {editorState?.showGrid ? 'ON' : 'OFF'}</span>
           <span>Snap: {editorState?.snapToGrid ? 'ON' : 'OFF'}</span>
         </div>

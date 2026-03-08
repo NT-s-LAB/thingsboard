@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Section, Field, inputCls, selectCls, numCls, checkCls, btnSmCls } from '../PropertyPanel';
 import type { Widget, DataBinding, DataBindingType, TbEntityType, TbAttributeScope, TbAggregation } from '../../types';
+import { deviceService } from '@/features/devices/services/deviceService';
+import type { Device } from '@/features/devices/types';
 
 interface DataBindingTabProps {
   widget: Widget;
@@ -18,6 +20,10 @@ export const DataBindingTab: React.FC<DataBindingTabProps> = ({ widget, onUpdate
       id: crypto.randomUUID(),
       type,
       label: `Binding ${bindings.length + 1}`,
+      entityType: 'DEVICE',
+      entityId: '',
+      entityName: '',
+      telemetryKey: '',
       defaultValue: 0,
       thresholds: [],
     };
@@ -79,6 +85,12 @@ export const DataBindingTab: React.FC<DataBindingTabProps> = ({ widget, onUpdate
         </button>
         <button onClick={() => addBinding('static')} className={btnSmCls + ' border-gray-300 text-gray-700 hover:bg-gray-50'}>
           + Static
+        </button>
+        <button onClick={() => addBinding('calculation')} className={btnSmCls + ' border-orange-300 text-orange-700 hover:bg-orange-50'}>
+          + Calculation
+        </button>
+        <button onClick={() => addBinding('function')} className={btnSmCls + ' border-pink-300 text-pink-700 hover:bg-pink-50'}>
+          + Function
         </button>
       </div>
 
@@ -151,6 +163,217 @@ const TYPE_LABELS: Record<string, string> = {
   function: '𝑓(x) Function',
 };
 
+/* ────── Device Search Dropdown ────── */
+const DeviceSearchDropdown: React.FC<{
+  selectedDeviceId: string | undefined;
+  selectedDeviceName: string | undefined;
+  onSelect: (device: Device) => void;
+}> = ({ selectedDeviceId, selectedDeviceName, onSelect }) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const fetchDevices = useCallback(async (query: string) => {
+    try {
+      setLoading(true);
+      const params: Record<string, any> = { page: 1, pageSize: 20 };
+      if (query) params.textSearch = query;
+      const res = await deviceService.getDevices(params);
+      setDevices(res.data || []);
+    } catch {
+      setDevices([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      fetchDevices(search);
+    }
+  }, [open, search, fetchDevices]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setTimeout(() => inputRef.current?.focus(), 50); }}
+        className={`${inputCls} text-left flex items-center justify-between cursor-pointer`}
+      >
+        <span className={selectedDeviceId ? 'text-gray-900' : 'text-gray-400'}>
+          {selectedDeviceName || (selectedDeviceId ? `ID: ${selectedDeviceId.slice(0, 8)}...` : 'Select device...')}
+        </span>
+        <span className="text-gray-400 text-[10px]">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-hidden">
+          <div className="p-1.5 border-b border-gray-100">
+            <input
+              ref={inputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search devices..."
+              className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {loading ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500 text-center">Loading...</div>
+            ) : devices.length === 0 ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500 text-center">No devices found</div>
+            ) : (
+              devices.map((device) => (
+                <button
+                  key={device.id}
+                  type="button"
+                  onClick={() => {
+                    onSelect(device);
+                    setOpen(false);
+                    setSearch('');
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 flex items-center justify-between transition-colors ${
+                    device.id === selectedDeviceId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{device.name}</div>
+                    <div className="text-[10px] text-gray-400 truncate">
+                      {device.deviceType?.name || device.model || 'Device'}
+                    </div>
+                  </div>
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ml-2 ${device.isOnline ? 'bg-green-500' : 'bg-gray-300'}`} />
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ────── Telemetry/Attribute Key Dropdown ────── */
+const KeyDropdown: React.FC<{
+  deviceId: string | undefined;
+  value: string;
+  onChange: (key: string) => void;
+  keyType: 'telemetry' | 'attribute';
+  attributeScope?: string;
+  placeholder?: string;
+}> = ({ deviceId, value, onChange, keyType, attributeScope, placeholder }) => {
+  const [open, setOpen] = useState(false);
+  const [keys, setKeys] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const fetchKeys = useCallback(async () => {
+    if (!deviceId) { setKeys([]); return; }
+    try {
+      setLoading(true);
+      if (keyType === 'telemetry') {
+        const data = await deviceService.getDeviceTelemetry(deviceId);
+        setKeys(data && typeof data === 'object' ? Object.keys(data).sort() : []);
+      } else {
+        const scope = attributeScope || 'SERVER_SCOPE';
+        const data = await deviceService.getDeviceAttributes(deviceId, scope);
+        setKeys(data && typeof data === 'object' ? Object.keys(data).sort() : []);
+      }
+    } catch {
+      setKeys([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [deviceId, keyType, attributeScope]);
+
+  useEffect(() => {
+    if (open) fetchKeys();
+  }, [open, fetchKeys]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          className={inputCls}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder || (keyType === 'telemetry' ? 'e.g. temperature' : 'e.g. firmwareVersion')}
+        />
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          disabled={!deviceId}
+          className={`px-1.5 py-1 text-xs border rounded transition-colors flex-shrink-0 ${
+            deviceId
+              ? 'border-gray-300 text-gray-600 hover:bg-gray-100 cursor-pointer'
+              : 'border-gray-200 text-gray-300 cursor-not-allowed'
+          }`}
+          title={deviceId ? 'Browse available keys' : 'Select a device first'}
+        >
+          ▼
+        </button>
+      </div>
+
+      {open && deviceId && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-hidden">
+          <div className="max-h-48 overflow-y-auto">
+            {loading ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500 text-center">Loading keys...</div>
+            ) : keys.length === 0 ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500 text-center">No keys found</div>
+            ) : (
+              keys.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    onChange(key);
+                    setOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 transition-colors font-mono ${
+                    key === value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                  }`}
+                >
+                  {key}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const BindingEditor: React.FC<{
   binding: DataBinding;
   index: number;
@@ -202,7 +425,7 @@ const BindingEditor: React.FC<{
                 <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1.5">ThingsBoard Entity</p>
               </div>
               <Field label="Entity Type">
-                <select className={selectCls} value={binding.entityType || 'DEVICE'} onChange={(e) => onUpdate({ entityType: e.target.value as TbEntityType })}>
+                <select className={selectCls} value={binding.entityType || 'DEVICE'} onChange={(e) => onUpdate({ entityType: e.target.value as TbEntityType, entityId: '', entityName: '' })}>
                   <option value="DEVICE">Device</option>
                   <option value="ASSET">Asset</option>
                   <option value="ENTITY_VIEW">Entity View</option>
@@ -210,12 +433,27 @@ const BindingEditor: React.FC<{
                   <option value="DASHBOARD">Dashboard</option>
                 </select>
               </Field>
-              <Field label="Entity ID">
-                <input className={inputCls} value={binding.entityId || ''} placeholder="Device/Asset UUID" onChange={(e) => onUpdate({ entityId: e.target.value })} />
-              </Field>
-              <Field label="Entity Name">
-                <input className={inputCls} value={binding.entityName || ''} placeholder="Display name (optional)" onChange={(e) => onUpdate({ entityName: e.target.value })} />
-              </Field>
+              {(binding.entityType || 'DEVICE') === 'DEVICE' ? (
+                <Field label="Device">
+                  <DeviceSearchDropdown
+                    selectedDeviceId={binding.entityId}
+                    selectedDeviceName={binding.entityName}
+                    onSelect={(device) => onUpdate({
+                      entityId: device.id,
+                      entityName: device.name,
+                    })}
+                  />
+                </Field>
+              ) : (
+                <>
+                  <Field label="Entity ID">
+                    <input className={inputCls} value={binding.entityId || ''} placeholder="Asset/Entity UUID" onChange={(e) => onUpdate({ entityId: e.target.value })} />
+                  </Field>
+                  <Field label="Entity Name">
+                    <input className={inputCls} value={binding.entityName || ''} placeholder="Display name (optional)" onChange={(e) => onUpdate({ entityName: e.target.value })} />
+                  </Field>
+                </>
+              )}
             </>
           )}
 
@@ -226,7 +464,13 @@ const BindingEditor: React.FC<{
                 <p className="text-[10px] font-semibold text-blue-600 uppercase mb-1.5">📡 Telemetry Configuration</p>
               </div>
               <Field label="Telemetry Key">
-                <input className={inputCls} value={binding.telemetryKey || ''} placeholder="e.g. temperature, humidity, pressure" onChange={(e) => onUpdate({ telemetryKey: e.target.value })} />
+                <KeyDropdown
+                  deviceId={binding.entityId}
+                  value={binding.telemetryKey || ''}
+                  onChange={(key) => onUpdate({ telemetryKey: key })}
+                  keyType="telemetry"
+                  placeholder="e.g. temperature, humidity, pressure"
+                />
               </Field>
               <Field label="Aggregation">
                 <select className={selectCls} value={binding.aggregation || 'NONE'} onChange={(e) => onUpdate({ aggregation: e.target.value as TbAggregation })}>
@@ -269,7 +513,14 @@ const BindingEditor: React.FC<{
                 </select>
               </Field>
               <Field label="Attribute Key">
-                <input className={inputCls} value={binding.attributeKey || ''} placeholder="e.g. firmwareVersion, config" onChange={(e) => onUpdate({ attributeKey: e.target.value })} />
+                <KeyDropdown
+                  deviceId={binding.entityId}
+                  value={binding.attributeKey || ''}
+                  onChange={(key) => onUpdate({ attributeKey: key })}
+                  keyType="attribute"
+                  attributeScope={binding.attributeScope || 'SERVER_SCOPE'}
+                  placeholder="e.g. firmwareVersion, config"
+                />
               </Field>
             </>
           )}

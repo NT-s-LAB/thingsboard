@@ -15,6 +15,7 @@ import { DeviceAlarmsTab } from '@/features/devices/components/tabs/DeviceAlarms
 import { DeviceEventsTab } from '@/features/devices/components/tabs/DeviceEventsTab';
 import { DeviceRelationsTab } from '@/features/devices/components/tabs/DeviceRelationsTab';
 import { DeviceAuditLogsTab } from '@/features/devices/components/tabs/DeviceAuditLogsTab';
+import { useDeviceRealtime } from '@/features/devices/hooks/useDeviceRealtime';
 
 type TabKey = 'details' | 'attributes' | 'telemetry' | 'alarms' | 'events' | 'relations' | 'audit-logs';
 
@@ -47,6 +48,21 @@ const DeviceDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+
+  // Real-time WebSocket updates for device status
+  const { connected: wsConnected } = useDeviceRealtime({
+    deviceId,
+    onStatus: useCallback((event) => {
+      setDevice(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          isOnline: event.status.isOnline,
+          ...(event.status.lastSeen ? { lastSeen: event.status.lastSeen } : {}),
+        };
+      });
+    }, []),
+  });
 
   const fetchDevice = useCallback(async () => {
     try {
@@ -126,6 +142,12 @@ const DeviceDetailPage: React.FC = () => {
               <h1 className="text-2xl font-bold text-gray-900">{device.name}</h1>
               <Badge className={statusColor}>{status}</Badge>
               <Badge variant="secondary">{getDeviceTypeName(device)}</Badge>
+              {wsConnected && (
+                <span className="flex items-center space-x-1 text-xs text-green-600">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span>Live</span>
+                </span>
+              )}
             </div>
             {device.description && (
               <p className="text-gray-600 mt-1">{device.description}</p>

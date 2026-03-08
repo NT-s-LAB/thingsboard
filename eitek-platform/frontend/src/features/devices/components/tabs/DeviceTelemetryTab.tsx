@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/shared/components/ui/Button';
 import { deviceService } from '../../services/deviceService';
+import { useDeviceRealtime } from '../../hooks/useDeviceRealtime';
 
 interface TelemetryEntry {
   key: string;
@@ -49,6 +50,31 @@ export const DeviceTelemetryTab: React.FC<DeviceTelemetryTabProps> = ({ deviceId
   const [autoRefresh, setAutoRefresh] = useState(false);
 
   const currentSelectedKeys = selectedKeys;
+
+  // Real-time WebSocket updates
+  const { connected: wsConnected } = useDeviceRealtime({
+    deviceId,
+    onTelemetry: useCallback((event) => {
+      if (!event.data || typeof event.data !== 'object') return;
+      setLatestData(prev => {
+        const updated = [...prev];
+        Object.entries(event.data).forEach(([key, values]) => {
+          const arr = values as Array<{ ts: number; value: string }>;
+          if (arr.length > 0) {
+            const latest = arr[0]!;
+            const existingIdx = updated.findIndex(e => e.key === key);
+            if (existingIdx >= 0) {
+              updated[existingIdx] = { key, ts: latest.ts, value: latest.value };
+            } else {
+              updated.push({ key, ts: latest.ts, value: latest.value });
+              updated.sort((a, b) => a.key.localeCompare(b.key));
+            }
+          }
+        });
+        return updated;
+      });
+    }, []),
+  });
 
   const fetchLatest = useCallback(async () => {
     try {
@@ -192,6 +218,12 @@ export const DeviceTelemetryTab: React.FC<DeviceTelemetryTabProps> = ({ deviceId
             />
             <span>Auto-refresh</span>
           </label>
+          {wsConnected && (
+            <span className="flex items-center space-x-1 text-xs text-green-600">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span>Live</span>
+            </span>
+          )}
           <Button variant="outline" size="sm" onClick={viewMode === 'latest' ? fetchLatest : fetchTimeseries}>
             Refresh
           </Button>

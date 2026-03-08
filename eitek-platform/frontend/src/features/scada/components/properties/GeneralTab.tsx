@@ -229,6 +229,16 @@ const WidgetTypeProperties: React.FC<{
       return (
         <>
           <Field label="Label"><input className={inputCls} value={properties.label || ''} onChange={(e) => onChange('label', e.target.value)} /></Field>
+          <Field label="Icon">
+            <div className="flex gap-1">
+              <input className={inputCls + ' flex-1'} value={properties.icon || ''} placeholder="🌡️ ⚡ 💧 🔥 💨 ..." onChange={(e) => onChange('icon', e.target.value)} />
+              <div className="flex gap-0.5 flex-wrap max-w-[100px]">
+                {['🌡️', '⚡', '💧', '🔥', '💨', '📊', '⚙️', '🔋', '☀️', '💡'].map(ic => (
+                  <button key={ic} type="button" className="text-sm hover:bg-gray-100 rounded p-0.5" onClick={() => onChange('icon', ic)}>{ic}</button>
+                ))}
+              </div>
+            </div>
+          </Field>
           <div className="grid grid-cols-2 gap-2">
             <Field label="Decimals"><input type="number" className={numCls + ' w-full'} value={properties.decimals ?? 2} min={0} max={10} onChange={(e) => onChange('decimals', Number(e.target.value))} /></Field>
             <Field label="Unit"><input className={inputCls} value={properties.unit || ''} onChange={(e) => onChange('unit', e.target.value)} /></Field>
@@ -238,7 +248,42 @@ const WidgetTypeProperties: React.FC<{
             <Field label="Suffix"><input className={inputCls} value={properties.suffix || ''} onChange={(e) => onChange('suffix', e.target.value)} /></Field>
           </div>
           <label className="flex items-center gap-2"><input type="checkbox" className={checkCls} checked={properties.showTrend ?? false} onChange={(e) => onChange('showTrend', e.target.checked)} /><span className="text-xs text-gray-700">Show Trend Arrow</span></label>
+          {properties.showTrend && (
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Up Color"><input type="color" className={colorCls} value={properties.trendUpColor || '#22C55E'} onChange={(e) => onChange('trendUpColor', e.target.value)} /></Field>
+              <Field label="Down Color"><input type="color" className={colorCls} value={properties.trendDownColor || '#EF4444'} onChange={(e) => onChange('trendDownColor', e.target.value)} /></Field>
+            </div>
+          )}
           <Field label="Telemetry Key"><input className={inputCls} value={properties.telemetryKey || ''} placeholder="temperature" onChange={(e) => onChange('telemetryKey', e.target.value)} /></Field>
+          {/* Thresholds */}
+          <Field label="Color Thresholds">
+            <div className="space-y-1">
+              {(properties.thresholds || []).map((t: any, i: number) => (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="text-[10px] text-gray-400">≥</span>
+                  <input type="number" className={numCls + ' w-14'} value={t.value} onChange={(e) => {
+                    const arr = [...(properties.thresholds || [])];
+                    arr[i] = { ...arr[i], value: Number(e.target.value) };
+                    onChange('thresholds', arr);
+                  }} />
+                  <input type="color" className={colorCls} value={t.color || '#EF4444'} onChange={(e) => {
+                    const arr = [...(properties.thresholds || [])];
+                    arr[i] = { ...arr[i], color: e.target.value };
+                    onChange('thresholds', arr);
+                  }} />
+                  <button type="button" className="text-red-400 hover:text-red-600 text-xs" onClick={() => {
+                    const arr = [...(properties.thresholds || [])];
+                    arr.splice(i, 1);
+                    onChange('thresholds', arr);
+                  }}>✕</button>
+                </div>
+              ))}
+              <button type="button" className="text-[10px] text-blue-600 hover:text-blue-800" onClick={() => {
+                const arr = [...(properties.thresholds || []), { value: 0, color: '#EF4444' }];
+                onChange('thresholds', arr);
+              }}>+ Add Threshold</button>
+            </div>
+          </Field>
         </>
       );
 

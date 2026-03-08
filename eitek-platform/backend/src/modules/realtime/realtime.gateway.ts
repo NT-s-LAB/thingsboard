@@ -84,6 +84,26 @@ export class RealtimeGateway
     return { event: 'unsubscribed', data: { room } };
   }
 
+  @SubscribeMessage('subscribe:devices:list')
+  handleSubscribeDevicesList(
+    @ConnectedSocket() client: Socket,
+  ) {
+    const room = 'devices:list';
+    client.join(room);
+    this.logger.debug(`Client ${client.id} subscribed to ${room}`);
+    return { event: 'subscribed', data: { room } };
+  }
+
+  @SubscribeMessage('unsubscribe:devices:list')
+  handleUnsubscribeDevicesList(
+    @ConnectedSocket() client: Socket,
+  ) {
+    const room = 'devices:list';
+    client.leave(room);
+    this.logger.debug(`Client ${client.id} unsubscribed from ${room}`);
+    return { event: 'unsubscribed', data: { room } };
+  }
+
   /**
    * Broadcast telemetry data to subscribers
    */
@@ -96,12 +116,30 @@ export class RealtimeGateway
   }
 
   /**
-   * Broadcast device status update
+   * Broadcast device status update to device subscribers AND to global 'devices' room
    */
   broadcastDeviceStatus(deviceId: string, status: any) {
     this.server.to(`device:${deviceId}`).emit('device:status', {
       deviceId,
       status,
+      timestamp: new Date().toISOString(),
+    });
+    // Also broadcast to global device-list subscribers
+    this.server.to('devices:list').emit('device:status', {
+      deviceId,
+      status,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Broadcast attribute update to device subscribers
+   */
+  broadcastAttributes(deviceId: string, scope: string, data: any) {
+    this.server.to(`device:${deviceId}`).emit('attributes', {
+      deviceId,
+      scope,
+      data,
       timestamp: new Date().toISOString(),
     });
   }

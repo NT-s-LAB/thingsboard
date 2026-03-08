@@ -19,13 +19,34 @@ export class CreateDeviceDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({ description: 'Device label' })
+  @IsOptional()
+  @IsString()
+  label?: string;
+
   @ApiProperty({ description: 'Area ID where device belongs' })
   @IsUUID()
   areaId: string;
 
-  @ApiProperty({ description: 'Device type ID' })
+  @ApiPropertyOptional({ description: 'Local device type ID (optional if deviceProfileId provided)' })
+  @IsOptional()
   @IsUUID()
-  deviceTypeId: string;
+  deviceTypeId?: string;
+
+  @ApiPropertyOptional({ description: 'ThingsBoard Device Profile ID' })
+  @IsOptional()
+  @IsString()
+  deviceProfileId?: string;
+
+  @ApiPropertyOptional({ description: 'Mark device as gateway' })
+  @IsOptional()
+  @IsBoolean()
+  isGateway?: boolean;
+
+  @ApiPropertyOptional({ description: 'User ID to assign the device to' })
+  @IsOptional()
+  @IsUUID()
+  assignedUserId?: string;
 
   @ApiPropertyOptional({ description: 'Device serial number' })
   @IsOptional()

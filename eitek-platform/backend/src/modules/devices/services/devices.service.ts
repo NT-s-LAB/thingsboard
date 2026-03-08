@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -16,12 +17,51 @@ import { Device } from '@prisma/client';
 
 @Injectable()
 export class DevicesService {
+  private readonly logger = new Logger(DevicesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tbDeviceApi: ThingsBoardDeviceApiService,
     private readonly tbClient: ThingsBoardClientService,
     private readonly deviceSync: DeviceSyncService,
   ) {}
+
+  /**
+   * Fetch real-time online status for a batch of devices from ThingsBoard.
+   * Queries SERVER_SCOPE `active` attribute per device in parallel.
+   * Returns a map of tbDeviceId → { isOnline, lastActivityTime }.
+   */
+  private async fetchRealtimeStatus(
+    tbDeviceIds: string[],
+  ): Promise<Map<string, { isOnline: boolean; lastActivityTime?: number }>> {
+    const statusMap = new Map<string, { isOnline: boolean; lastActivityTime?: number }>();
+    if (!tbDeviceIds.length) return statusMap;
+
+    const results = await Promise.allSettled(
+      tbDeviceIds.map(async (tbId) => {
+        const attrs = await this.tbClient.getDeviceAttributes(tbId, 'SERVER_SCOPE', [
+          'active',
+          'lastActivityTime',
+        ]);
+        return {
+          tbId,
+          isOnline: attrs['active']?.value === true,
+          lastActivityTime: attrs['lastActivityTime']?.value as number | undefined,
+        };
+      }),
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        statusMap.set(result.value.tbId, {
+          isOnline: result.value.isOnline,
+          lastActivityTime: result.value.lastActivityTime,
+        });
+      }
+    }
+
+    return statusMap;
+  }
 
   async create(createDeviceDto: CreateDeviceDto, user: RequestUser): Promise<Device> {
     // Validate area belongs to user's tenant
@@ -40,13 +80,46 @@ export class DevicesService {
       throw new NotFoundException('Area not found or access denied');
     }
 
-    // Validate device type exists
-    const deviceType = await this.prisma.deviceType.findUnique({
-      where: { id: createDeviceDto.deviceTypeId },
-    });
+    // Resolve device type: use provided deviceTypeId or auto-create from TB profile
+    let deviceTypeId = createDeviceDto.deviceTypeId;
+    let deviceTypeName = '';
 
-    if (!deviceType) {
-      throw new NotFoundException('Device type not found');
+    if (createDeviceDto.deviceProfileId) {
+      // Fetch TB profile to get name
+      const tbProfile = await this.tbClient.getDeviceProfile(createDeviceDto.deviceProfileId);
+      deviceTypeName = tbProfile.name;
+
+      if (!deviceTypeId) {
+        // Auto-create or find local DeviceType from TB profile
+        let localType = await this.prisma.deviceType.findUnique({
+          where: { name: tbProfile.name },
+        });
+        if (!localType) {
+          localType = await this.prisma.deviceType.create({
+            data: {
+              name: tbProfile.name,
+              category: tbProfile.type || 'DEFAULT',
+              description: tbProfile.description || `Auto-created from ThingsBoard profile: ${tbProfile.name}`,
+            },
+          });
+        }
+        deviceTypeId = localType.id;
+      }
+    }
+
+    if (!deviceTypeId) {
+      throw new BadRequestException('Either deviceTypeId or deviceProfileId must be provided');
+    }
+
+    // Validate device type exists if directly provided
+    if (!createDeviceDto.deviceProfileId && createDeviceDto.deviceTypeId) {
+      const deviceType = await this.prisma.deviceType.findUnique({
+        where: { id: deviceTypeId },
+      });
+      if (!deviceType) {
+        throw new NotFoundException('Device type not found');
+      }
+      deviceTypeName = deviceType.name;
     }
 
     // Check if device name already exists in area
@@ -62,12 +135,41 @@ export class DevicesService {
     }
 
     try {
-      // Create device in ThingsBoard first
-      const tbDevice = await this.tbDeviceApi.createDevice({
+      // Build ThingsBoard device payload
+      const tbDevicePayload: any = {
         name: createDeviceDto.name,
-        type: deviceType.name,
-        label: createDeviceDto.description,
-      });
+        type: deviceTypeName,
+        label: createDeviceDto.label || createDeviceDto.description || '',
+      };
+
+      // Set device profile if provided
+      if (createDeviceDto.deviceProfileId) {
+        tbDevicePayload.deviceProfileId = {
+          entityType: 'DEVICE_PROFILE',
+          id: createDeviceDto.deviceProfileId,
+        };
+      }
+
+      // Set gateway flag
+      if (createDeviceDto.isGateway) {
+        tbDevicePayload.additionalInfo = {
+          ...(tbDevicePayload.additionalInfo || {}),
+          gateway: true,
+        };
+      }
+
+      // Create device in ThingsBoard
+      const tbDevice = await this.tbClient.createDevice(tbDevicePayload);
+
+      // Assign to customer/user in ThingsBoard if requested
+      if (createDeviceDto.assignedUserId) {
+        const assignedUser = await this.prisma.user.findUnique({
+          where: { id: createDeviceDto.assignedUserId },
+        });
+        if (assignedUser?.tbUserId) {
+          await this.tbClient.assignDeviceToCustomer(tbDevice.id.id, assignedUser.tbUserId);
+        }
+      }
 
       // Create device in our database
       const device = await this.prisma.device.create({
@@ -79,10 +181,15 @@ export class DevicesService {
           serialNumber: createDeviceDto.serialNumber,
           model: createDeviceDto.model,
           firmware: createDeviceDto.firmware,
-          metadata: createDeviceDto.metadata || {},
+          metadata: {
+            ...(createDeviceDto.metadata || {}),
+            isGateway: createDeviceDto.isGateway || false,
+            deviceProfileId: createDeviceDto.deviceProfileId,
+            assignedUserId: createDeviceDto.assignedUserId,
+          },
           isActive: createDeviceDto.isActive ?? true,
           areaId: createDeviceDto.areaId,
-          deviceTypeId: createDeviceDto.deviceTypeId,
+          deviceTypeId: deviceTypeId,
         },
         include: {
           area: true,
@@ -105,7 +212,6 @@ export class DevicesService {
 
       return device;
     } catch (error) {
-      // If ThingsBoard creation fails, don't create in our database
       if (error.response?.status) {
         throw new BadRequestException(
           `Failed to create device in ThingsBoard: ${error.message}`,
@@ -176,10 +282,31 @@ export class DevicesService {
       this.prisma.device.count({ where }),
     ]);
 
+    // Enrich with real-time online status from ThingsBoard
+    const tbDeviceIds = devices
+      .filter((d) => d.tbDeviceId)
+      .map((d) => d.tbDeviceId);
+
+    const statusMap = await this.fetchRealtimeStatus(tbDeviceIds);
+
+    const enrichedDevices = devices.map((device) => {
+      const status = statusMap.get(device.tbDeviceId);
+      if (status) {
+        return {
+          ...device,
+          isOnline: status.isOnline,
+          ...(status.lastActivityTime
+            ? { lastSeen: new Date(status.lastActivityTime) }
+            : {}),
+        };
+      }
+      return device;
+    });
+
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data: devices,
+      data: enrichedDevices,
       pagination: {
         total,
         page,
@@ -220,6 +347,25 @@ export class DevicesService {
 
     if (!device) {
       throw new NotFoundException('Device not found or access denied');
+    }
+
+    // Enrich with real-time online status from ThingsBoard
+    if (device.tbDeviceId) {
+      try {
+        const statusMap = await this.fetchRealtimeStatus([device.tbDeviceId]);
+        const status = statusMap.get(device.tbDeviceId);
+        if (status) {
+          return {
+            ...device,
+            isOnline: status.isOnline,
+            ...(status.lastActivityTime
+              ? { lastSeen: new Date(status.lastActivityTime) }
+              : {}),
+          } as Device;
+        }
+      } catch {
+        // Fall through to DB value if TB is unreachable
+      }
     }
 
     return device;

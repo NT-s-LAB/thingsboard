@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -27,6 +28,9 @@ import thingsBoardConfig from './config/thingsboard.config';
       load: [appConfig, databaseConfig, thingsBoardConfig],
       envFilePath: ['.env.local', '.env'],
     }),
+
+    // Scheduler
+    ScheduleModule.forRoot(),
 
     // Database
     DatabaseModule,

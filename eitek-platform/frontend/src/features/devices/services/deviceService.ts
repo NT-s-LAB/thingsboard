@@ -12,6 +12,8 @@ import type {
   DeviceRelation,
   DeviceAuditLog,
   TbPagedResponse,
+  TbDeviceProfileOption,
+  UserOption,
 } from '../types';
 
 class DeviceService {
@@ -226,6 +228,31 @@ class DeviceService {
   async getDeviceTypes(): Promise<any[]> {
     const response = await apiClient.get<any>('/device-types');
     return Array.isArray(response) ? response : (response?.data || []);
+  }
+
+  async getDeviceProfiles(): Promise<TbDeviceProfileOption[]> {
+    const response = await apiClient.get<any>('/device-profiles?pageSize=100');
+    const data = Array.isArray(response) ? response : (response?.data || []);
+    return data.map((p: any) => ({
+      id: p.id?.id || p.id,
+      name: p.name,
+      type: p.type,
+      transportType: p.transportType,
+      description: p.description,
+      isDefault: p.default || false,
+    }));
+  }
+
+  async getUsers(): Promise<UserOption[]> {
+    const response = await apiClient.get<any>('/users?pageSize=100');
+    const data = Array.isArray(response) ? response : (response?.data || []);
+    return data.map((u: any) => ({
+      id: u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      role: u.role,
+    }));
   }
 
   async getAreas(): Promise<any[]> {

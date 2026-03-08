@@ -5,30 +5,28 @@ import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { useDeviceStore } from '../stores/deviceStore';
 import { deviceService } from '../services/deviceService';
-import type { DeviceCreateRequest } from '../types';
+import type { DeviceCreateRequest, TbDeviceProfileOption, UserOption } from '../types';
 
 interface AreaOption {
   id: string;
   name: string;
 }
 
-interface DeviceTypeOption {
-  id: string;
-  name: string;
-  category: string;
-}
-
 export const CreateDeviceModal: React.FC = () => {
   const { isCreateModalOpen, closeAllModals, createDevice, saving, error } = useDeviceStore();
   const [areas, setAreas] = useState<AreaOption[]>([]);
-  const [deviceTypes, setDeviceTypes] = useState<DeviceTypeOption[]>([]);
+  const [deviceProfiles, setDeviceProfiles] = useState<TbDeviceProfileOption[]>([]);
+  const [users, setUsers] = useState<UserOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
 
   const [formData, setFormData] = useState<DeviceCreateRequest>({
     name: '',
     description: '',
+    label: '',
     areaId: '',
-    deviceTypeId: '',
+    deviceProfileId: '',
+    isGateway: false,
+    assignedUserId: '',
     serialNumber: '',
     model: '',
     firmware: '',
@@ -39,12 +37,14 @@ export const CreateDeviceModal: React.FC = () => {
   useEffect(() => {
     if (isCreateModalOpen) {
       loadOptions();
-      // Reset form
       setFormData({
         name: '',
         description: '',
+        label: '',
         areaId: '',
-        deviceTypeId: '',
+        deviceProfileId: '',
+        isGateway: false,
+        assignedUserId: '',
         serialNumber: '',
         model: '',
         firmware: '',
@@ -56,12 +56,14 @@ export const CreateDeviceModal: React.FC = () => {
   const loadOptions = async () => {
     setLoadingOptions(true);
     try {
-      const [areasRes, typesRes] = await Promise.all([
+      const [areasRes, profilesRes, usersRes] = await Promise.all([
         deviceService.getAreas().catch(() => []),
-        deviceService.getDeviceTypes().catch(() => []),
+        deviceService.getDeviceProfiles().catch(() => []),
+        deviceService.getUsers().catch(() => []),
       ]);
       setAreas(Array.isArray(areasRes) ? areasRes : []);
-      setDeviceTypes(Array.isArray(typesRes) ? typesRes : []);
+      setDeviceProfiles(Array.isArray(profilesRes) ? profilesRes : []);
+      setUsers(Array.isArray(usersRes) ? usersRes : []);
     } catch {
       console.error('Failed to load options');
     } finally {
@@ -73,7 +75,7 @@ export const CreateDeviceModal: React.FC = () => {
     const errors: Record<string, string> = {};
     if (!formData.name.trim()) errors.name = 'Device name is required';
     if (!formData.areaId) errors.areaId = 'Area is required';
-    if (!formData.deviceTypeId) errors.deviceTypeId = 'Device type is required';
+    if (!formData.deviceProfileId) errors.deviceProfileId = 'Device profile is required';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -85,9 +87,12 @@ export const CreateDeviceModal: React.FC = () => {
     const submitData: DeviceCreateRequest = {
       name: formData.name.trim(),
       areaId: formData.areaId,
-      deviceTypeId: formData.deviceTypeId,
     };
+    if (formData.deviceProfileId) submitData.deviceProfileId = formData.deviceProfileId;
     if (formData.description?.trim()) submitData.description = formData.description.trim();
+    if (formData.label?.trim()) submitData.label = formData.label.trim();
+    if (formData.isGateway) submitData.isGateway = true;
+    if (formData.assignedUserId) submitData.assignedUserId = formData.assignedUserId;
     if (formData.serialNumber?.trim()) submitData.serialNumber = formData.serialNumber.trim();
     if (formData.model?.trim()) submitData.model = formData.model.trim();
     if (formData.firmware?.trim()) submitData.firmware = formData.firmware.trim();
@@ -117,6 +122,7 @@ export const CreateDeviceModal: React.FC = () => {
             </div>
           )}
 
+          {/* Device Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Device Name <span className="text-red-500">*</span>
@@ -129,19 +135,47 @@ export const CreateDeviceModal: React.FC = () => {
             {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
           </div>
 
+          {/* Device Profile (ThingsBoard) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
+              Device Profile <span className="text-red-500">*</span>
             </label>
-            <textarea
-              value={formData.description || ''}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Enter device description"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 text-sm"
-              rows={3}
+            {loadingOptions ? (
+              <p className="text-sm text-gray-500">Loading device profiles...</p>
+            ) : deviceProfiles.length === 0 ? (
+              <p className="text-sm text-yellow-600">No device profiles available.</p>
+            ) : (
+              <select
+                value={formData.deviceProfileId || ''}
+                onChange={(e) => setFormData({ ...formData, deviceProfileId: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 text-sm"
+              >
+                <option value="">Select a device profile</option>
+                {deviceProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name}
+                    {profile.isDefault ? ' (Default)' : ''}
+                    {profile.transportType ? ` - ${profile.transportType}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            {formErrors.deviceProfileId && <p className="text-red-500 text-xs mt-1">{formErrors.deviceProfileId}</p>}
+          </div>
+
+          {/* Label */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Label
+            </label>
+            <Input
+              value={formData.label || ''}
+              onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+              placeholder="Device label"
             />
           </div>
 
+          {/* Area */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Area <span className="text-red-500">*</span>
@@ -165,29 +199,58 @@ export const CreateDeviceModal: React.FC = () => {
             {formErrors.areaId && <p className="text-red-500 text-xs mt-1">{formErrors.areaId}</p>}
           </div>
 
+          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Device Type <span className="text-red-500">*</span>
+              Description
+            </label>
+            <textarea
+              value={formData.description || ''}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Enter device description"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 text-sm"
+              rows={3}
+            />
+          </div>
+
+          {/* Gateway Toggle */}
+          <div className="flex items-center space-x-3">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isGateway || false}
+                onChange={(e) => setFormData({ ...formData, isGateway: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600"></div>
+            </label>
+            <span className="text-sm font-medium text-gray-700">Is Gateway</span>
+          </div>
+
+          {/* Assign to User */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Assign to User
             </label>
             {loadingOptions ? (
-              <p className="text-sm text-gray-500">Loading device types...</p>
-            ) : deviceTypes.length === 0 ? (
-              <p className="text-sm text-yellow-600">No device types available. Please create a device type first.</p>
+              <p className="text-sm text-gray-500">Loading users...</p>
             ) : (
               <select
-                value={formData.deviceTypeId}
-                onChange={(e) => setFormData({ ...formData, deviceTypeId: e.target.value })}
+                value={formData.assignedUserId || ''}
+                onChange={(e) => setFormData({ ...formData, assignedUserId: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 text-sm"
               >
-                <option value="">Select a device type</option>
-                {deviceTypes.map((type) => (
-                  <option key={type.id} value={type.id}>{type.name} ({type.category})</option>
+                <option value="">Unassigned</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.firstName} {user.lastName} ({user.email})
+                  </option>
                 ))}
               </select>
             )}
-            {formErrors.deviceTypeId && <p className="text-red-500 text-xs mt-1">{formErrors.deviceTypeId}</p>}
           </div>
 
+          {/* Serial Number & Model */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -211,6 +274,7 @@ export const CreateDeviceModal: React.FC = () => {
             </div>
           </div>
 
+          {/* Firmware */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Firmware Version

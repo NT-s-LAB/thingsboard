@@ -170,13 +170,36 @@ export interface TbPagedResponse<T> {
 export interface DeviceCreateRequest {
   name: string;
   description?: string;
+  label?: string;
   areaId: string;
-  deviceTypeId: string;
+  deviceTypeId?: string;
+  deviceProfileId?: string;
+  isGateway?: boolean;
+  assignedUserId?: string;
   serialNumber?: string;
   model?: string;
   firmware?: string;
   metadata?: Record<string, any>;
   isActive?: boolean;
+}
+
+// TB Device Profile for dropdown
+export interface TbDeviceProfileOption {
+  id: string;
+  name: string;
+  type?: string;
+  transportType?: string;
+  description?: string;
+  isDefault?: boolean;
+}
+
+// User option for assignment dropdown
+export interface UserOption {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
 }
 
 export interface DeviceUpdateRequest {

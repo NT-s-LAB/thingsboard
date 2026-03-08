@@ -1,11 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../../../database/prisma.service';
 import { ThingsBoardDeviceApiService } from '../../thingsboard-integration/services/device-api.service';
 import { ThingsBoardTelemetryApiService } from '../../thingsboard-integration/services/telemetry-api.service';
 import { DeviceMapper } from '../../thingsboard-integration/mappers/device.mapper';
+import { RealtimeGateway } from '../../realtime/realtime.gateway';
 
 @Injectable()
-export class DeviceSyncService {
+export class DeviceSyncService implements OnModuleInit {
   private readonly logger = new Logger(DeviceSyncService.name);
   private syncIntervals = new Map<string, NodeJS.Timeout>();
 
@@ -14,7 +16,20 @@ export class DeviceSyncService {
     private readonly tbDeviceApi: ThingsBoardDeviceApiService,
     private readonly tbTelemetryApi: ThingsBoardTelemetryApiService,
     private readonly deviceMapper: DeviceMapper,
+    private readonly realtimeGateway: RealtimeGateway,
   ) {}
+
+  /**
+   * On app startup, sync all devices to get accurate initial status
+   */
+  async onModuleInit(): Promise<void> {
+    this.logger.log('Initializing device sync — running initial sync for all devices...');
+    try {
+      await this.syncAllDevices();
+    } catch (error) {
+      this.logger.error(`Initial device sync failed: ${error.message}`);
+    }
+  }
 
   /**
    * Start syncing a device's telemetry data
@@ -68,11 +83,20 @@ export class DeviceSyncService {
       // Fetch latest telemetry
       const telemetryData = await this.tbTelemetryApi.getLatestTelemetry(tbDeviceId);
 
-      // Fetch device attributes
+      // Fetch client-scope attributes (app data)
       const attributes = await this.tbTelemetryApi.getAttributes(
         tbDeviceId,
         'CLIENT_SCOPE',
       );
+
+      // Fetch SERVER_SCOPE to get ThingsBoard's authoritative connectivity status.
+      const serverAttributes = await this.tbTelemetryApi.getAttributes(
+        tbDeviceId,
+        'SERVER_SCOPE',
+        ['active', 'lastActivityTime'],
+      );
+      const isOnline = serverAttributes['active']?.value === true;
+      const lastActivityTime = serverAttributes['lastActivityTime']?.value as number | undefined;
 
       // Map telemetry data
       const mappedTelemetry = this.deviceMapper.mapTelemetryData(telemetryData);
@@ -98,12 +122,20 @@ export class DeviceSyncService {
       await this.prisma.device.update({
         where: { id: deviceId },
         data: {
-          isOnline: true,
-          lastSeen: new Date(),
+          isOnline,
+          ...(isOnline ? { lastSeen: new Date() } : {}),
         },
       });
 
-      this.logger.debug(`Device ${deviceId} synced successfully`);
+      // Broadcast real-time updates via WebSocket
+      this.realtimeGateway.broadcastTelemetry(deviceId, telemetryData);
+      this.realtimeGateway.broadcastDeviceStatus(deviceId, {
+        isOnline,
+        lastActivityTime,
+        lastSeen: isOnline ? new Date().toISOString() : undefined,
+      });
+
+      this.logger.debug(`Device ${deviceId} synced — isOnline: ${isOnline}`);
     } catch (error) {
       this.logger.error(`Failed to sync device ${deviceId}: ${error.message}`);
 
@@ -112,12 +144,17 @@ export class DeviceSyncService {
         where: { id: deviceId },
         data: { isOnline: false },
       });
+
+      this.realtimeGateway.broadcastDeviceStatus(deviceId, {
+        isOnline: false,
+      });
     }
   }
 
   /**
-   * Sync all active devices
+   * Sync all active devices — runs every 60 seconds via @nestjs/schedule
    */
+  @Interval(10000)
   async syncAllDevices(): Promise<void> {
     const devices = await this.prisma.device.findMany({
       where: { isActive: true },

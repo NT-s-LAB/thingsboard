@@ -96,6 +96,7 @@ interface DeviceActions {
   
   // Real-time actions
   updateRealtimeTelemetry: (deviceId: string, data: any) => void;
+  updateDeviceRealtimeStatus: (deviceId: string, isOnline: boolean, lastSeen?: string) => void;
   addDeviceAlarm: (alarm: DeviceAlarm) => void;
   updateDeviceAlarm: (alarm: DeviceAlarm) => void;
   addRpcCommand: (command: DeviceCommand) => void;
@@ -172,8 +173,10 @@ export const useDeviceStore = create<DeviceState & DeviceActions>()(
           // Data actions
           fetchDevices: async (params) => {
             try {
+              // Only show loading spinner on initial load (no devices yet)
+              const hasDevices = get().devices.length > 0;
               set((state) => {
-                state.loading = true;
+                if (!hasDevices) state.loading = true;
                 state.error = null;
               });
 
@@ -543,6 +546,18 @@ export const useDeviceStore = create<DeviceState & DeviceActions>()(
                   state.devices[deviceIndex].isOnline = data.isOnline;
                 }
                 state.devices[deviceIndex].lastSeen = new Date().toISOString();
+              }
+            });
+          },
+
+          updateDeviceRealtimeStatus: (deviceId, isOnline, lastSeen) => {
+            set((state) => {
+              const deviceIndex = state.devices.findIndex(d => d.id === deviceId);
+              if (deviceIndex !== -1 && state.devices[deviceIndex]) {
+                state.devices[deviceIndex].isOnline = isOnline;
+                if (lastSeen) {
+                  state.devices[deviceIndex].lastSeen = lastSeen;
+                }
               }
             });
           },
