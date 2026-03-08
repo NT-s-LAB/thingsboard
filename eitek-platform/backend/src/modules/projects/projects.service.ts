@@ -42,7 +42,12 @@ export class ProjectsService {
   }
 
   async findAll(pagination: PaginationDto, tenantId: string): Promise<PaginatedResult<Project>> {
-    const { page, limit, offset, search, sortBy, sortOrder } = pagination;
+    const page = pagination.page;
+    const limit = pagination.effectiveLimit;
+    const offset = pagination.offset;
+    const search = pagination.effectiveSearch;
+    const sortBy = pagination.effectiveSortBy;
+    const sortOrder = pagination.effectiveSortOrder;
 
     const where: any = { tenantId };
 
@@ -144,5 +149,63 @@ export class ProjectsService {
     }
 
     await this.prisma.project.delete({ where: { id } });
+  }
+
+  async getRecentProjects(tenantId: string, limit: number): Promise<Project[]> {
+    return this.prisma.project.findMany({
+      where: { tenantId },
+      include: {
+        tenant: { select: { id: true, name: true } },
+        _count: { select: { sites: true, userProjects: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  async getFavoriteProjects(userId: string, tenantId: string): Promise<Project[]> {
+    const userProjects = await this.prisma.userProject.findMany({
+      where: { userId },
+      include: {
+        project: {
+          include: {
+            tenant: { select: { id: true, name: true } },
+            _count: { select: { sites: true, userProjects: true } },
+          },
+        },
+      },
+    });
+
+    return userProjects
+      .map((up) => up.project)
+      .filter((p) => p.tenantId === tenantId);
+  }
+
+  async addToFavorites(projectId: string, userId: string, tenantId: string): Promise<void> {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    await this.prisma.userProject.upsert({
+      where: {
+        userId_projectId: { userId, projectId },
+      },
+      update: {},
+      create: {
+        userId,
+        projectId,
+        role: 'member',
+      },
+    });
+  }
+
+  async removeFromFavorites(projectId: string, userId: string): Promise<void> {
+    await this.prisma.userProject.deleteMany({
+      where: { userId, projectId },
+    });
   }
 }

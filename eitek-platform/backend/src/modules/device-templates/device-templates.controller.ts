@@ -19,7 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('Device Templates')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller({ path: 'device-templates', version: '1' })
+@Controller('device-templates')
 export class DeviceTemplatesController {
   constructor(private readonly deviceTemplatesService: DeviceTemplatesService) {}
 

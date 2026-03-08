@@ -117,7 +117,12 @@ export class DevicesService {
     pagination: PaginationDto,
     user: RequestUser,
   ): Promise<PaginatedResult<Device>> {
-    const { page, limit, offset, search, sortBy, sortOrder } = pagination;
+    const page = pagination.page;
+    const limit = pagination.effectiveLimit;
+    const offset = pagination.offset;
+    const search = pagination.effectiveSearch;
+    const sortBy = pagination.effectiveSortBy;
+    const sortOrder = pagination.effectiveSortOrder;
 
     // Build where clause for user's tenant
     const where: any = {

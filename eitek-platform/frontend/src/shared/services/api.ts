@@ -57,8 +57,26 @@ class ApiService {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
-      return data;
+      const json = await response.json();
+      
+      // Auto-unwrap BE response wrapper: { success, data, message, ... }
+      if (json && typeof json === 'object' && 'success' in json && 'data' in json) {
+        // Paginated response: { success, data, pagination: { total, page, limit, totalPages, hasNext, hasPrev } }
+        if (json.pagination) {
+          return {
+            data: json.data,
+            totalElements: json.pagination.total,
+            totalPages: json.pagination.totalPages,
+            hasNext: json.pagination.hasNext,
+            hasPrev: json.pagination.hasPrev,
+            page: json.pagination.page,
+            limit: json.pagination.limit,
+          } as T;
+        }
+        return json.data;
+      }
+      
+      return json;
     } catch (error) {
       console.error('API request failed:', error);
       throw error;
@@ -137,8 +155,16 @@ class ApiService {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
-      return data;
+      const json = await response.json();
+      
+      // Auto-unwrap BE response wrapper
+      if (json && typeof json === 'object' && 'success' in json && 'data' in json) {
+        if (json.pagination) {
+          return { data: json.data, totalElements: json.pagination.total, totalPages: json.pagination.totalPages, hasNext: json.pagination.hasNext } as T;
+        }
+        return json.data;
+      }
+      return json;
     } catch (error) {
       console.error('API form data request failed:', error);
       throw error;

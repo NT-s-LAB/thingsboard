@@ -51,7 +51,12 @@ export class FilesService {
   }
 
   async findAll(pagination: PaginationDto, user: RequestUser): Promise<PaginatedResult<PrismaFile>> {
-    const { page, limit, offset, search, sortBy, sortOrder } = pagination;
+    const page = pagination.page;
+    const limit = pagination.effectiveLimit;
+    const offset = pagination.offset;
+    const search = pagination.effectiveSearch;
+    const sortBy = pagination.effectiveSortBy;
+    const sortOrder = pagination.effectiveSortOrder;
 
     const where: any = {};
 

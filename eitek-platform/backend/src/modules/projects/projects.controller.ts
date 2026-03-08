@@ -21,9 +21,42 @@ import { RequestUser } from '../../common/interfaces/common.interface';
 @ApiTags('Projects')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller({ path: 'projects', version: '1' })
+@Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
+
+  @ApiOperation({ summary: 'Get recent projects' })
+  @Get('recent')
+  async getRecent(
+    @Query('limit') limit: string = '10',
+    @CurrentUser() user: RequestUser,
+  ) {
+    const projects = await this.projectsService.getRecentProjects(
+      user.tenantId,
+      parseInt(limit, 10) || 10,
+    );
+    return {
+      success: true,
+      message: 'Recent projects retrieved successfully',
+      data: projects,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Get favorite projects' })
+  @Get('favorites')
+  async getFavorites(@CurrentUser() user: RequestUser) {
+    const projects = await this.projectsService.getFavoriteProjects(
+      user.id,
+      user.tenantId,
+    );
+    return {
+      success: true,
+      message: 'Favorite projects retrieved successfully',
+      data: projects,
+      timestamp: new Date().toISOString(),
+    };
+  }
 
   @ApiOperation({ summary: 'Create a new project' })
   @Post()
@@ -52,6 +85,34 @@ export class ProjectsController {
       message: 'Projects retrieved successfully',
       data: result.data,
       pagination: result.pagination,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Add project to favorites' })
+  @Post(':id/favorite')
+  async addToFavorites(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.projectsService.addToFavorites(id, user.id, user.tenantId);
+    return {
+      success: true,
+      message: 'Project added to favorites',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Remove project from favorites' })
+  @Delete(':id/favorite')
+  async removeFromFavorites(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.projectsService.removeFromFavorites(id, user.id);
+    return {
+      success: true,
+      message: 'Project removed from favorites',
       timestamp: new Date().toISOString(),
     };
   }

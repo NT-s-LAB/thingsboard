@@ -21,7 +21,7 @@ import { RequestUser } from '../../common/interfaces/common.interface';
 @ApiTags('Users')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller({ path: 'users', version: '1' })
+@Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

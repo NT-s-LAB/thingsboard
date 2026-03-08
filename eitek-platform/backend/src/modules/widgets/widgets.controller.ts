@@ -19,7 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('Widgets')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller({ path: 'widgets', version: '1' })
+@Controller('widgets')
 export class WidgetsController {
   constructor(private readonly widgetsService: WidgetsService) {}
 

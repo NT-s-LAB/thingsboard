@@ -196,8 +196,8 @@ export const useDeviceStore = create<DeviceState & DeviceActions>()(
 
               const { filters, sort, pagination } = get();
               const requestParams: DeviceListParams = {
-                page: pagination.page,
-                pageSize: pagination.pageSize,
+                page: (pagination.page ?? 0) + 1, // FE is 0-based, BE is 1-based
+                pageSize: pagination.pageSize ?? 20,
                 sortProperty: sort.field,
                 sortOrder: sort.direction.toUpperCase() as 'ASC' | 'DESC',
                 ...params,
@@ -661,6 +661,14 @@ export const useDeviceStore = create<DeviceState & DeviceActions>()(
           },
           filters: state.filters,
           sort: state.sort,
+        }),
+        merge: (persistedState: any, currentState) => ({
+          ...currentState,
+          ...persistedState,
+          pagination: {
+            ...currentState.pagination,
+            ...(persistedState as any)?.pagination,
+          },
         }),
       }
     ),

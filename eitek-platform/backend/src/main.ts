@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -21,12 +21,6 @@ async function bootstrap() {
     origin: configService.get('FRONTEND_URL') || 'http://localhost:3000',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-  });
-
-  // API versioning
-  app.enableVersioning({
-    type: VersioningType.URI,
-    defaultVersion: '1',
   });
 
   // Swagger documentation

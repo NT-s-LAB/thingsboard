@@ -5,13 +5,21 @@ class AuthService {
   private basePath = '/auth';
 
   async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const response = await apiClient.post<LoginResponse>(`${this.basePath}/login`, credentials);
+    const data = await apiClient.post<any>(`${this.basePath}/login`, credentials);
     
-    if (response.token) {
-      apiClient.setToken(response.token);
+    // BE returns { accessToken, refreshToken, user }
+    // FE expects { token, refreshToken, user }
+    const loginResponse: LoginResponse = {
+      token: data.accessToken || data.token,
+      refreshToken: data.refreshToken,
+      user: data.user,
+    };
+    
+    if (loginResponse.token) {
+      apiClient.setToken(loginResponse.token);
     }
     
-    return response;
+    return loginResponse;
   }
 
   async logout(): Promise<void> {
@@ -23,8 +31,7 @@ class AuthService {
   }
 
   async getProfile(): Promise<User> {
-    const response = await apiClient.get<User>(`${this.basePath}/profile`);
-    return response;
+    return apiClient.get<User>(`${this.basePath}/profile`);
   }
 
   async updateProfile(data: Partial<User>): Promise<User> {

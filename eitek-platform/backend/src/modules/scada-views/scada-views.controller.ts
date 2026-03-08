@@ -21,7 +21,7 @@ import { RequestUser } from '../../common/interfaces/common.interface';
 @ApiTags('SCADA Views')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller({ path: 'scada-views', version: '1' })
+@Controller('scada-views')
 export class ScadaViewsController {
   constructor(private readonly scadaViewsService: ScadaViewsService) {}
 

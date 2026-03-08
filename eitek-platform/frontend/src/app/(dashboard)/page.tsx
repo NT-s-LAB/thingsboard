@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
@@ -10,7 +11,8 @@ import { useDeviceStore } from '@/features/devices/stores/deviceStore';
 import { formatDistanceToNow } from '@/shared/utils/date';
 
 const DashboardPage: React.FC = () => {
-  const { user } = useAuthStore();
+  const router = useRouter();
+  const { user, isAuthenticated, token } = useAuthStore();
   const { 
     recentProjects, 
     favoriteProjects, 
@@ -25,11 +27,15 @@ const DashboardPage: React.FC = () => {
   } = useDeviceStore();
 
   useEffect(() => {
+    if (!isAuthenticated || !token) {
+      router.replace('/login');
+      return;
+    }
     // Fetch dashboard data
     fetchRecentProjects();
     fetchFavorites();
     fetchDevices({ pageSize: 10 });
-  }, [fetchRecentProjects, fetchFavorites, fetchDevices]);
+  }, [isAuthenticated, token, router, fetchRecentProjects, fetchFavorites, fetchDevices]);
 
   // Calculate statistics
   const stats = {

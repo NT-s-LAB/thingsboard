@@ -1,5 +1,5 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { Providers } from './providers';
 import { ErrorBoundary } from '@/shared/components/ui/ErrorBoundary';
@@ -12,7 +12,11 @@ export const metadata: Metadata = {
   description: 'Advanced IoT Platform with SCADA and Device Management',
   keywords: ['IoT', 'SCADA', 'Dashboard', 'Device Management', 'Industrial IoT'],
   authors: [{ name: 'EITEK Development Team' }],
-  viewport: 'width=device-width, initial-scale=1',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({

@@ -24,7 +24,7 @@ import { RequestUser } from '../../common/interfaces/common.interface';
 @ApiTags('Files')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller({ path: 'files', version: '1' })
+@Controller('files')
 export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 

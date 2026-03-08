@@ -224,8 +224,8 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
 
               const { filters, sort, pagination } = get();
               const requestParams = {
-                page: pagination.page,
-                pageSize: pagination.pageSize,
+                page: (pagination.page ?? 0) + 1, // FE is 0-based, BE is 1-based
+                pageSize: pagination.pageSize ?? 20,
                 sortBy: sort.field,
                 sortOrder: sort.direction.toUpperCase() as 'ASC' | 'DESC',
                 ...params,
@@ -875,6 +875,10 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
           ...currentState,
           ...persistedState,
           expandedNodes: new Set(persistedState.expandedNodes || []),
+          pagination: {
+            ...currentState.pagination,
+            ...(persistedState as any)?.pagination,
+          },
         }),
       }
     ),

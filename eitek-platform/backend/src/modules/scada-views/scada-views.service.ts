@@ -47,7 +47,12 @@ export class ScadaViewsService {
   }
 
   async findAll(pagination: PaginationDto, user: RequestUser, areaId?: string): Promise<PaginatedResult<ScadaView>> {
-    const { page, limit, offset, search, sortBy, sortOrder } = pagination;
+    const page = pagination.page;
+    const limit = pagination.effectiveLimit;
+    const offset = pagination.offset;
+    const search = pagination.effectiveSearch;
+    const sortBy = pagination.effectiveSortBy;
+    const sortOrder = pagination.effectiveSortOrder;
 
     const where: any = {
       area: {

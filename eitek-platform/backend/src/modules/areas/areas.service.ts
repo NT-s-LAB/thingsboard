@@ -60,7 +60,12 @@ export class AreasService {
     user: RequestUser,
     siteId?: string,
   ): Promise<PaginatedResult<Area>> {
-    const { page, limit, offset, search, sortBy, sortOrder } = pagination;
+    const page = pagination.page;
+    const limit = pagination.effectiveLimit;
+    const offset = pagination.offset;
+    const search = pagination.effectiveSearch;
+    const sortBy = pagination.effectiveSortBy;
+    const sortOrder = pagination.effectiveSortOrder;
 
     const where: any = {
       site: {

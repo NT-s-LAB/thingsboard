@@ -39,7 +39,7 @@ export default function LoginPage() {
         title: 'Đăng nhập thành công',
         message: 'Chào mừng bạn đến với EITEK Platform',
       });
-      router.push('/dashboard');
+      router.push('/');
     } catch (error: any) {
       addNotification({
         type: 'error',

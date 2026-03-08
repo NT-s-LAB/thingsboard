@@ -19,7 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('Tenants')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller({ path: 'tenants', version: '1' })
+@Controller('tenants')
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 

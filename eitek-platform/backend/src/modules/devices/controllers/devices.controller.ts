@@ -22,7 +22,7 @@ import { RequestUser } from '../../../common/interfaces/common.interface';
 @ApiTags('Devices')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller({ path: 'devices', version: '1' })
+@Controller('devices')
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
 

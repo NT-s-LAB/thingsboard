@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { User, LoginRequest } from '@/shared/types';
 import { authService } from '../services/authService';
+import { apiClient } from '@/shared/services/api';
 
 interface AuthState {
   user: User | null;
@@ -118,6 +119,12 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           isAuthenticated: state.isAuthenticated,
           permissions: state.permissions,
         }),
+        onRehydrateStorage: () => (state) => {
+          // Restore apiClient token from persisted auth state
+          if (state?.token) {
+            apiClient.setToken(state.token);
+          }
+        },
       }
     ),
     { name: 'auth-store' }
