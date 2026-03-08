@@ -96,17 +96,111 @@ export class DevicesController {
     };
   }
 
-  @ApiOperation({ summary: 'Get device telemetry data' })
+  // ================================
+  // Device Credentials
+  // ================================
+
+  @ApiOperation({ summary: 'Get device credentials' })
+  @Get(':id/credentials')
+  async getCredentials(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    const credentials = await this.devicesService.getCredentials(id, user);
+    return {
+      success: true,
+      message: 'Device credentials retrieved successfully',
+      data: credentials,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Save device credentials' })
+  @Post(':id/credentials')
+  async saveCredentials(
+    @Param('id') id: string,
+    @Body() credentials: any,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const result = await this.devicesService.saveCredentials(id, credentials, user);
+    return {
+      success: true,
+      message: 'Device credentials saved successfully',
+      data: result,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ================================
+  // Device Attributes
+  // ================================
+
+  @ApiOperation({ summary: 'Get device attributes by scope' })
+  @Get(':id/attributes/:scope')
+  async getAttributes(
+    @Param('id') id: string,
+    @Param('scope') scope: 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE',
+    @Query('keys') keys: string | undefined,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const attributes = await this.devicesService.getAttributes(
+      id,
+      scope,
+      user,
+      keys?.split(','),
+    );
+    return {
+      success: true,
+      message: 'Device attributes retrieved successfully',
+      data: attributes,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Save device attributes' })
+  @Post(':id/attributes/:scope')
+  async saveAttributes(
+    @Param('id') id: string,
+    @Param('scope') scope: 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE',
+    @Body() attributes: Record<string, any>,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.devicesService.saveAttributes(id, scope, attributes, user);
+    return {
+      success: true,
+      message: 'Device attributes saved successfully',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Delete device attributes' })
+  @Delete(':id/attributes/:scope')
+  async deleteAttributes(
+    @Param('id') id: string,
+    @Param('scope') scope: 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE',
+    @Query('keys') keys: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.devicesService.deleteAttributes(id, scope, keys.split(','), user);
+    return {
+      success: true,
+      message: 'Device attributes deleted successfully',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ================================
+  // Device Telemetry
+  // ================================
+
+  @ApiOperation({ summary: 'Get device latest telemetry' })
   @Get(':id/telemetry')
   async getTelemetry(
     @Param('id') deviceId: string,
-    @Query('keys') keys?: string,
-    @CurrentUser() user?: RequestUser,
+    @Query('keys') keys: string | undefined,
+    @CurrentUser() user: RequestUser,
   ) {
-    const telemetryData = await this.devicesService.getTelemetry(
+    const telemetryData = await this.devicesService.getLatestTelemetry(
       deviceId,
-      keys?.split(','),
       user,
+      keys?.split(','),
     );
     return {
       success: true,
@@ -115,6 +209,42 @@ export class DevicesController {
       timestamp: new Date().toISOString(),
     };
   }
+
+  @ApiOperation({ summary: 'Get device timeseries data' })
+  @Get(':id/timeseries')
+  async getTimeseries(
+    @Param('id') deviceId: string,
+    @Query('keys') keys: string,
+    @Query('startTs') startTs: string,
+    @Query('endTs') endTs: string,
+    @Query('interval') interval: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @Query('agg') agg: string | undefined,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const data = await this.devicesService.getTimeseries(
+      deviceId,
+      keys.split(','),
+      Number(startTs),
+      Number(endTs),
+      user,
+      {
+        interval: interval ? Number(interval) : undefined,
+        limit: limit ? Number(limit) : undefined,
+        agg: agg || undefined,
+      },
+    );
+    return {
+      success: true,
+      message: 'Timeseries data retrieved successfully',
+      data,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ================================
+  // Device RPC
+  // ================================
 
   @ApiOperation({ summary: 'Send RPC command to device' })
   @Post(':id/rpc')
@@ -133,6 +263,175 @@ export class DevicesController {
       success: true,
       message: 'RPC command sent successfully',
       data: result,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ================================
+  // Device Alarms
+  // ================================
+
+  @ApiOperation({ summary: 'Get device alarms' })
+  @Get(':id/alarms')
+  async getAlarms(
+    @Param('id') deviceId: string,
+    @Query('pageSize') pageSize: string | undefined,
+    @Query('page') page: string | undefined,
+    @Query('searchStatus') searchStatus: string | undefined,
+    @Query('startTime') startTime: string | undefined,
+    @Query('endTime') endTime: string | undefined,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const data = await this.devicesService.getAlarms(deviceId, user, {
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      page: page ? Number(page) : undefined,
+      searchStatus: searchStatus || undefined,
+      startTime: startTime ? Number(startTime) : undefined,
+      endTime: endTime ? Number(endTime) : undefined,
+    });
+    return {
+      success: true,
+      message: 'Device alarms retrieved successfully',
+      data,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Acknowledge device alarm' })
+  @Post(':id/alarms/:alarmId/ack')
+  async ackAlarm(
+    @Param('id') deviceId: string,
+    @Param('alarmId') alarmId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.devicesService.ackAlarm(deviceId, alarmId, user);
+    return {
+      success: true,
+      message: 'Alarm acknowledged successfully',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Clear device alarm' })
+  @Post(':id/alarms/:alarmId/clear')
+  async clearAlarm(
+    @Param('id') deviceId: string,
+    @Param('alarmId') alarmId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.devicesService.clearAlarm(deviceId, alarmId, user);
+    return {
+      success: true,
+      message: 'Alarm cleared successfully',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ================================
+  // Device Events
+  // ================================
+
+  @ApiOperation({ summary: 'Get device events' })
+  @Get(':id/events/:eventType')
+  async getEvents(
+    @Param('id') deviceId: string,
+    @Param('eventType') eventType: string,
+    @Query('pageSize') pageSize: string | undefined,
+    @Query('page') page: string | undefined,
+    @Query('startTime') startTime: string | undefined,
+    @Query('endTime') endTime: string | undefined,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const data = await this.devicesService.getEvents(deviceId, eventType, user, {
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      page: page ? Number(page) : undefined,
+      startTime: startTime ? Number(startTime) : undefined,
+      endTime: endTime ? Number(endTime) : undefined,
+    });
+    return {
+      success: true,
+      message: 'Device events retrieved successfully',
+      data,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ================================
+  // Device Relations
+  // ================================
+
+  @ApiOperation({ summary: 'Get device relations' })
+  @Get(':id/relations')
+  async getRelations(
+    @Param('id') deviceId: string,
+    @Query('direction') direction: 'FROM' | 'TO' = 'FROM',
+    @CurrentUser() user: RequestUser,
+  ) {
+    const data = await this.devicesService.getRelations(deviceId, direction, user);
+    return {
+      success: true,
+      message: 'Device relations retrieved successfully',
+      data,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Save device relation' })
+  @Post(':id/relations')
+  async saveRelation(
+    @Param('id') deviceId: string,
+    @Body() relation: any,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.devicesService.saveRelation(deviceId, relation, user);
+    return {
+      success: true,
+      message: 'Relation saved successfully',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Delete device relation' })
+  @Delete(':id/relations')
+  async deleteRelation(
+    @Param('id') deviceId: string,
+    @Query('relationType') relationType: string,
+    @Query('toId') toId: string,
+    @Query('toType') toType: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.devicesService.deleteRelation(deviceId, relationType, toId, toType, user);
+    return {
+      success: true,
+      message: 'Relation deleted successfully',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ================================
+  // Audit Logs
+  // ================================
+
+  @ApiOperation({ summary: 'Get device audit logs' })
+  @Get(':id/audit-logs')
+  async getAuditLogs(
+    @Param('id') deviceId: string,
+    @Query('pageSize') pageSize: string | undefined,
+    @Query('page') page: string | undefined,
+    @Query('startTime') startTime: string | undefined,
+    @Query('endTime') endTime: string | undefined,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const data = await this.devicesService.getAuditLogs(deviceId, user, {
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      page: page ? Number(page) : undefined,
+      startTime: startTime ? Number(startTime) : undefined,
+      endTime: endTime ? Number(endTime) : undefined,
+    });
+    return {
+      success: true,
+      message: 'Device audit logs retrieved successfully',
+      data,
       timestamp: new Date().toISOString(),
     };
   }

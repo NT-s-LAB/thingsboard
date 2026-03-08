@@ -10,6 +10,7 @@ import { UpdateDeviceDto } from '../dto/update-device.dto';
 import { PaginationDto, PaginatedResult } from '../../../common/dto/pagination.dto';
 import { RequestUser } from '../../../common/interfaces/common.interface';
 import { ThingsBoardDeviceApiService } from '../../thingsboard-integration/services/device-api.service';
+import { ThingsBoardClientService } from '../../thingsboard-integration/services/thingsboard-client.service';
 import { DeviceSyncService } from './device-sync.service';
 import { Device } from '@prisma/client';
 
@@ -18,6 +19,7 @@ export class DevicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tbDeviceApi: ThingsBoardDeviceApiService,
+    private readonly tbClient: ThingsBoardClientService,
     private readonly deviceSync: DeviceSyncService,
   ) {}
 
@@ -359,5 +361,159 @@ export class DevicesService {
     
     // Send RPC command through ThingsBoard
     return await this.tbDeviceApi.sendRpcCommand(device.tbDeviceId, method, params);
+  }
+
+  // ================================
+  // Device Credentials
+  // ================================
+
+  async getCredentials(deviceId: string, user: RequestUser): Promise<any> {
+    const device = await this.findOne(deviceId, user);
+    return await this.tbClient.getDeviceCredentials(device.tbDeviceId);
+  }
+
+  async saveCredentials(deviceId: string, credentials: any, user: RequestUser): Promise<any> {
+    await this.findOne(deviceId, user);
+    return await this.tbClient.saveDeviceCredentials(credentials);
+  }
+
+  // ================================
+  // Device Attributes
+  // ================================
+
+  async getAttributes(
+    deviceId: string,
+    scope: 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE',
+    user: RequestUser,
+    keys?: string[],
+  ): Promise<any> {
+    const device = await this.findOne(deviceId, user);
+    return await this.tbClient.getDeviceAttributes(device.tbDeviceId, scope, keys);
+  }
+
+  async saveAttributes(
+    deviceId: string,
+    scope: 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE',
+    attributes: Record<string, any>,
+    user: RequestUser,
+  ): Promise<void> {
+    const device = await this.findOne(deviceId, user);
+    await this.tbClient.saveDeviceAttributes(device.tbDeviceId, scope, attributes);
+  }
+
+  async deleteAttributes(
+    deviceId: string,
+    scope: 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE',
+    keys: string[],
+    user: RequestUser,
+  ): Promise<void> {
+    const device = await this.findOne(deviceId, user);
+    await this.tbClient.deleteDeviceAttributes(device.tbDeviceId, scope, keys);
+  }
+
+  // ================================
+  // Device Telemetry (enhanced)
+  // ================================
+
+  async getLatestTelemetry(deviceId: string, user: RequestUser, keys?: string[]): Promise<any> {
+    const device = await this.findOne(deviceId, user);
+    return await this.tbClient.getLatestTelemetry(device.tbDeviceId, keys);
+  }
+
+  async getTimeseries(
+    deviceId: string,
+    keys: string[],
+    startTs: number,
+    endTs: number,
+    user: RequestUser,
+    params?: { interval?: number; limit?: number; agg?: string; orderBy?: string },
+  ): Promise<any> {
+    const device = await this.findOne(deviceId, user);
+    return await this.tbClient.getTimeseries(device.tbDeviceId, keys, startTs, endTs, params);
+  }
+
+  // ================================
+  // Device Alarms
+  // ================================
+
+  async getAlarms(deviceId: string, user: RequestUser, params: {
+    pageSize?: number;
+    page?: number;
+    searchStatus?: string;
+    severityList?: string[];
+    typeList?: string[];
+    startTime?: number;
+    endTime?: number;
+  } = {}): Promise<any> {
+    const device = await this.findOne(deviceId, user);
+    return await this.tbClient.getAlarms({
+      entityType: 'DEVICE',
+      entityId: device.tbDeviceId,
+      ...params,
+    });
+  }
+
+  async ackAlarm(deviceId: string, alarmId: string, user: RequestUser): Promise<void> {
+    await this.findOne(deviceId, user);
+    await this.tbClient.ackAlarm(alarmId);
+  }
+
+  async clearAlarm(deviceId: string, alarmId: string, user: RequestUser): Promise<void> {
+    await this.findOne(deviceId, user);
+    await this.tbClient.clearAlarm(alarmId);
+  }
+
+  // ================================
+  // Device Events
+  // ================================
+
+  async getEvents(deviceId: string, eventType: string, user: RequestUser, params: {
+    pageSize?: number;
+    page?: number;
+    startTime?: number;
+    endTime?: number;
+  } = {}): Promise<any> {
+    const device = await this.findOne(deviceId, user);
+    return await this.tbClient.getEvents('DEVICE', device.tbDeviceId, eventType, params);
+  }
+
+  // ================================
+  // Device Relations
+  // ================================
+
+  async getRelations(deviceId: string, direction: 'FROM' | 'TO', user: RequestUser): Promise<any> {
+    const device = await this.findOne(deviceId, user);
+    return await this.tbClient.getRelations(device.tbDeviceId, 'DEVICE', direction);
+  }
+
+  async saveRelation(deviceId: string, relation: any, user: RequestUser): Promise<void> {
+    await this.findOne(deviceId, user);
+    await this.tbClient.saveRelation(relation);
+  }
+
+  async deleteRelation(
+    deviceId: string,
+    relationType: string,
+    toId: string,
+    toType: string,
+    user: RequestUser,
+  ): Promise<void> {
+    const device = await this.findOne(deviceId, user);
+    await this.tbClient.deleteRelation(device.tbDeviceId, 'DEVICE', relationType, toId, toType);
+  }
+
+  // ================================
+  // Audit Logs
+  // ================================
+
+  async getAuditLogs(deviceId: string, user: RequestUser, params: {
+    pageSize?: number;
+    page?: number;
+    startTime?: number;
+    endTime?: number;
+    actionTypes?: string[];
+  } = {}): Promise<any> {
+    const device = await this.findOne(deviceId, user);
+    return await this.tbClient.getAuditLogsByEntityId('DEVICE', device.tbDeviceId, params);
   }
 }

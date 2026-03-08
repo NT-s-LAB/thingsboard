@@ -5,6 +5,9 @@ import { DeviceFilters } from '@/features/devices/components/DeviceFilters';
 import { DeviceToolbar } from '@/features/devices/components/DeviceToolbar';
 import { DeviceCard } from '@/features/devices/components/DeviceCard';
 import { DeviceListItem } from '@/features/devices/components/DeviceListItem';
+import { CreateDeviceModal } from '@/features/devices/components/CreateDeviceModal';
+import { EditDeviceModal } from '@/features/devices/components/EditDeviceModal';
+import { DeleteDeviceModal } from '@/features/devices/components/DeleteDeviceModal';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { Button } from '@/shared/components/ui/Button';
 import { useDeviceStore } from '@/features/devices/stores/deviceStore';
@@ -196,24 +199,24 @@ const DevicesPage: React.FC = () => {
                         Status
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Connection
+                        Area
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Profile
+                        Model
                       </th>
                       <th 
                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                        onClick={() => setSort({ field: 'lastActivityTime', direction: sort.field === 'lastActivityTime' && sort.direction === 'desc' ? 'asc' : 'desc' })}
+                        onClick={() => setSort({ field: 'lastSeen', direction: sort.field === 'lastSeen' && sort.direction === 'desc' ? 'asc' : 'desc' })}
                       >
-                        Last Activity
-                        {sort.field === 'lastActivityTime' && (
+                        Last Seen
+                        {sort.field === 'lastSeen' && (
                           <span className="ml-1">
                             {sort.direction === 'asc' ? '↑' : '↓'}
                           </span>
                         )}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Location
+                        Serial Number
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
@@ -292,6 +295,11 @@ const DevicesPage: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Modals */}
+      <CreateDeviceModal />
+      <EditDeviceModal />
+      <DeleteDeviceModal />
     </div>
   );
 };

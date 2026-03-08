@@ -1,8 +1,10 @@
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/shared/utils/cn';
 import { Badge } from '@/shared/components/ui/Badge';
 import { formatDistanceToNow } from '@/shared/utils/date';
-import type { Device, DeviceStatus, DeviceType } from '../types';
+import type { Device, DeviceStatus } from '../types';
+import { getDeviceStatus, getDeviceTypeName } from '../types';
 
 interface DeviceCardProps {
   device: Device;
@@ -25,7 +27,7 @@ const deviceStatusColors: Record<DeviceStatus, string> = {
   'Unknown': 'bg-gray-100 text-gray-800',
 };
 
-const deviceTypeIcons: Record<DeviceType, string> = {
+const categoryIcons: Record<string, string> = {
   'Gateway': '🌐',
   'PLC': '🔧',
   'HMI': '📱',
@@ -37,7 +39,7 @@ const deviceTypeIcons: Record<DeviceType, string> = {
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({
   device,
-  onSelect,
+  onSelect: _onSelect,
   onEdit,
   onDelete,
   onViewAttributes,
@@ -47,14 +49,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   isSelectable = false,
   onToggleSelect,
 }) => {
-  const statusColor = deviceStatusColors[device.status];
-  const typeIcon = deviceTypeIcons[device.type];
+  const router = useRouter();
+  const status = getDeviceStatus(device);
+  const statusColor = deviceStatusColors[status];
+  const typeName = getDeviceTypeName(device);
+  const category = device.deviceType?.category || 'Custom';
+  const typeIcon = categoryIcons[category] || '⚙️';
 
   const handleCardClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (onSelect) {
-      onSelect(device);
-    }
+    router.push(`/devices/${device.id}`);
   };
 
   const handleCheckboxClick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,9 +99,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               <h3 className="font-semibold text-gray-900 truncate">
                 {device.name}
               </h3>
-              {device.label && device.label !== device.name && (
+              {device.description && (
                 <p className="text-sm text-gray-600 truncate">
-                  {device.label}
+                  {device.description}
                 </p>
               )}
             </div>
@@ -135,50 +139,48 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       {/* Status and Type */}
       <div className="flex items-center space-x-2 mb-3">
         <Badge className={statusColor}>
-          {device.status}
+          {status}
         </Badge>
         <Badge variant="secondary">
-          {device.type}
-        </Badge>
-        <Badge variant="outline">
-          {device.connectionType}
+          {typeName}
         </Badge>
       </div>
 
       {/* Device Info */}
       <div className="space-y-2 mb-4">
-        {device.deviceProfile && (
+        {device.area && (
           <div className="flex items-center text-sm text-gray-600">
-            <span className="font-medium">Profile:</span>
-            <span className="ml-1 truncate">{device.deviceProfile.name}</span>
+            <span className="font-medium">Area:</span>
+            <span className="ml-1 truncate">{device.area.name}</span>
           </div>
         )}
         
-        {device.firmwareVersion && (
+        {device.firmware && (
           <div className="flex items-center text-sm text-gray-600">
             <span className="font-medium">Firmware:</span>
-            <span className="ml-1">{device.firmwareVersion}</span>
+            <span className="ml-1">{device.firmware}</span>
           </div>
         )}
 
-        {device.additionalInfo?.location && (
+        {device.serialNumber && (
           <div className="flex items-center text-sm text-gray-600">
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span className="truncate">
-              {device.additionalInfo.location.address || 
-               `${device.additionalInfo.location.latitude}, ${device.additionalInfo.location.longitude}`}
-            </span>
+            <span className="font-medium">S/N:</span>
+            <span className="ml-1">{device.serialNumber}</span>
+          </div>
+        )}
+
+        {device.model && (
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="font-medium">Model:</span>
+            <span className="ml-1">{device.model}</span>
           </div>
         )}
       </div>
 
-      {/* Last Activity */}
-      {device.lastActivityTime && (
+      {/* Last Seen */}
+      {device.lastSeen && (
         <div className="text-xs text-gray-500 mb-3">
-          Last activity: {formatDistanceToNow(new Date(device.lastActivityTime))}
+          Last seen: {formatDistanceToNow(new Date(device.lastSeen))}
         </div>
       )}
 
@@ -200,7 +202,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             🏷️ Attributes
           </button>
         )}
-        {onSendCommand && device.status === 'Online' && (
+        {onSendCommand && device.isOnline && (
           <button
             onClick={(e) => handleActionClick(e, () => onSendCommand(device))}
             className="flex-1 px-2 py-1 text-xs bg-orange-50 text-orange-700 rounded hover:bg-orange-100 transition-colors"
@@ -209,15 +211,6 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           </button>
         )}
       </div>
-
-      {/* Description */}
-      {device.additionalInfo?.description && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-600 line-clamp-2">
-            {device.additionalInfo.description}
-          </p>
-        </div>
-      )}
     </div>
   );
 };

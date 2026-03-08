@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { Badge } from '@/shared/components/ui/Badge';
-import type { DeviceFilters as DeviceFiltersType, DeviceType, DeviceStatus, ConnectionType } from '../types';
+import type { DeviceFilters as DeviceFiltersType, DeviceStatus } from '../types';
 
 interface DeviceFiltersProps {
   filters: DeviceFiltersType;
@@ -10,9 +10,7 @@ interface DeviceFiltersProps {
   onReset: () => void;
 }
 
-const deviceTypes: DeviceType[] = ['Gateway', 'PLC', 'HMI', 'Sensor', 'Actuator', 'Camera', 'Custom'];
 const deviceStatuses: DeviceStatus[] = ['Online', 'Offline', 'Error', 'Maintenance', 'Unknown'];
-const connectionTypes: ConnectionType[] = ['Modbus', 'Ethernet/IP', 'OPC UA', 'MQTT', 'HTTP', 'TCP/IP', 'Serial', 'CAN'];
 
 export const DeviceFilters: React.FC<DeviceFiltersProps> = ({
   filters,
@@ -25,13 +23,6 @@ export const DeviceFilters: React.FC<DeviceFiltersProps> = ({
     onFiltersChange({ search });
   };
 
-  const handleTypeToggle = (type: DeviceType) => {
-    const newTypes = filters.deviceTypes.includes(type)
-      ? filters.deviceTypes.filter(t => t !== type)
-      : [...filters.deviceTypes, type];
-    onFiltersChange({ deviceTypes: newTypes });
-  };
-
   const handleStatusToggle = (status: DeviceStatus) => {
     const newStatuses = filters.statuses.includes(status)
       ? filters.statuses.filter(s => s !== status)
@@ -39,25 +30,10 @@ export const DeviceFilters: React.FC<DeviceFiltersProps> = ({
     onFiltersChange({ statuses: newStatuses });
   };
 
-  const handleConnectionTypeToggle = (connectionType: ConnectionType) => {
-    const newConnectionTypes = filters.connectionTypes.includes(connectionType)
-      ? filters.connectionTypes.filter(ct => ct !== connectionType)
-      : [...filters.connectionTypes, connectionType];
-    onFiltersChange({ connectionTypes: newConnectionTypes });
-  };
-
-  const handleLocationFilterChange = (hasLocation: boolean | null) => {
-    onFiltersChange({ hasLocation });
-  };
-
   const hasActiveFilters = 
     filters.search ||
     filters.deviceTypes.length > 0 ||
-    filters.statuses.length > 0 ||
-    filters.connectionTypes.length > 0 ||
-    filters.hasLocation !== null ||
-    filters.lastActivityFrom ||
-    filters.lastActivityTo;
+    filters.statuses.length > 0;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-4">
@@ -100,19 +76,9 @@ export const DeviceFilters: React.FC<DeviceFiltersProps> = ({
               Device Types
             </label>
             <div className="flex flex-wrap gap-2">
-              {deviceTypes.map(type => (
-                <button
-                  key={type}
-                  onClick={() => handleTypeToggle(type)}
-                  className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                    filters.deviceTypes.includes(type)
-                      ? 'bg-primary-100 text-primary-800 border-2 border-primary-300'
-                      : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
+              {filters.deviceTypes.length === 0 && (
+                <span className="text-sm text-gray-500 italic">No type filter active</span>
+              )}
             </div>
           </div>
 
@@ -137,91 +103,6 @@ export const DeviceFilters: React.FC<DeviceFiltersProps> = ({
               ))}
             </div>
           </div>
-
-          {/* Connection Types */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Connection Types
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {connectionTypes.map(connectionType => (
-                <button
-                  key={connectionType}
-                  onClick={() => handleConnectionTypeToggle(connectionType)}
-                  className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                    filters.connectionTypes.includes(connectionType)
-                      ? 'bg-primary-100 text-primary-800 border-2 border-primary-300'
-                      : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                  }`}
-                >
-                  {connectionType}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Location Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Location
-            </label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleLocationFilterChange(null)}
-                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                  filters.hasLocation === null
-                    ? 'bg-primary-100 text-primary-800 border-2 border-primary-300'
-                    : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                }`}
-              >
-                All
-              </button>
-              <button
-                onClick={() => handleLocationFilterChange(true)}
-                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                  filters.hasLocation === true
-                    ? 'bg-primary-100 text-primary-800 border-2 border-primary-300'
-                    : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                }`}
-              >
-                With Location
-              </button>
-              <button
-                onClick={() => handleLocationFilterChange(false)}
-                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                  filters.hasLocation === false
-                    ? 'bg-primary-100 text-primary-800 border-2 border-primary-300'
-                    : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                }`}
-              >
-                Without Location
-              </button>
-            </div>
-          </div>
-
-          {/* Last Activity Date Range */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Last Activity From
-              </label>
-              <Input
-                type="datetime-local"
-                value={filters.lastActivityFrom || ''}
-                onChange={(e) => onFiltersChange({ lastActivityFrom: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Last Activity To
-              </label>
-              <Input
-                type="datetime-local"
-                value={filters.lastActivityTo || ''}
-                onChange={(e) => onFiltersChange({ lastActivityTo: e.target.value })}
-              />
-            </div>
-          </div>
         </div>
       )}
 
@@ -242,18 +123,6 @@ export const DeviceFilters: React.FC<DeviceFiltersProps> = ({
             </Badge>
           )}
 
-          {filters.deviceTypes.map(type => (
-            <Badge key={type} variant="secondary" className="gap-1">
-              {type}
-              <button
-                onClick={() => handleTypeToggle(type)}
-                className="ml-1 hover:text-red-600"
-              >
-                ✕
-              </button>
-            </Badge>
-          ))}
-
           {filters.statuses.map(status => (
             <Badge key={status} variant="secondary" className="gap-1">
               {status}
@@ -265,30 +134,6 @@ export const DeviceFilters: React.FC<DeviceFiltersProps> = ({
               </button>
             </Badge>
           ))}
-
-          {filters.connectionTypes.map(connectionType => (
-            <Badge key={connectionType} variant="secondary" className="gap-1">
-              {connectionType}
-              <button
-                onClick={() => handleConnectionTypeToggle(connectionType)}
-                className="ml-1 hover:text-red-600"
-              >
-                ✕
-              </button>
-            </Badge>
-          ))}
-
-          {filters.hasLocation !== null && (
-            <Badge variant="secondary" className="gap-1">
-              {filters.hasLocation ? 'With Location' : 'Without Location'}
-              <button
-                onClick={() => handleLocationFilterChange(null)}
-                className="ml-1 hover:text-red-600"
-              >
-                ✕
-              </button>
-            </Badge>
-          )}
         </div>
       )}
     </div>

@@ -5,10 +5,11 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Home, 
-  Monitor as Devices, // Using Monitor icon for Devices
+  Monitor as Devices,
   FolderTree,
   Settings,
-  Layout as Template, // Using Layout icon for Template
+  Layout as Template,
+  Layers,
   Bell,
   User,
   Search,
@@ -46,7 +47,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       href: '/devices',
       icon: <Devices className="w-5 h-5" />,
       label: 'Devices',
-      badge: 12
+    },
+    {
+      href: '/profiles',
+      icon: <Layers className="w-5 h-5" />,
+      label: 'Profiles'
     },
     {
       href: '/projects',

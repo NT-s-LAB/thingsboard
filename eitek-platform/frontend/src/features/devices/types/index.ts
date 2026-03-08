@@ -1,107 +1,65 @@
 // Device Types for EITEK Platform
-export type DeviceType = 'Gateway' | 'PLC' | 'HMI' | 'Sensor' | 'Actuator' | 'Camera' | 'Custom';
+// These match the BE Prisma DeviceType.category values
+export type DeviceCategory = 'Gateway' | 'PLC' | 'HMI' | 'Sensor' | 'Actuator' | 'Camera' | 'Custom' | string;
 
 export type DeviceStatus = 'Online' | 'Offline' | 'Error' | 'Maintenance' | 'Unknown';
 
-export type ConnectionType = 'Modbus' | 'Ethernet/IP' | 'OPC UA' | 'MQTT' | 'HTTP' | 'TCP/IP' | 'Serial' | 'CAN';
-
-export interface DeviceAttribute {
-  id: string;
-  key: string;
-  value: any;
-  type: 'string' | 'number' | 'boolean' | 'json' | 'date';
-  lastUpdate: string;
-  isPublic: boolean;
-}
-
-export interface DeviceTelemetry {
-  id: string;
-  key: string;
-  value: any;
-  timestamp: string;
-  dataType: 'string' | 'number' | 'boolean' | 'json';
-}
-
-export interface DeviceCredentials {
-  id: string;
-  deviceId: string;
-  credentialsType: 'ACCESS_TOKEN' | 'X509_CERTIFICATE' | 'MQTT_BASIC';
-  credentialsValue: string;
-  createdTime: string;
-}
-
-export interface DeviceProfile {
+// Related models from BE
+export interface DeviceTypeInfo {
   id: string;
   name: string;
+  category: string;
   description?: string;
-  deviceType: DeviceType;
-  transportType: ConnectionType;
-  firmwareId?: string;
-  softwareId?: string;
-  defaultDashboardId?: string;
-  defaultRuleChainId?: string;
-  isDefault: boolean;
-  provisioning: {
-    type: 'DISABLED' | 'ALLOW_CREATE_NEW_DEVICES' | 'CHECK_PRE_PROVISIONED_DEVICES';
-    provisionDeviceSecret?: string;
-  };
-  configuration: {
-    alarms?: any[];
-    deviceConfiguration?: any;
-    transportConfiguration?: any;
-  };
-  createdTime: string;
+  metadata?: Record<string, any>;
+  isActive?: boolean;
 }
 
+export interface AreaInfo {
+  id: string;
+  name: string;
+}
+
+export interface DeviceStateInfo {
+  telemetryData?: Record<string, any>;
+  attributes?: Record<string, any>;
+  alarms?: Record<string, any>;
+  lastUpdate?: string;
+}
+
+// Main Device interface — matches BE Prisma Device model with includes
 export interface Device {
   id: string;
   name: string;
-  label: string;
-  deviceProfileId: string;
-  deviceProfile?: DeviceProfile;
-  customerId?: string;
-  ownerId: string;
-  type: DeviceType;
-  status: DeviceStatus;
-  lastConnectTime?: string;
-  lastDisconnectTime?: string;
-  lastActivityTime?: string;
-  connectionType: ConnectionType;
-  firmwareVersion?: string;
-  softwareVersion?: string;
-  additionalInfo: {
-    gateway?: boolean;
-    description?: string;
-    location?: {
-      latitude?: number;
-      longitude?: number;
-      address?: string;
-    };
-  };
-  attributes: DeviceAttribute[];
-  telemetry: DeviceTelemetry[];
-  credentials?: DeviceCredentials;
-  createdTime: string;
-  updatedTime: string;
+  description?: string;
+  tbDeviceId: string;
+  tbEntityId?: string;
+  serialNumber?: string;
+  model?: string;
+  firmware?: string;
+  metadata?: Record<string, any>;
+  isActive: boolean;
+  isOnline: boolean;
+  lastSeen?: string;
+  createdAt: string;
+  updatedAt: string;
+  areaId: string;
+  deviceTypeId: string;
+  // Included relations
+  area?: AreaInfo;
+  deviceType?: DeviceTypeInfo;
+  deviceState?: DeviceStateInfo;
 }
 
-export interface DeviceGroup {
-  id: string;
-  name: string;
-  description?: string;
-  type: 'STATIC' | 'DYNAMIC';
-  devices: Device[];
-  filterConditions?: {
-    deviceTypes?: DeviceType[];
-    statuses?: DeviceStatus[];
-    attributeFilters?: Array<{
-      key: string;
-      operation: 'EQUAL' | 'NOT_EQUAL' | 'GREATER' | 'LESS' | 'CONTAINS';
-      value: any;
-    }>;
-  };
-  createdTime: string;
-  updatedTime: string;
+// Helper to derive display status from Device
+export function getDeviceStatus(device: Device): DeviceStatus {
+  if (!device.isActive) return 'Maintenance';
+  if (device.isOnline) return 'Online';
+  return 'Offline';
+}
+
+// Helper to get device type display name
+export function getDeviceTypeName(device: Device): string {
+  return device.deviceType?.name || device.deviceType?.category || 'Unknown';
 }
 
 export interface DeviceCommand {
@@ -132,22 +90,106 @@ export interface DeviceAlarm {
   propagate: boolean;
 }
 
+// TB Alarm from API
+export interface TbAlarmData {
+  id: { id: string; entityType: string };
+  createdTime: number;
+  name: string;
+  type: string;
+  originator: { id: string; entityType: string };
+  severity: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'WARNING' | 'INDETERMINATE';
+  status: string;
+  acknowledged: boolean;
+  cleared: boolean;
+  startTs: number;
+  endTs: number;
+  ackTs: number;
+  clearTs: number;
+  details?: any;
+}
+
+// TB Device Credentials
+export interface DeviceCredentials {
+  id: { id: string; entityType: string };
+  createdTime: number;
+  deviceId: { id: string; entityType: string };
+  credentialsType: 'ACCESS_TOKEN' | 'X509_CERTIFICATE' | 'MQTT_BASIC' | 'LWM2M_CREDENTIALS';
+  credentialsId: string;
+  credentialsValue?: string;
+}
+
+// TB Attribute
+export interface DeviceAttribute {
+  key: string;
+  lastUpdateTs: number;
+  value: any;
+}
+
+// TB Event
+export interface DeviceEvent {
+  id: { id: string; entityType: string };
+  createdTime: number;
+  tenantId: { id: string; entityType: string };
+  entityId: string;
+  serviceId: string;
+  body: any;
+}
+
+// TB Relation
+export interface DeviceRelation {
+  from: { id: string; entityType: string };
+  to: { id: string; entityType: string };
+  type: string;
+  typeGroup: string;
+  additionalInfo?: any;
+}
+
+// TB Audit Log
+export interface DeviceAuditLog {
+  id: { id: string; entityType: string };
+  createdTime: number;
+  entityId: { id: string; entityType: string };
+  entityName: string;
+  userId: { id: string; entityType: string };
+  userName: string;
+  actionType: string;
+  actionData?: any;
+  actionStatus: string;
+  actionFailureDetails?: string;
+}
+
+// TB Paged Response
+export interface TbPagedResponse<T> {
+  data: T[];
+  totalPages: number;
+  totalElements: number;
+  hasNext: boolean;
+}
+
 // Request/Response types for API
 export interface DeviceCreateRequest {
   name: string;
-  label: string;
-  deviceProfileId: string;
-  type: DeviceType;
-  connectionType: ConnectionType;
-  additionalInfo?: Device['additionalInfo'];
-  customerId?: string;
+  description?: string;
+  areaId: string;
+  deviceTypeId: string;
+  serialNumber?: string;
+  model?: string;
+  firmware?: string;
+  metadata?: Record<string, any>;
+  isActive?: boolean;
 }
 
 export interface DeviceUpdateRequest {
   id: string;
   name?: string;
-  label?: string;
-  additionalInfo?: Device['additionalInfo'];
+  description?: string;
+  areaId?: string;
+  deviceTypeId?: string;
+  serialNumber?: string;
+  model?: string;
+  firmware?: string;
+  metadata?: Record<string, any>;
+  isActive?: boolean;
 }
 
 export interface DeviceListResponse {
@@ -163,14 +205,6 @@ export interface DeviceListParams {
   sortProperty?: string;
   sortOrder?: 'ASC' | 'DESC';
   textSearch?: string;
-  deviceTypes?: DeviceType[];
-  statuses?: DeviceStatus[];
-}
-
-export interface AttributeUpdateRequest {
-  deviceId: string;
-  scope: 'SERVER_SCOPE' | 'CLIENT_SCOPE' | 'SHARED_SCOPE';
-  attributes: Record<string, any>;
 }
 
 export interface TelemetryRequest {
@@ -195,16 +229,13 @@ export interface DeviceRpcRequest {
 // UI State types
 export interface DeviceFilters {
   search: string;
-  deviceTypes: DeviceType[];
+  deviceTypes: string[];
   statuses: DeviceStatus[];
-  connectionTypes: ConnectionType[];
-  hasLocation: boolean | null;
-  lastActivityFrom?: string;
-  lastActivityTo?: string;
+  hasLocation?: boolean | null;
 }
 
 export interface DeviceSort {
-  field: keyof Device;
+  field: string;
   direction: 'asc' | 'desc';
 }
 

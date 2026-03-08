@@ -7,8 +7,6 @@ import type {
   DeviceSort, 
   DeviceSelection,
   DeviceListParams,
-  DeviceProfile,
-  DeviceGroup,
   DeviceAlarm,
   DeviceCommand
 } from '../types';
@@ -18,8 +16,6 @@ interface DeviceState {
   // Data state
   devices: Device[];
   selectedDevice: Device | null;
-  deviceProfiles: DeviceProfile[];
-  deviceGroups: DeviceGroup[];
   
   // UI state
   loading: boolean;
@@ -67,12 +63,6 @@ interface DeviceActions {
   updateDevice: (id: string, data: any) => Promise<void>;
   deleteDevice: (id: string) => Promise<void>;
   deleteDevices: (ids: string[]) => Promise<void>;
-  
-  // Profile actions
-  fetchDeviceProfiles: () => Promise<void>;
-  
-  // Group actions
-  fetchDeviceGroups: () => Promise<void>;
   
   // Filter and sort actions
   setFilters: (filters: Partial<DeviceFilters>) => void;
@@ -123,8 +113,6 @@ const initialFilters: DeviceFilters = {
   search: '',
   deviceTypes: [],
   statuses: [],
-  connectionTypes: [],
-  hasLocation: null,
 };
 
 const initialSort: DeviceSort = {
@@ -141,8 +129,6 @@ const initialSelection: DeviceSelection = {
 const initialState: DeviceState = {
   devices: [],
   selectedDevice: null,
-  deviceProfiles: [],
-  deviceGroups: [],
   
   loading: false,
   saving: false,
@@ -203,12 +189,6 @@ export const useDeviceStore = create<DeviceState & DeviceActions>()(
               // Apply filters
               if (filters.search) {
                 requestParams.textSearch = filters.search;
-              }
-              if (filters.deviceTypes.length > 0) {
-                requestParams.deviceTypes = filters.deviceTypes;
-              }
-              if (filters.statuses.length > 0) {
-                requestParams.statuses = filters.statuses;
               }
 
               const response = await deviceService.getDevices(requestParams);
@@ -374,30 +354,6 @@ export const useDeviceStore = create<DeviceState & DeviceActions>()(
                 state.saving = false;
                 state.error = error instanceof Error ? error.message : 'Failed to delete devices';
               });
-            }
-          },
-
-          // Profile actions
-          fetchDeviceProfiles: async () => {
-            try {
-              const response = await deviceService.getDeviceProfiles(0, 100);
-              set((state) => {
-                state.deviceProfiles = response.data;
-              });
-            } catch (error) {
-              console.error('Failed to fetch device profiles:', error);
-            }
-          },
-
-          // Group actions
-          fetchDeviceGroups: async () => {
-            try {
-              const groups = await deviceService.getDeviceGroups();
-              set((state) => {
-                state.deviceGroups = groups;
-              });
-            } catch (error) {
-              console.error('Failed to fetch device groups:', error);
             }
           },
 
@@ -580,11 +536,13 @@ export const useDeviceStore = create<DeviceState & DeviceActions>()(
                 ...data,
               };
               
-              // Update device status if available
+              // Update device online status if available
               const deviceIndex = state.devices.findIndex(d => d.id === deviceId);
-              if (deviceIndex !== -1 && data.status && state.devices[deviceIndex]) {
-                state.devices[deviceIndex].status = data.status;
-                state.devices[deviceIndex].lastActivityTime = new Date().toISOString();
+              if (deviceIndex !== -1 && state.devices[deviceIndex]) {
+                if (data.isOnline !== undefined) {
+                  state.devices[deviceIndex].isOnline = data.isOnline;
+                }
+                state.devices[deviceIndex].lastSeen = new Date().toISOString();
               }
             });
           },

@@ -9,6 +9,7 @@ import { SitesModule } from './modules/sites/sites.module';
 import { AreasModule } from './modules/areas/areas.module';
 import { DevicesModule } from './modules/devices/devices.module';
 import { DeviceTemplatesModule } from './modules/device-templates/device-templates.module';
+import { ProfilesModule } from './modules/profiles/profiles.module';
 import { ScadaViewsModule } from './modules/scada-views/scada-views.module';
 import { WidgetsModule } from './modules/widgets/widgets.module';
 import { ThingsBoardIntegrationModule } from './modules/thingsboard-integration/thingsboard-integration.module';
@@ -39,6 +40,7 @@ import thingsBoardConfig from './config/thingsboard.config';
     AreasModule,
     DevicesModule,
     DeviceTemplatesModule,
+    ProfilesModule,
     ScadaViewsModule,
     WidgetsModule,
 

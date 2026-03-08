@@ -19,6 +19,50 @@ export interface TbDevice {
   additionalInfo?: any;
 }
 
+export interface TbDeviceProfile {
+  id?: TbEntityId;
+  createdTime?: number;
+  tenantId?: TbEntityId;
+  name: string;
+  description?: string;
+  image?: string;
+  type?: string;
+  transportType?: string;
+  provisionType?: string;
+  defaultRuleChainId?: TbEntityId;
+  defaultDashboardId?: TbEntityId;
+  defaultQueueName?: string;
+  firmwareId?: TbEntityId;
+  softwareId?: TbEntityId;
+  default?: boolean;
+  profileData?: {
+    configuration?: any;
+    transportConfiguration?: any;
+    provisionConfiguration?: any;
+    alarms?: any[];
+  };
+}
+
+export interface TbAssetProfile {
+  id?: TbEntityId;
+  createdTime?: number;
+  tenantId?: TbEntityId;
+  name: string;
+  description?: string;
+  image?: string;
+  default?: boolean;
+  defaultRuleChainId?: TbEntityId;
+  defaultDashboardId?: TbEntityId;
+  defaultQueueName?: string;
+}
+
+export interface TbPageData<T> {
+  data: T[];
+  totalPages: number;
+  totalElements: number;
+  hasNext: boolean;
+}
+
 export interface TbTelemetryData {
   [key: string]: Array<{
     ts: number;
@@ -45,6 +89,71 @@ export interface TbRpcResponse {
   response?: any;
   error?: string;
   timeout: boolean;
+}
+
+export interface TbDeviceCredentials {
+  id: TbEntityId;
+  createdTime: number;
+  deviceId: TbEntityId;
+  credentialsType: 'ACCESS_TOKEN' | 'X509_CERTIFICATE' | 'MQTT_BASIC' | 'LWM2M_CREDENTIALS';
+  credentialsId: string;
+  credentialsValue?: string | undefined;
+}
+
+export interface TbAlarm {
+  id: TbEntityId;
+  createdTime: number;
+  tenantId: TbEntityId;
+  customerId?: TbEntityId | undefined;
+  name: string;
+  type: string;
+  originator: TbEntityId;
+  severity: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'WARNING' | 'INDETERMINATE';
+  status: 'ACTIVE_UNACK' | 'ACTIVE_ACK' | 'CLEARED_UNACK' | 'CLEARED_ACK';
+  acknowledged: boolean;
+  cleared: boolean;
+  startTs: number;
+  endTs: number;
+  ackTs: number;
+  clearTs: number;
+  assigneeId?: TbEntityId | undefined;
+  propagate: boolean;
+  propagateToOwner: boolean;
+  propagateToTenant: boolean;
+  propagateRelationTypes?: string[] | undefined;
+  details?: any;
+}
+
+export interface TbEvent {
+  id: TbEntityId;
+  createdTime: number;
+  tenantId: TbEntityId;
+  entityId: string;
+  serviceId: string;
+  body: any;
+}
+
+export interface TbRelation {
+  from: TbEntityId;
+  to: TbEntityId;
+  type: string;
+  typeGroup: string;
+  additionalInfo?: any;
+}
+
+export interface TbAuditLog {
+  id: TbEntityId;
+  createdTime: number;
+  tenantId: TbEntityId;
+  customerId?: TbEntityId | undefined;
+  entityId: TbEntityId;
+  entityName: string;
+  userId: TbEntityId;
+  userName: string;
+  actionType: string;
+  actionData?: any;
+  actionStatus: string;
+  actionFailureDetails?: string | undefined;
 }
 
 export interface IThingsBoardClient {

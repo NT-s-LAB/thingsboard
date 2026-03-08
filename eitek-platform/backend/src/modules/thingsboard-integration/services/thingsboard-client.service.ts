@@ -1,8 +1,8 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, BadGatewayException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { IThingsBoardClient, TbDevice, TbTelemetryData, TbAttributeData, TbRpcRequest, TbRpcResponse } from '../interfaces/thingsboard-api.interface';
+import { IThingsBoardClient, TbDevice, TbDeviceProfile, TbAssetProfile, TbPageData, TbTelemetryData, TbAttributeData, TbRpcRequest, TbRpcResponse, TbDeviceCredentials, TbAlarm, TbEvent, TbRelation, TbAuditLog } from '../interfaces/thingsboard-api.interface';
 
 @Injectable()
 export class ThingsBoardClientService implements IThingsBoardClient, OnModuleInit {
@@ -43,6 +43,46 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
       'Content-Type': 'application/json',
       'X-Authorization': `Bearer ${this.accessToken}`,
     };
+  }
+
+  private async tbRequest<T>(operation: string, fn: () => any): Promise<T> {
+    await this.ensureAuthenticated();
+    try {
+      const response = await firstValueFrom(fn()) as any;
+      return response.data;
+    } catch (error) {
+      const status = error?.response?.status;
+      const message = error?.response?.data?.message || error.message || 'Unknown error';
+      this.logger.error(`TB API error [${operation}]: ${status || 'N/A'} - ${message}`);
+
+      if (status === 401) {
+        this.logger.warn(`Token expired, re-authenticating for [${operation}]...`);
+        this.accessToken = null;
+        try {
+          await this.ensureAuthenticated();
+          const retryResponse = await firstValueFrom(fn()) as any;
+          return retryResponse.data;
+        } catch (retryError) {
+          const retryMsg = retryError?.response?.data?.message || retryError.message;
+          this.logger.error(`TB API retry failed [${operation}]: ${retryMsg}`);
+          throw this.mapTbError(operation, retryError);
+        }
+      }
+
+      throw this.mapTbError(operation, error);
+    }
+  }
+
+  private mapTbError(operation: string, error: any): Error {
+    const status = error?.response?.status;
+    const message = error?.response?.data?.message || error.message || 'Unknown error';
+    if (status === 404) {
+      return new NotFoundException(`ThingsBoard [${operation}]: ${message}`);
+    }
+    if (status >= 400 && status < 500) {
+      return new BadRequestException(`ThingsBoard [${operation}]: ${message}`);
+    }
+    return new BadGatewayException(`ThingsBoard service error [${operation}]: ${message}`);
   }
 
   async login(): Promise<string> {
@@ -87,38 +127,31 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
   }
 
   async createDevice(device: Partial<TbDevice>): Promise<TbDevice> {
-    await this.ensureAuthenticated();
-    const response = await firstValueFrom(
+    return this.tbRequest<TbDevice>('createDevice', () =>
       this.httpService.post(`${this.baseUrl}/api/device`, device, {
         headers: this.getHeaders(),
       }),
     );
-    return response.data;
   }
 
   async getDevice(deviceId: string): Promise<TbDevice> {
-    await this.ensureAuthenticated();
-    const response = await firstValueFrom(
+    return this.tbRequest<TbDevice>('getDevice', () =>
       this.httpService.get(`${this.baseUrl}/api/device/${deviceId}`, {
         headers: this.getHeaders(),
       }),
     );
-    return response.data;
   }
 
   async updateDevice(deviceId: string, device: Partial<TbDevice>): Promise<TbDevice> {
-    await this.ensureAuthenticated();
-    const response = await firstValueFrom(
+    return this.tbRequest<TbDevice>('updateDevice', () =>
       this.httpService.post(`${this.baseUrl}/api/device`, { ...device, id: { id: deviceId, entityType: 'DEVICE' } }, {
         headers: this.getHeaders(),
       }),
     );
-    return response.data;
   }
 
   async deleteDevice(deviceId: string): Promise<void> {
-    await this.ensureAuthenticated();
-    await firstValueFrom(
+    await this.tbRequest('deleteDevice', () =>
       this.httpService.delete(`${this.baseUrl}/api/device/${deviceId}`, {
         headers: this.getHeaders(),
       }),
@@ -126,14 +159,13 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
   }
 
   async getDevices(pageSize = 100, page = 0): Promise<TbDevice[]> {
-    await this.ensureAuthenticated();
-    const response = await firstValueFrom(
+    const result = await this.tbRequest<any>('getDevices', () =>
       this.httpService.get(
         `${this.baseUrl}/api/tenant/devices?pageSize=${pageSize}&page=${page}`,
         { headers: this.getHeaders() },
       ),
     );
-    return response.data.data || [];
+    return result?.data || [];
   }
 
   async getDeviceTelemetry(
@@ -142,32 +174,28 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
     startTs?: number,
     endTs?: number,
   ): Promise<TbTelemetryData> {
-    await this.ensureAuthenticated();
     const params: any = { keys: keys.join(',') };
     if (startTs) params.startTs = startTs;
     if (endTs) params.endTs = endTs;
 
-    const response = await firstValueFrom(
+    return this.tbRequest<TbTelemetryData>('getDeviceTelemetry', () =>
       this.httpService.get(
         `${this.baseUrl}/api/plugins/telemetry/DEVICE/${deviceId}/values/timeseries`,
         { headers: this.getHeaders(), params },
       ),
     );
-    return response.data;
   }
 
   async getLatestTelemetry(deviceId: string, keys?: string[]): Promise<TbTelemetryData> {
-    await this.ensureAuthenticated();
     const params: any = {};
     if (keys && keys.length) params.keys = keys.join(',');
 
-    const response = await firstValueFrom(
+    return this.tbRequest<TbTelemetryData>('getLatestTelemetry', () =>
       this.httpService.get(
         `${this.baseUrl}/api/plugins/telemetry/DEVICE/${deviceId}/values/timeseries`,
         { headers: this.getHeaders(), params },
       ),
     );
-    return response.data;
   }
 
   async getDeviceAttributes(
@@ -175,11 +203,10 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
     scope: 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE',
     keys?: string[],
   ): Promise<TbAttributeData> {
-    await this.ensureAuthenticated();
     const params: any = {};
     if (keys && keys.length) params.keys = keys.join(',');
 
-    const response = await firstValueFrom(
+    const data = await this.tbRequest<any>('getDeviceAttributes', () =>
       this.httpService.get(
         `${this.baseUrl}/api/plugins/telemetry/DEVICE/${deviceId}/values/attributes/${scope}`,
         { headers: this.getHeaders(), params },
@@ -188,8 +215,8 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
 
     // Convert array response to keyed object
     const result: TbAttributeData = {};
-    if (Array.isArray(response.data)) {
-      response.data.forEach((attr: any) => {
+    if (Array.isArray(data)) {
+      data.forEach((attr: any) => {
         result[attr.key] = {
           lastUpdateTs: attr.lastUpdateTs,
           value: attr.value,
@@ -204,8 +231,7 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
     scope: 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE',
     attributes: Record<string, any>,
   ): Promise<void> {
-    await this.ensureAuthenticated();
-    await firstValueFrom(
+    await this.tbRequest('saveDeviceAttributes', () =>
       this.httpService.post(
         `${this.baseUrl}/api/plugins/telemetry/DEVICE/${deviceId}/attributes/${scope}`,
         attributes,
@@ -254,5 +280,326 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
 
   async unsubscribeFromAttributes(deviceId: string): Promise<void> {
     this.logger.debug(`Unsubscribing from attributes for device ${deviceId}`);
+  }
+
+  // ================================
+  // Device Profile Management
+  // ================================
+
+  async getDeviceProfiles(pageSize = 100, page = 0, textSearch?: string, sortProperty = 'name', sortOrder = 'ASC'): Promise<TbPageData<TbDeviceProfile>> {
+    const params: any = { pageSize, page, sortProperty, sortOrder };
+    if (textSearch) params.textSearch = textSearch;
+
+    return this.tbRequest<TbPageData<TbDeviceProfile>>('getDeviceProfiles', () =>
+      this.httpService.get(`${this.baseUrl}/api/deviceProfiles`, {
+        headers: this.getHeaders(),
+        params,
+      }),
+    );
+  }
+
+  async getDeviceProfile(deviceProfileId: string): Promise<TbDeviceProfile> {
+    return this.tbRequest<TbDeviceProfile>('getDeviceProfile', () =>
+      this.httpService.get(`${this.baseUrl}/api/deviceProfile/${deviceProfileId}`, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  async saveDeviceProfile(profile: Partial<TbDeviceProfile>): Promise<TbDeviceProfile> {
+    return this.tbRequest<TbDeviceProfile>('saveDeviceProfile', () =>
+      this.httpService.post(`${this.baseUrl}/api/deviceProfile`, profile, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  async deleteDeviceProfile(deviceProfileId: string): Promise<void> {
+    await this.tbRequest('deleteDeviceProfile', () =>
+      this.httpService.delete(`${this.baseUrl}/api/deviceProfile/${deviceProfileId}`, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  // ================================
+  // Asset Profile Management
+  // ================================
+
+  async getAssetProfiles(pageSize = 100, page = 0, textSearch?: string, sortProperty = 'name', sortOrder = 'ASC'): Promise<TbPageData<TbAssetProfile>> {
+    const params: any = { pageSize, page, sortProperty, sortOrder };
+    if (textSearch) params.textSearch = textSearch;
+
+    return this.tbRequest<TbPageData<TbAssetProfile>>('getAssetProfiles', () =>
+      this.httpService.get(`${this.baseUrl}/api/assetProfiles`, {
+        headers: this.getHeaders(),
+        params,
+      }),
+    );
+  }
+
+  async getAssetProfile(assetProfileId: string): Promise<TbAssetProfile> {
+    return this.tbRequest<TbAssetProfile>('getAssetProfile', () =>
+      this.httpService.get(`${this.baseUrl}/api/assetProfile/${assetProfileId}`, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  async saveAssetProfile(profile: Partial<TbAssetProfile>): Promise<TbAssetProfile> {
+    return this.tbRequest<TbAssetProfile>('saveAssetProfile', () =>
+      this.httpService.post(`${this.baseUrl}/api/assetProfile`, profile, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  async deleteAssetProfile(assetProfileId: string): Promise<void> {
+    await this.tbRequest('deleteAssetProfile', () =>
+      this.httpService.delete(`${this.baseUrl}/api/assetProfile/${assetProfileId}`, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  // ================================
+  // Device Credentials
+  // ================================
+
+  async getDeviceCredentials(deviceId: string): Promise<TbDeviceCredentials> {
+    return this.tbRequest<TbDeviceCredentials>('getDeviceCredentials', () =>
+      this.httpService.get(`${this.baseUrl}/api/device/${deviceId}/credentials`, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  async saveDeviceCredentials(credentials: Partial<TbDeviceCredentials>): Promise<TbDeviceCredentials> {
+    return this.tbRequest<TbDeviceCredentials>('saveDeviceCredentials', () =>
+      this.httpService.post(`${this.baseUrl}/api/device/credentials`, credentials, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  // ================================
+  // Device Alarms
+  // ================================
+
+  async getAlarms(params: {
+    entityType?: string;
+    entityId?: string;
+    pageSize?: number;
+    page?: number;
+    textSearch?: string;
+    sortProperty?: string;
+    sortOrder?: string;
+    startTime?: number;
+    endTime?: number;
+    searchStatus?: string;
+    severityList?: string[];
+    typeList?: string[];
+    statusList?: string[];
+  } = {}): Promise<TbPageData<TbAlarm>> {
+    const queryParams: any = {
+      pageSize: params.pageSize || 20,
+      page: params.page || 0,
+      sortProperty: params.sortProperty || 'createdTime',
+      sortOrder: params.sortOrder || 'DESC',
+    };
+    if (params.textSearch) queryParams.textSearch = params.textSearch;
+    if (params.startTime) queryParams.startTime = params.startTime;
+    if (params.endTime) queryParams.endTime = params.endTime;
+    if (params.searchStatus) queryParams.searchStatus = params.searchStatus;
+    if (params.severityList?.length) queryParams.severityList = params.severityList.join(',');
+    if (params.typeList?.length) queryParams.typeList = params.typeList.join(',');
+    if (params.statusList?.length) queryParams.statusList = params.statusList.join(',');
+
+    let url = `${this.baseUrl}/api/alarms`;
+    if (params.entityType && params.entityId) {
+      url = `${this.baseUrl}/api/alarm/${params.entityType}/${params.entityId}`;
+    }
+
+    return this.tbRequest<TbPageData<TbAlarm>>('getAlarms', () =>
+      this.httpService.get(url, { headers: this.getHeaders(), params: queryParams }),
+    );
+  }
+
+  async getAlarmById(alarmId: string): Promise<TbAlarm> {
+    return this.tbRequest<TbAlarm>('getAlarmById', () =>
+      this.httpService.get(`${this.baseUrl}/api/alarm/${alarmId}`, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  async ackAlarm(alarmId: string): Promise<void> {
+    await this.tbRequest('ackAlarm', () =>
+      this.httpService.post(`${this.baseUrl}/api/alarm/${alarmId}/ack`, {}, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  async clearAlarm(alarmId: string): Promise<void> {
+    await this.tbRequest('clearAlarm', () =>
+      this.httpService.post(`${this.baseUrl}/api/alarm/${alarmId}/clear`, {}, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  async deleteAlarm(alarmId: string): Promise<void> {
+    await this.tbRequest('deleteAlarm', () =>
+      this.httpService.delete(`${this.baseUrl}/api/alarm/${alarmId}`, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  // ================================
+  // Device Events
+  // ================================
+
+  async getEvents(entityType: string, entityId: string, eventType: string, params: {
+    pageSize?: number;
+    page?: number;
+    sortProperty?: string;
+    sortOrder?: string;
+    startTime?: number;
+    endTime?: number;
+    tenantId?: string;
+  } = {}): Promise<TbPageData<TbEvent>> {
+    const queryParams: any = {
+      pageSize: params.pageSize || 20,
+      page: params.page || 0,
+      sortProperty: params.sortProperty || 'createdTime',
+      sortOrder: params.sortOrder || 'DESC',
+    };
+    if (params.startTime) queryParams.startTime = params.startTime;
+    if (params.endTime) queryParams.endTime = params.endTime;
+    if (params.tenantId) queryParams.tenantId = params.tenantId;
+
+    return this.tbRequest<TbPageData<TbEvent>>('getEvents', () =>
+      this.httpService.get(
+        `${this.baseUrl}/api/events/${entityType}/${entityId}/${eventType}`,
+        { headers: this.getHeaders(), params: queryParams },
+      ),
+    );
+  }
+
+  // ================================
+  // Relations
+  // ================================
+
+  async getRelations(entityId: string, entityType: string, direction: 'FROM' | 'TO' = 'FROM', relationType?: string): Promise<TbRelation[]> {
+    const params: any = {};
+    if (relationType) params.relationType = relationType;
+
+    return this.tbRequest<TbRelation[]>('getRelations', () =>
+      this.httpService.get(
+        `${this.baseUrl}/api/relations?fromId=${entityId}&fromType=${entityType}`,
+        { headers: this.getHeaders(), params },
+      ),
+    );
+  }
+
+  async saveRelation(relation: TbRelation): Promise<void> {
+    await this.tbRequest('saveRelation', () =>
+      this.httpService.post(`${this.baseUrl}/api/relation`, relation, {
+        headers: this.getHeaders(),
+      }),
+    );
+  }
+
+  async deleteRelation(fromId: string, fromType: string, relationType: string, toId: string, toType: string): Promise<void> {
+    await this.tbRequest('deleteRelation', () =>
+      this.httpService.delete(
+        `${this.baseUrl}/api/relation?fromId=${fromId}&fromType=${fromType}&relationType=${relationType}&toId=${toId}&toType=${toType}`,
+        { headers: this.getHeaders() },
+      ),
+    );
+  }
+
+  // ================================
+  // Audit Logs
+  // ================================
+
+  async getAuditLogsByEntityId(entityType: string, entityId: string, params: {
+    pageSize?: number;
+    page?: number;
+    sortProperty?: string;
+    sortOrder?: string;
+    startTime?: number;
+    endTime?: number;
+    actionTypes?: string[];
+  } = {}): Promise<TbPageData<TbAuditLog>> {
+    const queryParams: any = {
+      pageSize: params.pageSize || 20,
+      page: params.page || 0,
+      sortProperty: params.sortProperty || 'createdTime',
+      sortOrder: params.sortOrder || 'DESC',
+    };
+    if (params.startTime) queryParams.startTime = params.startTime;
+    if (params.endTime) queryParams.endTime = params.endTime;
+    if (params.actionTypes?.length) queryParams.actionTypes = params.actionTypes.join(',');
+
+    return this.tbRequest<TbPageData<TbAuditLog>>('getAuditLogsByEntityId', () =>
+      this.httpService.get(
+        `${this.baseUrl}/api/audit/logs/entity/${entityType}/${entityId}`,
+        { headers: this.getHeaders(), params: queryParams },
+      ),
+    );
+  }
+
+  // ================================
+  // Delete Attributes
+  // ================================
+
+  async deleteDeviceAttributes(
+    deviceId: string,
+    scope: 'CLIENT_SCOPE' | 'SHARED_SCOPE' | 'SERVER_SCOPE',
+    keys: string[],
+  ): Promise<void> {
+    await this.tbRequest('deleteDeviceAttributes', () =>
+      this.httpService.delete(
+        `${this.baseUrl}/api/plugins/telemetry/DEVICE/${deviceId}/attributes/${scope}?keys=${keys.join(',')}`,
+        { headers: this.getHeaders() },
+      ),
+    );
+  }
+
+  // ================================
+  // Timeseries with aggregation
+  // ================================
+
+  async getTimeseries(
+    deviceId: string,
+    keys: string[],
+    startTs: number,
+    endTs: number,
+    params: {
+      interval?: number;
+      limit?: number;
+      agg?: string;
+      orderBy?: string;
+    } = {},
+  ): Promise<TbTelemetryData> {
+    const queryParams: any = {
+      keys: keys.join(','),
+      startTs,
+      endTs,
+    };
+    if (params.interval) queryParams.interval = params.interval;
+    if (params.limit) queryParams.limit = params.limit;
+    if (params.agg) queryParams.agg = params.agg;
+    if (params.orderBy) queryParams.orderBy = params.orderBy;
+
+    return this.tbRequest<TbTelemetryData>('getTimeseries', () =>
+      this.httpService.get(
+        `${this.baseUrl}/api/plugins/telemetry/DEVICE/${deviceId}/values/timeseries`,
+        { headers: this.getHeaders(), params: queryParams },
+      ),
+    );
   }
 }

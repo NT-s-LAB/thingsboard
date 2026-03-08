@@ -1,8 +1,10 @@
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/shared/utils/cn';
 import { Badge } from '@/shared/components/ui/Badge';
 import { formatDistanceToNow } from '@/shared/utils/date';
-import type { Device } from '../types';
+import type { Device, DeviceStatus } from '../types';
+import { getDeviceStatus, getDeviceTypeName } from '../types';
 
 interface DeviceListItemProps {
   device: Device;
@@ -19,7 +21,7 @@ interface DeviceListItemProps {
 
 export const DeviceListItem: React.FC<DeviceListItemProps> = ({
   device,
-  onSelect,
+  onSelect: _onSelect,
   onEdit,
   onDelete,
   onViewAttributes,
@@ -29,10 +31,10 @@ export const DeviceListItem: React.FC<DeviceListItemProps> = ({
   isSelectable = false,
   onToggleSelect,
 }) => {
+  const router = useRouter();
+
   const handleRowClick = () => {
-    if (onSelect) {
-      onSelect(device);
-    }
+    router.push(`/devices/${device.id}`);
   };
 
   const handleCheckboxClick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,7 +49,10 @@ export const DeviceListItem: React.FC<DeviceListItemProps> = ({
     action();
   };
 
-  const statusColors = {
+  const status = getDeviceStatus(device);
+  const typeName = getDeviceTypeName(device);
+
+  const statusColors: Record<DeviceStatus, string> = {
     'Online': 'bg-green-100 text-green-800',
     'Offline': 'bg-red-100 text-red-800',
     'Error': 'bg-red-100 text-red-800',
@@ -81,9 +86,9 @@ export const DeviceListItem: React.FC<DeviceListItemProps> = ({
           <div className="font-semibold text-gray-900">
             {device.name}
           </div>
-          {device.label && device.label !== device.name && (
+          {device.description && (
             <div className="text-sm text-gray-600">
-              {device.label}
+              {device.description}
             </div>
           )}
         </div>
@@ -92,37 +97,37 @@ export const DeviceListItem: React.FC<DeviceListItemProps> = ({
       {/* Type */}
       <td className="px-6 py-4">
         <Badge variant="secondary">
-          {device.type}
+          {typeName}
         </Badge>
       </td>
 
       {/* Status */}
       <td className="px-6 py-4">
-        <Badge className={statusColors[device.status]}>
-          {device.status}
+        <Badge className={statusColors[status]}>
+          {status}
         </Badge>
       </td>
 
-      {/* Connection */}
-      <td className="px-6 py-4">
-        <Badge variant="outline">
-          {device.connectionType}
-        </Badge>
-      </td>
-
-      {/* Profile */}
+      {/* Area */}
       <td className="px-6 py-4">
         <div className="text-sm text-gray-900">
-          {device.deviceProfile?.name || '-'}
+          {device.area?.name || '-'}
         </div>
       </td>
 
-      {/* Last Activity */}
+      {/* Model */}
       <td className="px-6 py-4">
         <div className="text-sm text-gray-900">
-          {device.lastActivityTime ? (
-            <span title={new Date(device.lastActivityTime).toLocaleString()}>
-              {formatDistanceToNow(new Date(device.lastActivityTime))}
+          {device.model || '-'}
+        </div>
+      </td>
+
+      {/* Last Seen */}
+      <td className="px-6 py-4">
+        <div className="text-sm text-gray-900">
+          {device.lastSeen ? (
+            <span title={new Date(device.lastSeen).toLocaleString()}>
+              {formatDistanceToNow(new Date(device.lastSeen))}
             </span>
           ) : (
             '-'
@@ -130,16 +135,10 @@ export const DeviceListItem: React.FC<DeviceListItemProps> = ({
         </div>
       </td>
 
-      {/* Location */}
+      {/* Serial Number */}
       <td className="px-6 py-4">
         <div className="text-sm text-gray-900">
-          {device.additionalInfo?.location ? (
-            <span title={`${device.additionalInfo.location.latitude}, ${device.additionalInfo.location.longitude}`}>
-              {device.additionalInfo.location.address || '📍'}
-            </span>
-          ) : (
-            '-'
-          )}
+          {device.serialNumber || '-'}
         </div>
       </td>
 
@@ -170,7 +169,7 @@ export const DeviceListItem: React.FC<DeviceListItemProps> = ({
             </button>
           )}
 
-          {onSendCommand && device.status === 'Online' && (
+          {onSendCommand && device.isOnline && (
             <button
               onClick={(e) => handleActionClick(e, () => onSendCommand(device))}
               className="text-orange-600 hover:text-orange-900 transition-colors"

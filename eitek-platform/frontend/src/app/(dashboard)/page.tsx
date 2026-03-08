@@ -22,6 +22,7 @@ const DashboardPage: React.FC = () => {
   } = useProjectStore();
   const { 
     devices, 
+    pagination,
     fetchDevices,
     loading: deviceLoading 
   } = useDeviceStore();
@@ -40,8 +41,8 @@ const DashboardPage: React.FC = () => {
   // Calculate statistics
   const stats = {
     totalProjects: recentProjects.length + favoriteProjects.length,
-    totalDevices: devices.length,
-    onlineDevices: devices.filter(d => d.status === 'Online').length,
+    totalDevices: pagination.totalElements,
+    onlineDevices: devices.filter(d => d.isOnline).length,
     activeAlarms: 0, // TODO: Get from alarm service
   };
 
@@ -187,27 +188,29 @@ const DashboardPage: React.FC = () => {
                 <div key={device.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                   <div className="flex items-center space-x-3">
                     <div className={`w-3 h-3 rounded-full ${
-                      device.status === 'Online' ? 'bg-green-500' :
-                      device.status === 'Offline' ? 'bg-red-500' :
-                      'bg-yellow-500'
+                      device.isOnline ? 'bg-green-500' :
+                      !device.isActive ? 'bg-yellow-500' :
+                      'bg-red-500'
                     }`} />
                     <div>
                       <p className="font-medium text-gray-900">{device.name}</p>
-                      <p className="text-sm text-gray-600">{device.type} • {device.connectionType}</p>
+                      <p className="text-sm text-gray-600">
+                        {device.deviceType?.name || device.deviceType?.category || 'Unknown'}
+                        {device.area ? ` • ${device.area.name}` : ''}
+                      </p>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className={`inline-flex px-2 py-1 text-xs rounded-full ${
-                      device.status === 'Online' ? 'bg-green-100 text-green-800' :
-                      device.status === 'Offline' ? 'bg-red-100 text-red-800' :
-                      device.status === 'Error' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
+                      device.isOnline ? 'bg-green-100 text-green-800' :
+                      !device.isActive ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
                     }`}>
-                      {device.status}
+                      {device.isOnline ? 'Online' : !device.isActive ? 'Inactive' : 'Offline'}
                     </div>
-                    {device.lastActivityTime && (
+                    {device.lastSeen && (
                       <p className="text-xs text-gray-500 mt-1">
-                        {formatDistanceToNow(new Date(device.lastActivityTime))}
+                        {formatDistanceToNow(new Date(device.lastSeen))}
                       </p>
                     )}
                   </div>
