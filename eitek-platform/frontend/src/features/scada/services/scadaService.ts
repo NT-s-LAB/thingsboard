@@ -24,112 +24,153 @@ class ScadaService {
     }
     if (params.createdBy) queryParams.append('createdBy', params.createdBy);
     if (params.page !== undefined) queryParams.append('page', params.page.toString());
-    if (params.pageSize !== undefined) queryParams.append('pageSize', params.pageSize.toString());
+    if (params.pageSize !== undefined) queryParams.append('limit', params.pageSize.toString());
 
-    const response = await apiClient.get<DashboardListResponse>(`/scada/dashboards?${queryParams.toString()}`);
+    const response = await apiClient.get<DashboardListResponse>(`/scada-views?${queryParams.toString()}`);
     return response;
   }
 
   async getDashboard(id: string): Promise<ScadaDashboard> {
-    const response = await apiClient.get<ScadaDashboard>(`/scada/dashboards/${id}`);
+    const response = await apiClient.get<ScadaDashboard>(`/scada-views/${id}`);
     return response;
   }
 
   async createDashboard(data: DashboardCreateRequest): Promise<ScadaDashboard> {
-    const response = await apiClient.post<ScadaDashboard>('/scada/dashboards', data);
+    const response = await apiClient.post<ScadaDashboard>('/scada-views', data);
     return response;
   }
 
   async updateDashboard(data: DashboardUpdateRequest): Promise<ScadaDashboard> {
-    const response = await apiClient.put<ScadaDashboard>(`/scada/dashboards/${data.id}`, data);
+    const response = await apiClient.put<ScadaDashboard>(`/scada-views/${data.id}`, data);
     return response;
   }
 
   async deleteDashboard(id: string): Promise<void> {
-    await apiClient.delete(`/scada/dashboards/${id}`);
+    await apiClient.delete(`/scada-views/${id}`);
   }
 
   async cloneDashboard(id: string, name: string): Promise<ScadaDashboard> {
-    const response = await apiClient.post<ScadaDashboard>(`/scada/dashboards/${id}/clone`, { name });
+    const response = await apiClient.post<ScadaDashboard>(`/scada-views/${id}/clone`, { name });
     return response;
   }
 
   // Widget operations
   async addWidget(dashboardId: string, widget: Omit<Widget, 'id' | 'createdTime' | 'updatedTime' | 'createdBy'>): Promise<Widget> {
-    const response = await apiClient.post<Widget>(`/scada/dashboards/${dashboardId}/widgets`, widget);
+    // Transform FE widget shape to BE DTO shape
+    const w = widget as any;
+    const payload: Record<string, any> = {
+      type: w.type || 'custom',
+      name: w.name || 'Widget',
+      position: w.transform
+        ? {
+            x: w.transform.position?.x ?? 100,
+            y: w.transform.position?.y ?? 100,
+            width: w.transform.size?.width ?? 100,
+            height: w.transform.size?.height ?? 50,
+            rotation: w.transform.rotation ?? 0,
+            zIndex: w.transform.zIndex ?? 0,
+          }
+        : w.position || { x: 100, y: 100, width: 100, height: 50 },
+      properties: w.properties || {},
+    };
+    if (w.description) payload.description = w.description;
+    if (w.style) payload.styles = w.style;
+    if (w.dataBindings) payload.bindings = { items: w.dataBindings };
+    if (w.visible !== undefined) payload.isVisible = w.visible;
+
+    const response = await apiClient.post<Widget>(`/scada-views/${dashboardId}/widgets`, payload);
     return response;
   }
 
   async updateWidget(dashboardId: string, widget: Widget): Promise<Widget> {
-    const response = await apiClient.put<Widget>(`/scada/dashboards/${dashboardId}/widgets/${widget.id}`, widget);
+    const w = widget as any;
+    const payload: Record<string, any> = {};
+    if (w.name) payload.name = w.name;
+    if (w.type) payload.type = w.type;
+    if (w.transform) {
+      payload.position = {
+        x: w.transform.position?.x ?? 100,
+        y: w.transform.position?.y ?? 100,
+        width: w.transform.size?.width ?? 100,
+        height: w.transform.size?.height ?? 50,
+        rotation: w.transform.rotation ?? 0,
+        zIndex: w.transform.zIndex ?? 0,
+      };
+    }
+    if (w.properties) payload.properties = w.properties;
+    if (w.style) payload.styles = w.style;
+    if (w.dataBindings) payload.bindings = { items: w.dataBindings };
+    if (w.visible !== undefined) payload.isVisible = w.visible;
+
+    const response = await apiClient.put<Widget>(`/scada-views/${dashboardId}/widgets/${widget.id}`, payload);
     return response;
   }
 
   async deleteWidget(dashboardId: string, widgetId: string): Promise<void> {
-    await apiClient.delete(`/scada/dashboards/${dashboardId}/widgets/${widgetId}`);
+    await apiClient.delete(`/scada-views/${dashboardId}/widgets/${widgetId}`);
   }
 
   async duplicateWidget(dashboardId: string, widgetId: string): Promise<Widget> {
-    const response = await apiClient.post<Widget>(`/scada/dashboards/${dashboardId}/widgets/${widgetId}/duplicate`);
+    const response = await apiClient.post<Widget>(`/scada-views/${dashboardId}/widgets/${widgetId}/duplicate`);
     return response;
   }
 
   async bulkUpdateWidgets(dashboardId: string, widgets: Widget[]): Promise<Widget[]> {
-    const response = await apiClient.put<Widget[]>(`/scada/dashboards/${dashboardId}/widgets/bulk`, { widgets });
+    const response = await apiClient.put<Widget[]>(`/scada-views/${dashboardId}/widgets/bulk`, { widgets });
     return response;
   }
 
   // Layer operations
   async createLayer(dashboardId: string, name: string): Promise<any> {
-    const response = await apiClient.post<ScadaLayer>(`/scada/dashboards/${dashboardId}/layers`, { name });
+    const response = await apiClient.post<ScadaLayer>(`/scada-views/${dashboardId}/layers`, { name });
     return response;
   }
 
   async updateLayer(dashboardId: string, layer: any): Promise<any> {
-    const response = await apiClient.put<ScadaLayer>(`/scada/dashboards/${dashboardId}/layers/${layer.id}`, layer);
+    const response = await apiClient.put<ScadaLayer>(`/scada-views/${dashboardId}/layers/${layer.id}`, layer);
     return response;
   }
 
   async deleteLayer(dashboardId: string, layerId: string): Promise<void> {
-    await apiClient.delete(`/scada/dashboards/${dashboardId}/layers/${layerId}`);
+    await apiClient.delete(`/scada-views/${dashboardId}/layers/${layerId}`);
   }
 
   async moveWidgetToLayer(dashboardId: string, widgetId: string, layerId: string): Promise<void> {
-    await apiClient.post(`/scada/dashboards/${dashboardId}/widgets/${widgetId}/layer`, { layerId });
+    await apiClient.post(`/scada-views/${dashboardId}/widgets/${widgetId}/layer`, { layerId });
   }
 
   // Variable operations
   async createVariable(dashboardId: string, variable: Omit<ScadaVariable, 'id'>): Promise<ScadaVariable> {
-    const response = await apiClient.post<ScadaVariable>(`/scada/dashboards/${dashboardId}/variables`, variable);
+    const response = await apiClient.post<ScadaVariable>(`/scada-views/${dashboardId}/variables`, variable);
     return response;
   }
 
   async updateVariable(dashboardId: string, variable: ScadaVariable): Promise<ScadaVariable> {
-    const response = await apiClient.put<ScadaVariable>(`/scada/dashboards/${dashboardId}/variables/${variable.id}`, variable);
+    const response = await apiClient.put<ScadaVariable>(`/scada-views/${dashboardId}/variables/${variable.id}`, variable);
     return response;
   }
 
   async deleteVariable(dashboardId: string, variableId: string): Promise<void> {
-    await apiClient.delete(`/scada/dashboards/${dashboardId}/variables/${variableId}`);
+    await apiClient.delete(`/scada-views/${dashboardId}/variables/${variableId}`);
   }
 
   // Script operations
   async createScript(dashboardId: string, script: Omit<ScadaScript, 'id'>): Promise<ScadaScript> {
-    const response = await apiClient.post<ScadaScript>(`/scada/dashboards/${dashboardId}/scripts`, script);
+    const response = await apiClient.post<ScadaScript>(`/scada-views/${dashboardId}/scripts`, script);
     return response;
   }
 
   async updateScript(dashboardId: string, script: ScadaScript): Promise<ScadaScript> {
-    const response = await apiClient.put<ScadaScript>(`/scada/dashboards/${dashboardId}/scripts/${script.id}`, script);
+    const response = await apiClient.put<ScadaScript>(`/scada-views/${dashboardId}/scripts/${script.id}`, script);
     return response;
   }
 
   async deleteScript(dashboardId: string, scriptId: string): Promise<void> {
-    await apiClient.delete(`/scada/dashboards/${dashboardId}/scripts/${scriptId}`);
+    await apiClient.delete(`/scada-views/${dashboardId}/scripts/${scriptId}`);
   }
 
   async testScript(dashboardId: string, script: ScadaScript): Promise<{ success: boolean; result?: any; error?: string }> {
-    const response = await apiClient.post<any>(`/scada/dashboards/${dashboardId}/scripts/test`, script);
+    const response = await apiClient.post<any>(`/scada-views/${dashboardId}/scripts/test`, script);
     return response;
   }
 
@@ -160,7 +201,7 @@ class ScadaService {
   }
 
   async createDashboardFromTemplate(templateId: string, name: string, projectId: string): Promise<ScadaDashboard> {
-    const response = await apiClient.post<ScadaDashboard>('/scada/dashboards/from-template', {
+    const response = await apiClient.post<ScadaDashboard>('/scada-views/from-template', {
       templateId,
       name,
       projectId,
@@ -170,12 +211,12 @@ class ScadaService {
 
   // Runtime operations
   async startRuntime(dashboardId: string): Promise<{ sessionId: string }> {
-    const response = await apiClient.post<{ sessionId: string }>(`/scada/dashboards/${dashboardId}/runtime/start`);
+    const response = await apiClient.post<{ sessionId: string }>(`/scada-views/${dashboardId}/runtime/start`);
     return response;
   }
 
   async stopRuntime(dashboardId: string, sessionId: string): Promise<void> {
-    await apiClient.post(`/scada/dashboards/${dashboardId}/runtime/stop`, { sessionId });
+    await apiClient.post(`/scada-views/${dashboardId}/runtime/stop`, { sessionId });
   }
 
   async getRuntimeStatus(dashboardId: string): Promise<{ 
@@ -184,7 +225,7 @@ class ScadaService {
     startTime?: string; 
     uptime?: number 
   }> {
-    const response = await apiClient.get<any>(`/scada/dashboards/${dashboardId}/runtime/status`);
+    const response = await apiClient.get<any>(`/scada-views/${dashboardId}/runtime/status`);
     return response;
   }
 
@@ -222,23 +263,23 @@ class ScadaService {
     author: string;
     changes: string;
   }>> {
-    const response = await apiClient.get<any[]>(`/scada/dashboards/${dashboardId}/versions`);
+    const response = await apiClient.get<any[]>(`/scada-views/${dashboardId}/versions`);
     return response;
   }
 
   async revertToVersion(dashboardId: string, version: string): Promise<ScadaDashboard> {
-    const response = await apiClient.post<ScadaDashboard>(`/scada/dashboards/${dashboardId}/revert`, { version });
+    const response = await apiClient.post<ScadaDashboard>(`/scada-views/${dashboardId}/revert`, { version });
     return response;
   }
 
   async createVersion(dashboardId: string, changes: string): Promise<{ version: string }> {
-    const response = await apiClient.post<any>(`/scada/dashboards/${dashboardId}/versions`, { changes });
+    const response = await apiClient.post<any>(`/scada-views/${dashboardId}/versions`, { changes });
     return response;
   }
 
   // Import/Export
   async exportDashboard(dashboardId: string, format: 'json' | 'scada'): Promise<Blob> {
-    const response = await apiClient.getBlob(`/scada/dashboards/${dashboardId}/export?format=${format}`);
+    const response = await apiClient.getBlob(`/scada-views/${dashboardId}/export?format=${format}`);
     return response;
   }
 
@@ -247,7 +288,7 @@ class ScadaService {
     formData.append('file', file);
     formData.append('projectId', projectId);
 
-    const response = await apiClient.postFormData<ScadaDashboard>('/scada/dashboards/import', formData);
+    const response = await apiClient.postFormData<ScadaDashboard>('/scada-views/import', formData);
     return response;
   }
 
@@ -263,7 +304,7 @@ class ScadaService {
     if (options?.format) queryParams.append('format', options.format);
     
     const query = queryParams.toString();
-    const response = await apiClient.getBlob(`/scada/dashboards/${dashboardId}/preview${query ? '?' + query : ''}`);
+    const response = await apiClient.getBlob(`/scada-views/${dashboardId}/preview${query ? '?' + query : ''}`);
     return response;
   }
 
@@ -285,7 +326,7 @@ class ScadaService {
         widgetId?: string;
         field?: string;
       }>;
-    }>('/scada/dashboards/validate', dashboard);
+    }>('/scada-views/validate', dashboard);
     return response;
   }
 
@@ -296,7 +337,7 @@ class ScadaService {
     role: 'viewer' | 'editor' | 'admin';
     lastAccess: string;
   }>> {
-    const response = await apiClient.get<any[]>(`/scada/dashboards/${dashboardId}/collaborators`);
+    const response = await apiClient.get<any[]>(`/scada-views/${dashboardId}/collaborators`);
     return response;
   }
 
@@ -304,7 +345,7 @@ class ScadaService {
     userId: string;
     role: 'viewer' | 'editor' | 'admin';
   }>): Promise<void> {
-    await apiClient.post(`/scada/dashboards/${dashboardId}/share`, { users });
+    await apiClient.post(`/scada-views/${dashboardId}/share`, { users });
   }
 }
 

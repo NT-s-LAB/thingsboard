@@ -156,6 +156,7 @@ model Project {
   sites        Site[]
   userProjects UserProject[]
   auditLogs    AuditLog[]
+  scadaViews   ScadaView[]
 
   @@unique([tenantId, name])
   @@map("projects")
@@ -297,11 +298,12 @@ model ScadaView {
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  areaId       String
-  area         Area          @relation(fields: [areaId], references: [id])
+  areaId       String?
+  area         Area?         @relation(fields: [areaId], references: [id])
+  projectId    String?
+  project      Project?      @relation(fields: [projectId], references: [id])
   scadaWidgets ScadaWidget[]
 
-  @@unique([areaId, name])
   @@map("scada_views")
 }
 

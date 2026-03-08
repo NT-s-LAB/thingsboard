@@ -11,19 +11,12 @@ export class ProjectsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createProjectDto: CreateProjectDto, user: RequestUser): Promise<Project> {
-    // Verify tenant exists
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: createProjectDto.tenantId },
-    });
-
-    if (!tenant) {
-      throw new NotFoundException('Tenant not found');
-    }
+    const tenantId = user.tenantId;
 
     // Check uniqueness of name within tenant
     const existing = await this.prisma.project.findFirst({
       where: {
-        tenantId: createProjectDto.tenantId,
+        tenantId,
         name: createProjectDto.name,
       },
     });
@@ -33,7 +26,13 @@ export class ProjectsService {
     }
 
     return this.prisma.project.create({
-      data: createProjectDto,
+      data: {
+        name: createProjectDto.name,
+        description: createProjectDto.description,
+        settings: createProjectDto.settings || {},
+        isActive: createProjectDto.isActive ?? true,
+        tenantId,
+      },
       include: {
         tenant: { select: { id: true, name: true } },
         _count: { select: { sites: true, userProjects: true } },

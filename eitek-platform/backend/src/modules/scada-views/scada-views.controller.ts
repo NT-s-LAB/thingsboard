@@ -13,7 +13,9 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ScadaViewsService } from './scada-views.service';
 import { CreateScadaViewDto } from './dto/create-scada-view.dto';
 import { UpdateScadaViewDto } from './dto/update-scada-view.dto';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ScadaViewQueryDto } from './dto/scada-view-query.dto';
+import { CreateScadaWidgetDto } from './dto/create-scada-widget.dto';
+import { UpdateScadaWidgetDto } from './dto/update-scada-widget.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/common.interface';
@@ -43,11 +45,10 @@ export class ScadaViewsController {
   @ApiOperation({ summary: 'Get all SCADA views with pagination' })
   @Get()
   async findAll(
-    @Query() pagination: PaginationDto,
-    @Query('areaId') areaId: string,
+    @Query() query: ScadaViewQueryDto,
     @CurrentUser() user: RequestUser,
   ) {
-    const result = await this.scadaViewsService.findAll(pagination, user, areaId);
+    const result = await this.scadaViewsService.findAll(query, user, query.areaId, query.projectId);
     return {
       success: true,
       message: 'SCADA views retrieved successfully',
@@ -92,6 +93,72 @@ export class ScadaViewsController {
     return {
       success: true,
       message: 'SCADA view deleted successfully',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ========== ScadaWidget CRUD (widgets placed on a view) ==========
+
+  @ApiOperation({ summary: 'Add a widget to a SCADA view' })
+  @Post(':id/widgets')
+  async addWidget(
+    @Param('id') viewId: string,
+    @Body() createDto: CreateScadaWidgetDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const widget = await this.scadaViewsService.addWidget(viewId, createDto, user);
+    return {
+      success: true,
+      message: 'Widget added successfully',
+      data: widget,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Update a widget on a SCADA view' })
+  @Put(':id/widgets/:widgetId')
+  async updateWidget(
+    @Param('id') viewId: string,
+    @Param('widgetId') widgetId: string,
+    @Body() updateDto: UpdateScadaWidgetDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const widget = await this.scadaViewsService.updateScadaWidget(viewId, widgetId, updateDto, user);
+    return {
+      success: true,
+      message: 'Widget updated successfully',
+      data: widget,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Delete a widget from a SCADA view' })
+  @Delete(':id/widgets/:widgetId')
+  async deleteWidget(
+    @Param('id') viewId: string,
+    @Param('widgetId') widgetId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.scadaViewsService.removeScadaWidget(viewId, widgetId, user);
+    return {
+      success: true,
+      message: 'Widget removed successfully',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @ApiOperation({ summary: 'Duplicate a widget on a SCADA view' })
+  @Post(':id/widgets/:widgetId/duplicate')
+  async duplicateWidget(
+    @Param('id') viewId: string,
+    @Param('widgetId') widgetId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const widget = await this.scadaViewsService.duplicateScadaWidget(viewId, widgetId, user);
+    return {
+      success: true,
+      message: 'Widget duplicated successfully',
+      data: widget,
       timestamp: new Date().toISOString(),
     };
   }

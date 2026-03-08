@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Stage, Layer, Rect, Circle, Line, Text, Group, Transformer } from 'react-konva';
+import { Stage, Layer, Rect, Circle, Line, Text, Group, Transformer, Arc, Arrow, Ellipse } from 'react-konva';
 import Konva from 'konva';
 import { useScadaStore } from '../stores/scadaStore';
 import type { Widget } from '../types';
@@ -11,38 +11,33 @@ interface ScadaCanvasProps {
   height: number;
 }
 
-export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({
-  width,
-  height,
-}) => {
+/* ────── Color helpers ────── */
+const VARIANT_COLORS: Record<string, string> = {
+  primary: '#3B82F6', secondary: '#6B7280', success: '#22C55E', warning: '#F59E0B', danger: '#EF4444',
+};
+
+export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
-  
+
   const {
-    currentDashboard,
-    editorState,
-    isRuntimeMode,
-    selectWidget,
-    selectWidgets,
-    clearSelection,
-    moveWidget,
-    resizeWidget,
-    setViewport,
+    currentDashboard, editorState, isRuntimeMode,
+    selectWidget, selectWidgets, clearSelection,
+    moveWidget, resizeWidget, setViewport,
   } = useScadaStore();
 
   const [selectedShapes, setSelectedShapes] = useState<string[]>([]);
 
-  // Handle viewport changes
+  /* ── Viewport / zoom / pan ── */
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
 
     const updateViewport = () => {
-      const position = stage.position();
+      const pos = stage.position();
       const scale = stage.scaleX();
-      
       setViewport({
-        position: { x: -position.x / scale, y: -position.y / scale },
+        position: { x: -pos.x / scale, y: -pos.y / scale },
         zoom: scale,
         size: { width: width / scale, height: height / scale },
       });
@@ -51,442 +46,563 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({
     stage.on('dragend', updateViewport);
     stage.on('wheel', (e) => {
       e.evt.preventDefault();
-      
-      const scaleBy = 1.1;
-      const oldScale = stage.scaleX();
-      const pointer = stage.getPointerPosition()!;
-      
-      const mousePointTo = {
-        x: (pointer.x - stage.x()) / oldScale,
-        y: (pointer.y - stage.y()) / oldScale,
-      };
-
-      const newScale = e.evt.deltaY > 0 ? oldScale * scaleBy : oldScale / scaleBy;
-      const clampedScale = Math.max(0.1, Math.min(5, newScale));
-
-      stage.scale({ x: clampedScale, y: clampedScale });
-
-      const newPos = {
-        x: pointer.x - mousePointTo.x * clampedScale,
-        y: pointer.y - mousePointTo.y * clampedScale,
-      };
-      
-      stage.position(newPos);
+      const scaleBy = 1.08;
+      const old = stage.scaleX();
+      const ptr = stage.getPointerPosition()!;
+      const mp = { x: (ptr.x - stage.x()) / old, y: (ptr.y - stage.y()) / old };
+      const ns = Math.max(0.1, Math.min(5, e.evt.deltaY > 0 ? old * scaleBy : old / scaleBy));
+      stage.scale({ x: ns, y: ns });
+      stage.position({ x: ptr.x - mp.x * ns, y: ptr.y - mp.y * ns });
       updateViewport();
     });
 
-    return () => {
-      stage.off('dragend');
-      stage.off('wheel');
-    };
+    return () => { stage.off('dragend'); stage.off('wheel'); };
   }, [width, height, setViewport]);
 
-  // Handle transformer selection
+  /* ── Transformer sync ── */
   useEffect(() => {
-    const transformer = transformerRef.current;
-    if (!transformer) return;
-
+    const tr = transformerRef.current;
+    if (!tr) return;
     if (selectedShapes.length > 0) {
-      const stage = stageRef.current;
-      if (!stage) return;
-
-      const nodes = selectedShapes
-        .map(id => stage.findOne(`#${id}`))
-        .filter((node): node is Konva.Node => node !== undefined);
-      
-      transformer.nodes(nodes);
-      transformer.getLayer()?.batchDraw();
+      const s = stageRef.current;
+      if (!s) return;
+      const nodes = selectedShapes.map((id) => s.findOne(`#${id}`)).filter((n): n is Konva.Node => n != null);
+      tr.nodes(nodes);
+      tr.getLayer()?.batchDraw();
     } else {
-      transformer.nodes([]);
+      tr.nodes([]);
     }
   }, [selectedShapes]);
 
-  // Update selected shapes when store selection changes
   useEffect(() => {
-    setSelectedShapes(editorState.selection.selectedWidgetIds);
-  }, [editorState.selection.selectedWidgetIds]);
+    setSelectedShapes(editorState?.selection?.selectedWidgetIds ?? []);
+  }, [editorState?.selection?.selectedWidgetIds]);
 
+  /* ── Event handlers ── */
   const handleStageClick = (e: any) => {
     if (isRuntimeMode) return;
-
-    const clickedOnEmpty = e.target === e.target.getStage();
-    
-    if (clickedOnEmpty) {
-      clearSelection();
-    }
+    if (e.target === e.target.getStage()) clearSelection();
   };
 
   const handleShapeClick = (widgetId: string, e: any) => {
-    if (isRuntimeMode) {
-      // Handle runtime interactions
-      return;
-    }
-
+    if (isRuntimeMode) return;
     e.cancelBubble = true;
-
-    const isMultiSelect = e.evt.ctrlKey || e.evt.metaKey;
-    
-    if (isMultiSelect) {
-      const currentSelection = [...editorState.selection.selectedWidgetIds];
-      const index = currentSelection.indexOf(widgetId);
-      
-      if (index === -1) {
-        currentSelection.push(widgetId);
-      } else {
-        currentSelection.splice(index, 1);
-      }
-      
-      selectWidgets(currentSelection);
+    if (e.evt.ctrlKey || e.evt.metaKey) {
+      const cur = [...(editorState?.selection?.selectedWidgetIds ?? [])];
+      const idx = cur.indexOf(widgetId);
+      if (idx === -1) cur.push(widgetId); else cur.splice(idx, 1);
+      selectWidgets(cur);
     } else {
       selectWidget(widgetId);
     }
   };
 
-  const handleShapeDragEnd = (widgetId: string, e: any) => {
+  const handleDragEnd = (widgetId: string, e: any) => {
     if (isRuntimeMode) return;
-
-    const node = e.target;
-    const newPosition = {
-      x: node.x(),
-      y: node.y(),
-    };
-
-    moveWidget(widgetId, newPosition);
+    const n = e.target;
+    moveWidget(widgetId, { x: n.x(), y: n.y() });
   };
 
   const handleTransformEnd = (e: any) => {
     if (isRuntimeMode) return;
-
-    const node = e.target;
-    const scaleX = node.scaleX();
-    const scaleY = node.scaleY();
-    
-    // Reset scale and update size
-    node.scaleX(1);
-    node.scaleY(1);
-    
-    const newSize = {
-      width: Math.max(10, node.width() * scaleX),
-      height: Math.max(10, node.height() * scaleY),
-    };
-
-    const widgetId = node.id();
-    if (widgetId) {
-      resizeWidget(widgetId, newSize);
+    const n = e.target;
+    const sx = n.scaleX();
+    const sy = n.scaleY();
+    n.scaleX(1);
+    n.scaleY(1);
+    const wid = n.id();
+    if (wid) {
+      moveWidget(wid, { x: n.x(), y: n.y() });
+      resizeWidget(wid, { width: Math.max(10, n.width() * sx), height: Math.max(10, n.height() * sy) });
     }
   };
 
-  const renderWidget = (widget: Widget) => {
-    const commonProps = {
-      id: widget.id,
-      x: widget.transform.position.x,
-      y: widget.transform.position.y,
-      width: widget.transform.size.width,
-      height: widget.transform.size.height,
-      rotation: widget.transform.rotation || 0,
-      draggable: !isRuntimeMode && !widget.locked,
-      onClick: (e: any) => handleShapeClick(widget.id, e),
-      onDragEnd: (e: any) => handleShapeDragEnd(widget.id, e),
-      onTransformEnd: handleTransformEnd,
-      opacity: widget.style.opacity || 1,
-    };
+  /* ════════════════════════════════════════════════════
+     Widget Renderers
+     ════════════════════════════════════════════════════ */
 
-    switch (widget.type) {
-      case 'button':
+  const commonProps = (w: Widget) => ({
+    id: w.id,
+    x: w.transform.position.x,
+    y: w.transform.position.y,
+    width: w.transform.size.width,
+    height: w.transform.size.height,
+    rotation: w.transform.rotation || 0,
+    draggable: !isRuntimeMode && !w.locked,
+    onClick: (e: any) => handleShapeClick(w.id, e),
+    onDragEnd: (e: any) => handleDragEnd(w.id, e),
+    onTransformEnd: handleTransformEnd,
+    opacity: w.style.opacity ?? 1,
+  });
+
+  const renderWidget = (w: Widget) => {
+    const cp = commonProps(w);
+    const p: Record<string, any> = w.properties || {};
+    const s: Record<string, any> = w.style || {};
+    const W = w.transform.size.width;
+    const H = w.transform.size.height;
+
+    switch (w.type) {
+      /* ── Button ── */
+      case 'button': {
+        const bg = VARIANT_COLORS[p.variant] || s.backgroundColor || '#3B82F6';
         return (
-          <Group key={widget.id} {...commonProps}>
-            <Rect
-              width={widget.transform.size.width}
-              height={widget.transform.size.height}
-              fill={widget.style.backgroundColor || '#3B82F6'}
-              stroke={widget.style.borderColor || '#2563EB'}
-              strokeWidth={widget.style.borderWidth || 1}
-              cornerRadius={widget.style.borderRadius || 4}
-            />
-            <Text
-              text={(widget as any).properties?.text || 'Button'}
-              fontSize={widget.style.fontSize || 14}
-              fontFamily={widget.style.fontFamily || 'Arial'}
-              fill={widget.style.textColor || '#FFFFFF'}
-              align="center"
-              verticalAlign="middle"
-              width={widget.transform.size.width}
-              height={widget.transform.size.height}
-            />
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill={bg} stroke={s.borderColor || bg} strokeWidth={s.borderWidth || 1} cornerRadius={s.borderRadius ?? 6} shadowBlur={2} shadowColor="rgba(0,0,0,0.15)" shadowOffsetY={1} />
+            <Text text={p.icon ? `${p.icon} ${p.text || 'Button'}` : (p.text || 'Button')} fontSize={s.fontSize || 13} fontFamily={s.fontFamily || 'Arial'} fontStyle={s.fontWeight === 'bold' ? 'bold' : 'normal'} fill={s.textColor || '#FFF'} align="center" verticalAlign="middle" width={W} height={H} />
           </Group>
         );
+      }
 
+      /* ── Text ── */
       case 'text':
         return (
-          <Text
-            key={widget.id}
-            {...commonProps}
-            text={(widget as any).properties?.text || 'Text Widget'}
-            fontSize={widget.style.fontSize || 14}
-            fontFamily={widget.style.fontFamily || 'Arial'}
-            fill={widget.style.textColor || '#000000'}
-            align={widget.style.textAlign || 'left'}
-          />
+          <Group key={w.id} {...cp}>
+            {s.backgroundColor && <Rect width={W} height={H} fill={s.backgroundColor} cornerRadius={s.borderRadius || 0} />}
+            <Text text={p.text || 'Text'} fontSize={s.fontSize || 14} fontFamily={s.fontFamily || 'Arial'} fontStyle={`${s.fontWeight === 'bold' ? 'bold ' : ''}${s.fontStyle === 'italic' ? 'italic' : ''}`} fill={s.textColor || '#1F2937'} align={s.textAlign || 'left'} verticalAlign="middle" width={W} height={H} wrap={p.wordWrap ? 'word' : 'none'} />
+          </Group>
         );
 
-      case 'shape':
-        const shapeProps = (widget as any).properties;
-        if (shapeProps?.shape === 'rectangle') {
+      /* ── Shape ── */
+      case 'shape': {
+        const fillClr = p.fill ? (p.fillColor || '#E5E7EB') : 'transparent';
+        const strokeClr = p.strokeColor || '#374151';
+        const strokeW = p.strokeWidth ?? 1;
+        const dash = p.strokeStyle === 'dashed' ? [8, 4] : p.strokeStyle === 'dotted' ? [2, 4] : undefined;
+        if (p.shape === 'circle') {
+          const r = Math.min(W, H) / 2;
+          return <Circle key={w.id} {...cp} x={cp.x + r} y={cp.y + r} radius={r} fill={fillClr} stroke={strokeClr} strokeWidth={strokeW} {...(dash ? { dash } : {})} />;
+        }
+        if (p.shape === 'ellipse') {
+          return <Ellipse key={w.id} {...cp} x={cp.x + W / 2} y={cp.y + H / 2} radiusX={W / 2} radiusY={H / 2} fill={fillClr} stroke={strokeClr} strokeWidth={strokeW} {...(dash ? { dash } : {})} />;
+        }
+        if (p.shape === 'line') {
+          return <Line key={w.id} {...cp} points={[0, 0, W, H]} stroke={strokeClr} strokeWidth={strokeW} {...(dash ? { dash } : {})} />;
+        }
+        if (p.shape === 'arrow') {
+          return <Arrow key={w.id} {...cp} points={[0, H / 2, W, H / 2]} stroke={strokeClr} strokeWidth={strokeW} fill={strokeClr} pointerLength={10} pointerWidth={8} />;
+        }
+        return <Rect key={w.id} {...cp} fill={fillClr} stroke={strokeClr} strokeWidth={strokeW} cornerRadius={s.borderRadius || 0} {...(dash ? { dash } : {})} />;
+      }
+
+      /* ── Gauge ── */
+      case 'gauge': {
+        const cx = W / 2, cy = H / 2;
+        const r = Math.min(W, H) / 2 - 8;
+        const val = p.value ?? 0;
+        const min = p.min ?? 0, max = p.max ?? 100;
+        const pct = Math.max(0, Math.min(1, (val - min) / (max - min || 1)));
+        const angle = -135 + pct * 270;
+        const rad = (angle * Math.PI) / 180;
+        const needleLen = r * 0.75;
+        return (
+          <Group key={w.id} {...cp}>
+            {/* Background arc */}
+            <Arc x={cx} y={cy} innerRadius={r - 8} outerRadius={r} angle={270} rotation={135} fill="#E5E7EB" />
+            {/* Value arc */}
+            <Arc x={cx} y={cy} innerRadius={r - 8} outerRadius={r} angle={pct * 270} rotation={135} fill={getGaugeColor(pct, p.ranges)} />
+            {/* Needle */}
+            <Line points={[cx, cy, cx + Math.cos(rad) * needleLen, cy + Math.sin(rad) * needleLen]} stroke={p.needle?.color || '#1F2937'} strokeWidth={p.needle?.width || 2} />
+            <Circle x={cx} y={cy} radius={4} fill="#1F2937" />
+            {/* Value text */}
+            {(p.showValue ?? true) && (
+              <Text text={`${val}${p.unit || ''}`} fontSize={s.fontSize || Math.max(12, r / 3)} fontFamily={s.fontFamily || 'Arial'} fontStyle="bold" fill={s.textColor || '#1F2937'} align="center" verticalAlign="top" x={0} y={cy + r * 0.25} width={W} />
+            )}
+            {/* Min/Max */}
+            {(p.showMinMax ?? true) && (
+              <>
+                <Text text={String(min)} fontSize={9} fill="#9CA3AF" x={cx - r} y={cy + 8} width={r} align="center" />
+                <Text text={String(max)} fontSize={9} fill="#9CA3AF" x={cx} y={cy + 8} width={r} align="center" />
+              </>
+            )}
+          </Group>
+        );
+      }
+
+      /* ── Switch ── */
+      case 'switch': {
+        const isOn = true; // In runtime, this would come from telemetry
+        const trackW = W, trackH = H;
+        const knobR = Math.min(trackH / 2 - 2, trackW / 4);
+        const bg = isOn ? (p.onColor || '#22C55E') : (p.offColor || '#9CA3AF');
+        return (
+          <Group key={w.id} {...cp}>
+            <Rect width={trackW} height={trackH} fill={bg} cornerRadius={trackH / 2} />
+            <Circle x={isOn ? trackW - knobR - 3 : knobR + 3} y={trackH / 2} radius={knobR} fill="#FFFFFF" shadowBlur={2} shadowColor="rgba(0,0,0,0.2)" />
+            <Text text={isOn ? (p.onLabel || 'ON') : (p.offLabel || 'OFF')} fontSize={Math.max(8, trackH * 0.3)} fontFamily="Arial" fill="#FFFFFF" align="center" verticalAlign="middle" x={isOn ? 0 : trackW / 2} y={0} width={trackW / 2} height={trackH} />
+          </Group>
+        );
+      }
+
+      /* ── Slider ── */
+      case 'slider': {
+        const min = p.min ?? 0, max = p.max ?? 100, val = p.value ?? 50;
+        const pct = (val - min) / (max - min || 1);
+        const trackY = H / 2;
+        const thumbX = 6 + pct * (W - 12);
+        return (
+          <Group key={w.id} {...cp}>
+            {/* Track bg */}
+            <Rect x={0} y={trackY - 3} width={W} height={6} fill={p.trackColor || '#E5E7EB'} cornerRadius={3} />
+            {/* Track fill */}
+            <Rect x={0} y={trackY - 3} width={thumbX} height={6} fill={p.thumbColor || '#3B82F6'} cornerRadius={3} />
+            {/* Thumb */}
+            <Circle x={thumbX} y={trackY} radius={8} fill={p.thumbColor || '#3B82F6'} stroke="#FFFFFF" strokeWidth={2} shadowBlur={3} shadowColor="rgba(0,0,0,0.2)" />
+            {(p.showValue ?? true) && (
+              <Text text={`${val}${p.unit || ''}`} fontSize={10} fontFamily="Arial" fill="#6B7280" align="center" width={W} y={trackY + 12} />
+            )}
+          </Group>
+        );
+      }
+
+      /* ── LED ── */
+      case 'led': {
+        const isOn = true;
+        const color = isOn ? (p.onColor || '#22C55E') : (p.offColor || '#6B7280');
+        const r = Math.min(W, H) / 2 - 2;
+        const cx = W / 2, cy = (p.label ? H / 2 - 6 : H / 2);
+        if (p.shape === 'square') {
+          const side = Math.min(W, H) - 4;
           return (
-            <Rect
-              key={widget.id}
-              {...commonProps}
-              fill={shapeProps.fill ? shapeProps.fillColor || '#E5E7EB' : 'transparent'}
-              stroke={shapeProps.strokeColor || '#374151'}
-              strokeWidth={shapeProps.strokeWidth || 1}
-              cornerRadius={widget.style.borderRadius || 0}
-            />
-          );
-        } else if (shapeProps?.shape === 'circle') {
-          const radius = Math.min(widget.transform.size.width, widget.transform.size.height) / 2;
-          return (
-            <Circle
-              key={widget.id}
-              {...commonProps}
-              x={widget.transform.position.x + radius}
-              y={widget.transform.position.y + radius}
-              radius={radius}
-              fill={shapeProps.fill ? shapeProps.fillColor || '#E5E7EB' : 'transparent'}
-              stroke={shapeProps.strokeColor || '#374151'}
-              strokeWidth={shapeProps.strokeWidth || 1}
-            />
-          );
-        } else if (shapeProps?.shape === 'line') {
-          return (
-            <Line
-              key={widget.id}
-              {...commonProps}
-              points={[
-                0, 0,
-                widget.transform.size.width, widget.transform.size.height
-              ]}
-              stroke={shapeProps.strokeColor || '#374151'}
-              strokeWidth={shapeProps.strokeWidth || 2}
-            />
+            <Group key={w.id} {...cp}>
+              <Rect x={(W - side) / 2} y={(H - side) / 2 - (p.label ? 6 : 0)} width={side} height={side} fill={color} cornerRadius={4} shadowBlur={isOn ? 8 : 0} shadowColor={color} />
+              {p.label && <Text text={p.label} fontSize={9} fill="#6B7280" align="center" width={W} y={H - 14} />}
+            </Group>
           );
         }
-        break;
-
-      case 'gauge':
         return (
-          <Group key={widget.id} {...commonProps}>
-            <Circle
-              x={widget.transform.size.width / 2}
-              y={widget.transform.size.height / 2}
-              radius={Math.min(widget.transform.size.width, widget.transform.size.height) / 2 - 10}
-              stroke={widget.style.borderColor || '#E5E7EB'}
-              strokeWidth={widget.style.borderWidth || 2}
-              fill="transparent"
-            />
-            <Text
-              text={`${(widget as any).properties?.value || 0}${(widget as any).properties?.unit || ''}`}
-              fontSize={widget.style.fontSize || 16}
-              fontFamily={widget.style.fontFamily || 'Arial'}
-              fill={widget.style.textColor || '#000000'}
-              align="center"
-              verticalAlign="middle"
-              x={0}
-              y={widget.transform.size.height / 2 - 10}
-              width={widget.transform.size.width}
-            />
+          <Group key={w.id} {...cp}>
+            <Circle x={cx} y={cy} radius={r} fill={color} shadowBlur={isOn ? 10 : 0} shadowColor={color} stroke="#D1D5DB" strokeWidth={1} />
+            {/* Highlight */}
+            <Circle x={cx - r * 0.2} y={cy - r * 0.2} radius={r * 0.3} fill="rgba(255,255,255,0.4)" />
+            {p.label && <Text text={p.label} fontSize={9} fill="#6B7280" align="center" width={W} y={H - 14} />}
+          </Group>
+        );
+      }
+
+      /* ── Value Display ── */
+      case 'valueDisplay': {
+        const val = p.value ?? '0';
+        const dec = p.decimals ?? 2;
+        const displayVal = isNaN(Number(val)) ? val : Number(val).toFixed(dec);
+        return (
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill={s.backgroundColor || '#F9FAFB'} stroke={s.borderColor || '#E5E7EB'} strokeWidth={s.borderWidth || 1} cornerRadius={s.borderRadius || 6} />
+            {/* Label */}
+            <Text text={p.label || 'Value'} fontSize={10} fontFamily={s.fontFamily || 'Arial'} fill="#6B7280" align="center" width={W} y={6} />
+            {/* Value */}
+            <Text text={`${p.prefix || ''}${displayVal}${p.suffix || ''}${p.unit ? ' ' + p.unit : ''}`} fontSize={s.fontSize || Math.max(16, H * 0.35)} fontFamily={s.fontFamily || 'Arial'} fontStyle="bold" fill={s.textColor || '#1F2937'} align="center" verticalAlign="middle" width={W} y={H * 0.25} height={H * 0.55} />
+          </Group>
+        );
+      }
+
+      /* ── Valve ── */
+      case 'valve': {
+        const isOpen = true;
+        const color = isOpen ? (p.openColor || '#22C55E') : (p.closedColor || '#EF4444');
+        const cx = W / 2, cy = H / 2;
+        const half = Math.min(W, H) / 2 - 4;
+        // Butterfly valve symbol: two triangles
+        return (
+          <Group key={w.id} {...cp}>
+            {/* Pipe connections */}
+            <Rect x={0} y={cy - 4} width={W} height={8} fill="#9CA3AF" />
+            {/* Valve body */}
+            <Line points={[cx - half, cy - half, cx, cy, cx - half, cy + half]} fill={color} stroke="#374151" strokeWidth={1.5} closed />
+            <Line points={[cx + half, cy - half, cx, cy, cx + half, cy + half]} fill={color} stroke="#374151" strokeWidth={1.5} closed />
+            {/* Center point */}
+            <Circle x={cx} y={cy} radius={3} fill="#374151" />
+            {/* Label */}
+            {(p.showLabel ?? true) && (
+              <Text text={p.label || (isOpen ? 'OPEN' : 'CLOSED')} fontSize={8} fill="#6B7280" align="center" width={W} y={H - 12} />
+            )}
+          </Group>
+        );
+      }
+
+      /* ── Tank ── */
+      case 'tank': {
+        const level = 65; // In runtime: from telemetry
+        const min = p.minLevel ?? 0, max = p.maxLevel ?? 100;
+        const pct = Math.max(0, Math.min(1, (level - min) / (max - min || 1)));
+        const tankPad = 3;
+        const innerH = (H - 20) * pct;
+        let fillColor = p.fillColor || '#3B82F6';
+        if (level >= (p.criticalLevel ?? 95)) fillColor = p.criticalColor || '#EF4444';
+        else if (level >= (p.warningLevel ?? 80)) fillColor = p.warningColor || '#F59E0B';
+        return (
+          <Group key={w.id} {...cp}>
+            {/* Tank body */}
+            <Rect x={tankPad} y={10} width={W - tankPad * 2} height={H - 20} fill={p.emptyColor || '#F3F4F6'} stroke="#9CA3AF" strokeWidth={2} cornerRadius={4} />
+            {/* Liquid fill */}
+            <Rect x={tankPad + 2} y={10 + (H - 20) - innerH} width={W - tankPad * 2 - 4} height={innerH - 2} fill={fillColor} opacity={0.8} cornerRadius={[0, 0, 2, 2] as any} />
+            {/* Level text */}
+            {(p.showLevel ?? true) && (
+              <Text text={`${Math.round(level)}${p.unit || '%'}`} fontSize={s.fontSize || 14} fontFamily="Arial" fontStyle="bold" fill="#1F2937" align="center" verticalAlign="middle" width={W} y={H / 2 - 10} height={20} />
+            )}
+            {/* Scale marks */}
+            {(p.showScale ?? true) && [0, 25, 50, 75, 100].map((mark) => {
+              const markY = 10 + (H - 20) * (1 - mark / 100);
+              return (
+                <React.Fragment key={mark}>
+                  <Line points={[W - tankPad - 10, markY, W - tankPad, markY]} stroke="#9CA3AF" strokeWidth={1} />
+                  <Text text={String(mark)} fontSize={7} fill="#9CA3AF" x={W - tankPad + 2} y={markY - 4} />
+                </React.Fragment>
+              );
+            })}
+            {/* Label */}
+            {p.label && <Text text={p.label} fontSize={9} fill="#6B7280" align="center" width={W} y={0} />}
+          </Group>
+        );
+      }
+
+      /* ── Motor ── */
+      case 'motor': {
+        const isRunning = true;
+        const color = isRunning ? (p.runningColor || '#22C55E') : (p.stoppedColor || '#6B7280');
+        const cx = W / 2, cy = H / 2;
+        const r = Math.min(W, H) / 2 - 4;
+        return (
+          <Group key={w.id} {...cp}>
+            {/* Motor body */}
+            <Circle x={cx} y={cy} radius={r} fill="#F9FAFB" stroke={color} strokeWidth={3} />
+            {/* M label */}
+            <Text text="M" fontSize={Math.max(14, r * 0.8)} fontFamily="Arial" fontStyle="bold" fill={color} align="center" verticalAlign="middle" x={cx - r} y={cy - r} width={r * 2} height={r * 2} />
+            {/* Status indicator */}
+            <Circle x={cx + r * 0.6} y={cy - r * 0.6} radius={4} fill={color} />
+            {/* RPM text */}
+            {(p.showRPM ?? true) && (
+              <Text text={isRunning ? `${p.ratedRPM || 1800} RPM` : 'STOPPED'} fontSize={8} fill="#6B7280" align="center" width={W} y={cy + r + 2} />
+            )}
+          </Group>
+        );
+      }
+
+      /* ── Pipe ── */
+      case 'pipe': {
+        const pw = p.pipeWidth ?? 8;
+        const pipeClr = p.pipeColor || '#6B7280';
+        const flowClr = p.flowColor || '#3B82F6';
+        const isHorizontal = p.flowDirection === 'left-to-right' || p.flowDirection === 'right-to-left';
+        return (
+          <Group key={w.id} {...cp}>
+            {isHorizontal ? (
+              <>
+                {/* Pipe body */}
+                <Rect x={0} y={H / 2 - pw / 2} width={W} height={pw} fill={pipeClr} cornerRadius={2} />
+                {/* Flow indicator line */}
+                <Rect x={0} y={H / 2 - pw / 4} width={W} height={pw / 2} fill={flowClr} opacity={0.4} cornerRadius={1} />
+                {/* Flow arrows */}
+                {(p.showFlow ?? true) && [0.25, 0.5, 0.75].map((f) => (
+                  <Text key={f} text={p.flowDirection === 'right-to-left' ? '◂' : '▸'} fontSize={pw + 2} fill="#FFF" x={W * f - 4} y={H / 2 - pw / 2 - 1} />
+                ))}
+              </>
+            ) : (
+              <>
+                <Rect x={W / 2 - pw / 2} y={0} width={pw} height={H} fill={pipeClr} cornerRadius={2} />
+                <Rect x={W / 2 - pw / 4} y={0} width={pw / 2} height={H} fill={flowClr} opacity={0.4} cornerRadius={1} />
+                {(p.showFlow ?? true) && [0.25, 0.5, 0.75].map((f) => (
+                  <Text key={f} text={p.flowDirection === 'bottom-to-top' ? '▴' : '▾'} fontSize={pw + 2} fill="#FFF" x={W / 2 - pw / 2} y={H * f - 4} />
+                ))}
+              </>
+            )}
+          </Group>
+        );
+      }
+
+      /* ── Pump ── */
+      case 'pump': {
+        const isRunning = true;
+        const color = isRunning ? (p.runningColor || '#22C55E') : (p.stoppedColor || '#6B7280');
+        const cx = W / 2, cy = H / 2;
+        const r = Math.min(W, H) / 2 - 6;
+        return (
+          <Group key={w.id} {...cp}>
+            {/* Pump body - circle with triangle */}
+            <Circle x={cx} y={cy} radius={r} fill="#F9FAFB" stroke={color} strokeWidth={2.5} />
+            {/* Impeller triangle */}
+            <Line points={[cx - r * 0.5, cy + r * 0.4, cx, cy - r * 0.5, cx + r * 0.5, cy + r * 0.4]} fill={color} stroke={color} strokeWidth={1} closed />
+            {/* Inlet/outlet pipes */}
+            <Rect x={0} y={cy - 3} width={cx - r} height={6} fill="#9CA3AF" />
+            <Rect x={cx + r} y={cy - 3} width={cx - r} height={6} fill="#9CA3AF" />
+            {/* Label */}
+            {p.label && <Text text={p.label} fontSize={8} fill="#6B7280" align="center" width={W} y={H - 10} />}
+          </Group>
+        );
+      }
+
+      /* ── Indicator ── */
+      case 'indicator': {
+        const states = p.states || [{ value: 0, label: 'Off', color: '#6B7280' }];
+        const currentState = states[0] || { label: 'Unknown', color: '#6B7280' };
+        const cx = W / 2, cy = H / 2;
+        if (p.indicatorType === 'traffic-light') {
+          const lightR = Math.min(W / 2 - 4, H / 8);
+          return (
+            <Group key={w.id} {...cp}>
+              <Rect width={W} height={H} fill="#1F2937" cornerRadius={lightR + 4} />
+              {[{ y: lightR + 6, color: '#EF4444' }, { y: H / 2, color: '#F59E0B' }, { y: H - lightR - 6, color: '#22C55E' }].map((light, i) => (
+                <Circle key={i} x={cx} y={light.y} radius={lightR} fill={i === 0 ? light.color : '#374151'} shadowBlur={i === 0 ? 6 : 0} shadowColor={light.color} />
+              ))}
+            </Group>
+          );
+        }
+        return (
+          <Group key={w.id} {...cp}>
+            <Circle x={cx} y={cy - (p.showLabel ? 6 : 0)} radius={Math.min(W, H) / 2 - 4} fill={currentState.color} shadowBlur={6} shadowColor={currentState.color} stroke="#E5E7EB" strokeWidth={1} />
+            {(p.showLabel ?? true) && (
+              <Text text={currentState.label} fontSize={9} fill="#6B7280" align="center" width={W} y={H - 14} />
+            )}
+          </Group>
+        );
+      }
+
+      /* ── Alarm ── */
+      case 'alarm':
+        return (
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill="#FEF2F2" stroke="#FCA5A5" strokeWidth={1} cornerRadius={6} />
+            <Text text="🚨 ALARMS" fontSize={11} fontStyle="bold" fill="#991B1B" align="center" width={W} y={8} />
+            <Text text="No active alarms" fontSize={10} fill="#6B7280" align="center" verticalAlign="middle" width={W} y={H * 0.3} height={H * 0.5} />
           </Group>
         );
 
-      case 'image':
-        // TODO: Implement image widget with Konva.Image
+      /* ── Chart placeholder ── */
+      case 'chart':
         return (
-          <Rect
-            key={widget.id}
-            {...commonProps}
-            fill="#F3F4F6"
-            stroke="#D1D5DB"
-            strokeWidth={1}
-            cornerRadius={4}
-          />
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill={s.backgroundColor || '#FFFFFF'} stroke={s.borderColor || '#E5E7EB'} strokeWidth={1} cornerRadius={6} />
+            <Text text={`📈 ${p.chartType || 'Line'} Chart`} fontSize={11} fontStyle="bold" fill="#374151" align="center" width={W} y={8} />
+            {/* Fake chart lines */}
+            <Line points={[20, H * 0.7, W * 0.25, H * 0.5, W * 0.5, H * 0.6, W * 0.75, H * 0.3, W - 20, H * 0.45]} stroke="#3B82F6" strokeWidth={2} tension={0.3} />
+            <Line points={[20, H * 0.8, W * 0.3, H * 0.65, W * 0.55, H * 0.7, W * 0.8, H * 0.5, W - 20, H * 0.6]} stroke="#22C55E" strokeWidth={2} tension={0.3} opacity={0.6} />
+          </Group>
         );
 
+      /* ── Table placeholder ── */
+      case 'table':
+        return (
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill="#FFFFFF" stroke="#E5E7EB" strokeWidth={1} cornerRadius={4} />
+            <Rect width={W} height={28} fill="#F9FAFB" stroke="#E5E7EB" strokeWidth={1} cornerRadius={[4, 4, 0, 0] as any} />
+            <Text text="📋 Data Table" fontSize={11} fontStyle="bold" fill="#374151" align="center" width={W} y={6} />
+            {[0, 1, 2].map((row) => (
+              <Line key={row} points={[0, 28 + row * 24, W, 28 + row * 24]} stroke="#F3F4F6" strokeWidth={1} />
+            ))}
+          </Group>
+        );
+
+      /* ── Image placeholder ── */
+      case 'image':
+        return (
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill="#F3F4F6" stroke="#D1D5DB" strokeWidth={1} cornerRadius={4} />
+            <Text text={p.src ? '🖼️' : '🖼️ No Image'} fontSize={Math.max(12, Math.min(W, H) * 0.2)} fill="#9CA3AF" align="center" verticalAlign="middle" width={W} height={H} />
+          </Group>
+        );
+
+      /* ── Container ── */
       case 'container':
         return (
-          <Group key={widget.id} {...commonProps}>
-            <Rect
-              width={widget.transform.size.width}
-              height={widget.transform.size.height}
-              fill={widget.style.backgroundColor || 'transparent'}
-              stroke={widget.style.borderColor || '#E5E7EB'}
-              strokeWidth={widget.style.borderWidth || 1}
-              cornerRadius={widget.style.borderRadius || 0}
-            />
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill={s.backgroundColor || 'transparent'} stroke={s.borderColor || '#E5E7EB'} strokeWidth={s.borderWidth || 1} cornerRadius={s.borderRadius || 0} dash={[6, 3]} />
+            <Text text="📦 Container" fontSize={10} fill="#9CA3AF" align="center" width={W} y={4} />
           </Group>
         );
 
-      default:
-        // Fallback for unsupported widget types
+      /* ── Default / Custom ── */
+      case 'video':
         return (
-          <Group key={widget.id} {...commonProps}>
-            <Rect
-              width={widget.transform.size.width}
-              height={widget.transform.size.height}
-              fill="#F9FAFB"
-              stroke="#D1D5DB"
-              strokeWidth={1}
-              strokeDashArray={[5, 5]}
-              cornerRadius={4}
-            />
-            <Text
-              text={widget.type.toUpperCase()}
-              fontSize={12}
-              fontFamily="Arial"
-              fill="#6B7280"
-              align="center"
-              verticalAlign="middle"
-              width={widget.transform.size.width}
-              height={widget.transform.size.height}
-            />
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill="#1F2937" stroke="#374151" strokeWidth={1} cornerRadius={4} />
+            <Text text="🎬 Video" fontSize={Math.max(12, Math.min(W, H) * 0.15)} fill="#9CA3AF" align="center" verticalAlign="middle" width={W} height={H} />
+          </Group>
+        );
+      case 'map':
+        return (
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill="#E8F5E9" stroke="#A5D6A7" strokeWidth={1} cornerRadius={4} />
+            <Text text="🗺️ Map" fontSize={Math.max(12, Math.min(W, H) * 0.15)} fill="#4CAF50" align="center" verticalAlign="middle" width={W} height={H} />
+          </Group>
+        );
+      case 'custom':
+      default:
+        return (
+          <Group key={w.id} {...cp}>
+            <Rect width={W} height={H} fill="#F9FAFB" stroke="#D1D5DB" strokeWidth={1} dash={[5, 5]} cornerRadius={4} />
+            <Text text={`🧩 ${(w.type as string).toUpperCase()}`} fontSize={11} fontFamily="Arial" fill="#6B7280" align="center" verticalAlign="middle" width={W} height={H} />
           </Group>
         );
     }
-
-    return null;
   };
 
+  /* ── Grid ── */
   const renderGrid = () => {
-    if (!editorState.showGrid || isRuntimeMode) return null;
-
-    const gridSize = currentDashboard?.settings.grid.size || 20;
-    const gridColor = currentDashboard?.settings.grid.color || '#E5E7EB';
-    const canvasSize = currentDashboard?.canvasSize || { width: 1920, height: 1080 };
-
-    const lines = [];
-    
-    // Vertical lines
-    for (let i = 0; i <= canvasSize.width; i += gridSize) {
-      lines.push(
-        <Line
-          key={`v-${i}`}
-          points={[i, 0, i, canvasSize.height]}
-          stroke={gridColor}
-          strokeWidth={1}
-          opacity={0.3}
-        />
-      );
+    if (!editorState?.showGrid || isRuntimeMode) return null;
+    const settings = currentDashboard?.settings as any;
+    const gridSize = settings?.grid?.size || 20;
+    const gridColor = settings?.grid?.color || '#E5E7EB';
+    const cs = currentDashboard?.canvasSize as any;
+    const cw = cs?.width || 1920, ch = cs?.height || 1080;
+    const lines: React.ReactElement[] = [];
+    for (let i = 0; i <= cw; i += gridSize) {
+      lines.push(<Line key={`v-${i}`} points={[i, 0, i, ch]} stroke={gridColor} strokeWidth={1} opacity={0.3} />);
     }
-    
-    // Horizontal lines
-    for (let i = 0; i <= canvasSize.height; i += gridSize) {
-      lines.push(
-        <Line
-          key={`h-${i}`}
-          points={[0, i, canvasSize.width, i]}
-          stroke={gridColor}
-          strokeWidth={1}
-          opacity={0.3}
-        />
-      );
+    for (let i = 0; i <= ch; i += gridSize) {
+      lines.push(<Line key={`h-${i}`} points={[0, i, cw, i]} stroke={gridColor} strokeWidth={1} opacity={0.3} />);
     }
-
     return lines;
   };
 
+  /* ── Render ── */
   if (!currentDashboard) {
-    return (
-      <div className="flex items-center justify-center w-full h-full bg-gray-100">
-        <div className="text-gray-500">No dashboard loaded</div>
-      </div>
-    );
+    return <div className="flex items-center justify-center w-full h-full bg-gray-100"><div className="text-gray-500">No dashboard loaded</div></div>;
   }
 
+  const zoom = editorState?.viewport?.zoom ?? 1;
+  const vp = editorState?.viewport?.position ?? { x: 0, y: 0 };
+  const cs = currentDashboard?.canvasSize as any;
+  const dashW = cs?.width || 1920, dashH = cs?.height || 1080;
+  const widgets: Widget[] = (currentDashboard as any)?.widgets ?? (currentDashboard as any)?.scadaWidgets ?? [];
+  const layers: any[] = (currentDashboard as any)?.layers ?? [];
+  const bg: string = (currentDashboard as any)?.backgroundColor || '#FFFFFF';
+
   return (
-    <div className="relative w-full h-full overflow-hidden bg-gray-50">
-      <Stage
-        ref={stageRef}
-        width={width}
-        height={height}
-        draggable={!isRuntimeMode}
-        onClick={handleStageClick}
-        scale={{
-          x: editorState.viewport.zoom,
-          y: editorState.viewport.zoom,
-        }}
-        x={-editorState.viewport.position.x * editorState.viewport.zoom}
-        y={-editorState.viewport.position.y * editorState.viewport.zoom}
-      >
+    <div className="relative w-full h-full overflow-hidden bg-gray-200">
+      <Stage ref={stageRef} width={width} height={height} draggable={!isRuntimeMode} onClick={handleStageClick} onDragEnd={() => {}} scale={{ x: zoom, y: zoom }} x={-vp.x * zoom} y={-vp.y * zoom}>
         <Layer>
-          {/* Canvas background */}
-          <Rect
-            x={0}
-            y={0}
-            width={currentDashboard.canvasSize.width}
-            height={currentDashboard.canvasSize.height}
-            fill={currentDashboard.backgroundColor || '#FFFFFF'}
-          />
-          
-          {/* Grid */}
+          <Rect x={0} y={0} width={dashW} height={dashH} fill={bg} shadowBlur={8} shadowColor="rgba(0,0,0,0.08)" />
           {renderGrid()}
         </Layer>
-        
-        {/* Widget layers */}
-        {currentDashboard.layers.map(layer => (
-          <Layer
-            key={layer.id}
-            visible={layer.visible}
-            opacity={layer.opacity}
-          >
-            {currentDashboard.widgets
-              .filter(widget => widget.layerId === layer.id || (!widget.layerId && layer.order === 0))
-              .filter(widget => widget.visible)
-              .sort((a, b) => (a.transform.zIndex || 0) - (b.transform.zIndex || 0))
-              .map(renderWidget)}
+        {layers.map((layer: any) => (
+          <Layer key={layer.id} visible={layer.visible} opacity={layer.opacity}>
+            {widgets.filter((w: any) => w.layerId === layer.id || (!w.layerId && layer.order === 0)).filter((w: any) => w.visible !== false).sort((a: any, b: any) => (a.transform?.zIndex || 0) - (b.transform?.zIndex || 0)).map(renderWidget)}
           </Layer>
         ))}
-
-        {/* Default layer for widgets without layer assignment */}
         <Layer>
-          {currentDashboard.widgets
-            .filter(widget => !widget.layerId)
-            .filter(widget => widget.visible)
-            .sort((a, b) => (a.transform.zIndex || 0) - (b.transform.zIndex || 0))
-            .map(renderWidget)}
+          {widgets.filter((w: any) => !w.layerId).filter((w: any) => w.visible !== false).sort((a: any, b: any) => (a.transform?.zIndex || 0) - (b.transform?.zIndex || 0)).map(renderWidget)}
         </Layer>
-
-        {/* Selection transformer */}
         {!isRuntimeMode && (
           <Layer>
-            <Transformer
-              ref={transformerRef}
-              rotateEnabled={true}
-              borderStroke="#2563EB"
-              borderStrokeWidth={2}
-              anchorStroke="#2563EB"
-              anchorFill="#FFFFFF"
-              anchorStrokeWidth={2}
-              anchorSize={8}
-              keepRatio={false}
-              enabledAnchors={[
-                'top-left', 'top-center', 'top-right',
-                'middle-left', 'middle-right',
-                'bottom-left', 'bottom-center', 'bottom-right'
-              ]}
-            />
+            <Transformer ref={transformerRef} rotateEnabled={true} borderStroke="#2563EB" borderStrokeWidth={2} anchorStroke="#2563EB" anchorFill="#FFFFFF" anchorStrokeWidth={2} anchorSize={8} keepRatio={false} enabledAnchors={['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right']} />
           </Layer>
         )}
       </Stage>
-
-      {/* Canvas overlay for runtime mode */}
-      {isRuntimeMode && (
-        <div className="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded text-sm">
-          Runtime Mode
-        </div>
-      )}
-
-      {/* Zoom indicator */}
-      <div className="absolute bottom-2 right-2 bg-white border border-gray-300 px-2 py-1 rounded text-sm">
-        {Math.round(editorState.viewport.zoom * 100)}%
-      </div>
+      {isRuntimeMode && <div className="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-medium shadow">▶ Runtime</div>}
+      <div className="absolute bottom-2 right-2 bg-white/90 border border-gray-300 px-2 py-0.5 rounded text-[10px] text-gray-600 font-mono">{Math.round(zoom * 100)}%</div>
     </div>
   );
 };
+
+/* ── Helper: get gauge color from ranges or default gradient ── */
+function getGaugeColor(pct: number, ranges?: Array<{ from: number; to: number; color: string }>): string {
+  if (ranges && ranges.length > 0) {
+    const val = pct * 100;
+    for (const r of ranges) {
+      if (val >= r.from && val <= r.to) return r.color;
+    }
+  }
+  if (pct > 0.8) return '#EF4444';
+  if (pct > 0.6) return '#F59E0B';
+  return '#22C55E';
+}

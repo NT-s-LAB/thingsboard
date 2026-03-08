@@ -305,7 +305,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title={title || 'Dashboard'} actions={headerActions} />
         
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto min-h-0">
           {children}
         </main>
       </div>

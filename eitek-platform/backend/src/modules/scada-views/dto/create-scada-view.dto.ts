@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsUUID, IsObject } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsUUID, IsObject, ValidateIf } from 'class-validator';
 
 export class CreateScadaViewDto {
   @ApiProperty({ description: 'SCADA view name', example: 'Production Line Overview' })
@@ -12,30 +12,35 @@ export class CreateScadaViewDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ description: 'Layout configuration (JSON)', example: { type: 'grid', columns: 12 } })
+  @ApiPropertyOptional({ description: 'Layout configuration (JSON)', example: { type: 'grid', columns: 12 } })
+  @IsOptional()
   @IsObject()
-  @IsNotEmpty()
-  layout: Record<string, any>;
+  layout?: Record<string, any>;
 
   @ApiPropertyOptional({ description: 'Background image URL' })
   @IsOptional()
   @IsString()
   background?: string;
 
-  @ApiProperty({ description: 'Canvas size (JSON)', example: { width: 1920, height: 1080 } })
+  @ApiPropertyOptional({ description: 'Canvas size (JSON)', example: { width: 1920, height: 1080 } })
+  @IsOptional()
   @IsObject()
-  @IsNotEmpty()
-  canvasSize: Record<string, any>;
+  canvasSize?: Record<string, any>;
 
   @ApiPropertyOptional({ description: 'Additional settings (JSON)' })
   @IsOptional()
   @IsObject()
   settings?: Record<string, any>;
 
-  @ApiProperty({ description: 'Area ID' })
+  @ApiPropertyOptional({ description: 'Area ID (optional if projectId is provided)' })
+  @IsOptional()
   @IsUUID()
-  @IsNotEmpty()
-  areaId: string;
+  areaId?: string;
+
+  @ApiPropertyOptional({ description: 'Project ID (direct project link)', example: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
 
   @ApiPropertyOptional({ description: 'Is SCADA view active', default: true })
   @IsOptional()

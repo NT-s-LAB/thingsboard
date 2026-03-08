@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsUUID, IsObject } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsObject } from 'class-validator';
 
 export class CreateProjectDto {
   @ApiProperty({ description: 'Project name', example: 'Smart Factory Project' })
@@ -16,11 +16,6 @@ export class CreateProjectDto {
   @IsOptional()
   @IsObject()
   settings?: Record<string, any>;
-
-  @ApiProperty({ description: 'Tenant ID' })
-  @IsUUID()
-  @IsNotEmpty()
-  tenantId: string;
 
   @ApiPropertyOptional({ description: 'Is project active', default: true })
   @IsOptional()

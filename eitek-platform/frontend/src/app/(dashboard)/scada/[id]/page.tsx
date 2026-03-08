@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ScadaCanvasWrapper } from '@/features/scada/components/ScadaCanvasWrapper';
 import { WidgetPalette } from '@/features/scada/components/WidgetPalette';
+import { PropertyPanel } from '@/features/scada/components/PropertyPanel';
 import { Button } from '@/shared/components/ui/Button';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { useScadaStore } from '@/features/scada/stores/scadaStore';
@@ -29,11 +30,34 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
     togglePanel,
   } = useScadaStore();
 
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+
+  const updateCanvasSize = useCallback(() => {
+    if (canvasContainerRef.current) {
+      const rect = canvasContainerRef.current.getBoundingClientRect();
+      setCanvasSize({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
+    }
+  }, []);
+
   useEffect(() => {
     if (params.id) {
       fetchDashboard(params.id);
     }
   }, [params.id, fetchDashboard]);
+
+  useEffect(() => {
+    const el = canvasContainerRef.current;
+    if (!el) return;
+    // Initial measurement
+    updateCanvasSize();
+    // Observe resize
+    const observer = new ResizeObserver(() => {
+      updateCanvasSize();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateCanvasSize]);
 
   const handleToggleRuntime = () => {
     if (isRuntimeMode) {
@@ -87,7 +111,7 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100">
+    <div className="h-full flex flex-col bg-gray-100 overflow-hidden">
       {/* Top Toolbar */}
       <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -98,9 +122,9 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setEditorMode(editorState.mode === 'design' ? 'debug' : 'design')}
+              onClick={() => setEditorMode(editorState?.mode === 'design' ? 'debug' : 'design')}
             >
-              {editorState.mode === 'design' ? '🔧 Debug' : '🎨 Design'}
+              {editorState?.mode === 'design' ? '🔧 Debug' : '🎨 Design'}
             </Button>
             <Button
               size="sm"
@@ -120,7 +144,7 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
           <div className="flex items-center bg-gray-100 rounded p-1">
             <Button
               size="sm"
-              variant={editorState.leftPanelWidth > 0 ? 'secondary' : 'outline'}
+              variant={(editorState?.leftPanelWidth ?? 0) > 0 ? 'secondary' : 'outline'}
               onClick={() => togglePanel('left')}
               className="p-2"
             >
@@ -128,7 +152,7 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
             </Button>
             <Button
               size="sm"
-              variant={editorState.rightPanelWidth > 0 ? 'secondary' : 'outline'}
+              variant={(editorState?.rightPanelWidth ?? 0) > 0 ? 'secondary' : 'outline'}
               onClick={() => togglePanel('right')}
               className="p-2"
             >
@@ -136,7 +160,7 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
             </Button>
             <Button
               size="sm"
-              variant={editorState.bottomPanelHeight > 0 ? 'secondary' : 'outline'}
+              variant={(editorState?.bottomPanelHeight ?? 0) > 0 ? 'secondary' : 'outline'}
               onClick={() => togglePanel('bottom')}
               className="p-2"
             >
@@ -149,29 +173,29 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Widget Palette */}
-        {editorState.leftPanelWidth > 0 && (
+        {(editorState?.leftPanelWidth ?? 0) > 0 && (
           <div 
             className="bg-white border-r border-gray-200 flex-shrink-0"
-            style={{ width: editorState.leftPanelWidth }}
+            style={{ width: editorState?.leftPanelWidth ?? 300 }}
           >
             <WidgetPalette />
           </div>
         )}
 
         {/* Canvas Area */}
-        <div className="flex-1 flex flex-col">
-          <div className="flex-1 relative">
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 relative" ref={canvasContainerRef}>
             <ScadaCanvasWrapper
-              width={window.innerWidth - (editorState.leftPanelWidth + editorState.rightPanelWidth)}
-              height={window.innerHeight - 120 - editorState.bottomPanelHeight} // Subtract toolbar and bottom panel
+              width={canvasSize.width}
+              height={canvasSize.height}
             />
           </div>
 
           {/* Bottom Panel - Properties/Logs */}
-          {editorState.bottomPanelHeight > 0 && (
+          {(editorState?.bottomPanelHeight ?? 0) > 0 && (
             <div 
               className="bg-white border-t border-gray-200 flex-shrink-0"
-              style={{ height: editorState.bottomPanelHeight }}
+              style={{ height: editorState?.bottomPanelHeight ?? 200 }}
             >
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -182,8 +206,8 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
                 </div>
                 <div className="bg-gray-900 text-green-400 p-3 rounded font-mono text-sm h-32 overflow-y-auto">
                   <div>[INFO] Dashboard loaded: {currentDashboard.name}</div>
-                  <div>[INFO] Widgets count: {currentDashboard.widgets.length}</div>
-                  <div>[INFO] Canvas size: {currentDashboard.canvasSize.width}x{currentDashboard.canvasSize.height}</div>
+                  <div>[INFO] Widgets count: {(currentDashboard.widgets ?? (currentDashboard as any).scadaWidgets ?? []).length}</div>
+                  <div>[INFO] Canvas size: {(currentDashboard.canvasSize as any)?.width ?? 1920}x{(currentDashboard.canvasSize as any)?.height ?? 1080}</div>
                   {isRuntimeMode && <div>[INFO] Runtime mode active</div>}
                 </div>
               </div>
@@ -192,66 +216,12 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
         </div>
 
         {/* Right Panel - Properties */}
-        {editorState.rightPanelWidth > 0 && (
+        {(editorState?.rightPanelWidth ?? 0) > 0 && (
           <div 
-            className="bg-white border-l border-gray-200 flex-shrink-0"
-            style={{ width: editorState.rightPanelWidth }}
+            className="bg-white border-l border-gray-200 flex-shrink-0 overflow-y-auto overflow-x-hidden"
+            style={{ width: editorState?.rightPanelWidth ?? 300 }}
           >
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium text-gray-900">Properties</h3>
-                <Button size="sm" variant="outline" onClick={() => togglePanel('right')}>
-                  ✕
-                </Button>
-              </div>
-              
-              {editorState.selection.selectedWidgetIds.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">
-                  <svg className="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                  </svg>
-                  <p className="text-sm">Select a widget to edit its properties</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Selected Widgets
-                    </label>
-                    <div className="text-sm text-gray-900">
-                      {editorState.selection.selectedWidgetIds.length} widget(s) selected
-                    </div>
-                  </div>
-                  
-                  <div className="border-t border-gray-200 pt-4">
-                    <h4 className="font-medium text-gray-900 mb-2">Common Properties</h4>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Visibility
-                        </label>
-                        <input
-                          type="checkbox"
-                          defaultChecked
-                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-600">Visible</span>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Lock
-                        </label>
-                        <input
-                          type="checkbox"
-                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-600">Locked</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <PropertyPanel />
           </div>
         )}
       </div>
@@ -259,13 +229,13 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
       {/* Status Bar */}
       <div className="bg-gray-50 border-t border-gray-200 px-4 py-1 text-xs text-gray-600 flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <span>Mode: {editorState.mode}</span>
-          <span>Zoom: {Math.round(editorState.viewport.zoom * 100)}%</span>
-          <span>Widgets: {currentDashboard.widgets.length}</span>
+          <span>Mode: {editorState?.mode ?? 'design'}</span>
+          <span>Zoom: {Math.round((editorState?.viewport?.zoom ?? 1) * 100)}%</span>
+          <span>Widgets: {(currentDashboard.widgets ?? (currentDashboard as any).scadaWidgets ?? []).length}</span>
         </div>
         <div className="flex items-center space-x-4">
-          <span>Grid: {editorState.showGrid ? 'ON' : 'OFF'}</span>
-          <span>Snap: {editorState.snapToGrid ? 'ON' : 'OFF'}</span>
+          <span>Grid: {editorState?.showGrid ? 'ON' : 'OFF'}</span>
+          <span>Snap: {editorState?.snapToGrid ? 'ON' : 'OFF'}</span>
         </div>
       </div>
     </div>

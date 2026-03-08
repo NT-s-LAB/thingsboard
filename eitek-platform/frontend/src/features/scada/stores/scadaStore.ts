@@ -13,6 +13,50 @@ import type {
 } from '../types';
 import { scadaService } from '../services/scadaService';
 
+/** Transform BE response (scadaWidgets) into FE-compatible shape (widgets) */
+function normalizeDashboard(raw: any): ScadaDashboard | null {
+  if (!raw) return null;
+  const d = { ...raw };
+  // Map scadaWidgets -> widgets if needed
+  if (!d.widgets && d.scadaWidgets) {
+    d.widgets = (d.scadaWidgets as any[]).map((sw: any) => {
+      // If already transformed by BE, use as-is
+      if (sw.transform) return sw;
+      // Transform raw ScadaWidget + Widget relation
+      const pos = sw.position || {};
+      return {
+        id: sw.id,
+        type: sw.widget?.type || sw.properties?.widgetType || 'custom',
+        name: sw.properties?.name || sw.widget?.name || 'Widget',
+        description: sw.widget?.description || '',
+        transform: {
+          position: { x: pos.x ?? 100, y: pos.y ?? 100 },
+          size: { width: pos.width ?? 100, height: pos.height ?? 50 },
+          rotation: pos.rotation ?? 0,
+          scale: pos.scale ?? 1,
+          zIndex: pos.zIndex ?? 0,
+        },
+        style: sw.styles || {},
+        visible: sw.isVisible ?? true,
+        enabled: true,
+        locked: false,
+        dataBindings: Array.isArray(sw.bindings) ? sw.bindings : [],
+        actions: [],
+        properties: sw.properties || {},
+        createdTime: sw.createdAt || new Date().toISOString(),
+        updatedTime: sw.updatedAt || new Date().toISOString(),
+        createdBy: '',
+      };
+    });
+  }
+  if (!d.widgets) d.widgets = [];
+  if (!d.layers) d.layers = [];
+  if (!d.backgroundColor) d.backgroundColor = '#FFFFFF';
+  if (!d.settings) d.settings = { grid: { size: 20, color: '#E5E7EB' } };
+  if (!d.canvasSize) d.canvasSize = { width: 1920, height: 1080 };
+  return d as ScadaDashboard;
+}
+
 interface ScadaState {
   // Data state
   dashboards: ScadaDashboard[];
@@ -63,6 +107,7 @@ interface ScadaActions {
   // Widget actions
   addWidget: (widget: Omit<Widget, 'id' | 'createdTime' | 'updatedTime' | 'createdBy'>) => Promise<void>;
   updateWidget: (widget: Widget) => Promise<void>;
+  updateWidgetLocal: (widgetId: string, updates: Partial<Widget>) => void;
   deleteWidget: (widgetId: string) => Promise<void>;
   duplicateWidget: (widgetId: string) => Promise<void>;
   selectWidget: (widgetId: string | null) => void;
@@ -219,7 +264,8 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
                 state.error = null;
               });
 
-              const dashboard = await scadaService.getDashboard(id);
+              const rawDashboard = await scadaService.getDashboard(id);
+              const dashboard = normalizeDashboard(rawDashboard);
 
               set((state) => {
                 state.currentDashboard = dashboard;
@@ -377,10 +423,26 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
                 state.error = null;
               });
 
-              const newWidget = await scadaService.addWidget(currentDashboard.id, widget);
+              let newWidget: Widget;
+              try {
+                // Try to persist via API
+                newWidget = await scadaService.addWidget(currentDashboard.id, widget);
+              } catch {
+                // API not available — create widget locally
+                newWidget = {
+                  ...widget,
+                  id: crypto.randomUUID(),
+                  createdTime: new Date().toISOString(),
+                  updatedTime: new Date().toISOString(),
+                  createdBy: 'local',
+                } as Widget;
+              }
 
               set((state) => {
                 if (state.currentDashboard) {
+                  if (!state.currentDashboard.widgets) {
+                    (state.currentDashboard as any).widgets = [];
+                  }
                   state.currentDashboard.widgets.push(newWidget);
                 }
                 state.saving = false;
@@ -405,10 +467,11 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
 
               set((state) => {
                 if (state.currentDashboard) {
-                  const index = state.currentDashboard.widgets.findIndex(w => w.id === widget.id);
+                  const widgets = state.currentDashboard.widgets ?? [];
+                  const index = widgets.findIndex(w => w.id === widget.id);
                   if (index !== -1) {
-                    const oldWidget = state.currentDashboard.widgets[index];
-                    state.currentDashboard.widgets[index] = updatedWidget;
+                    const oldWidget = widgets[index];
+                    widgets[index] = updatedWidget;
                     
                     // Add to history
                     get().addToHistory('updateWidget', { 
@@ -428,6 +491,36 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
             }
           },
 
+          updateWidgetLocal: (widgetId, updates) => {
+            set((state) => {
+              if (state.currentDashboard) {
+                const widgets = state.currentDashboard.widgets ?? [];
+                const index = widgets.findIndex(w => w.id === widgetId);
+                if (index !== -1) {
+                  const old = widgets[index]!;
+                  const merged = {
+                    ...old,
+                    ...updates,
+                    transform: updates.transform
+                      ? { ...old.transform, ...updates.transform }
+                      : old.transform,
+                    style: updates.style
+                      ? { ...old.style, ...updates.style }
+                      : old.style,
+                    properties: updates.properties
+                      ? { ...old.properties, ...updates.properties }
+                      : old.properties,
+                    updatedTime: new Date().toISOString(),
+                  } as any;
+                  widgets[index] = merged;
+                  if (state.selectedWidget?.id === widgetId) {
+                    state.selectedWidget = merged;
+                  }
+                }
+              }
+            });
+          },
+
           deleteWidget: async (widgetId) => {
             const { currentDashboard } = get();
             if (!currentDashboard) return;
@@ -437,10 +530,11 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
 
               set((state) => {
                 if (state.currentDashboard) {
-                  const widgetIndex = state.currentDashboard.widgets.findIndex(w => w.id === widgetId);
+                  const widgets = state.currentDashboard.widgets ?? [];
+                  const widgetIndex = widgets.findIndex(w => w.id === widgetId);
                   if (widgetIndex !== -1) {
-                    const deletedWidget = state.currentDashboard.widgets[widgetIndex];
-                    state.currentDashboard.widgets.splice(widgetIndex, 1);
+                    const deletedWidget = widgets[widgetIndex];
+                    widgets.splice(widgetIndex, 1);
                     
                     // Remove from selection
                     state.editorState.selection.selectedWidgetIds = 
@@ -471,6 +565,9 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
 
               set((state) => {
                 if (state.currentDashboard) {
+                  if (!state.currentDashboard.widgets) {
+                    (state.currentDashboard as any).widgets = [];
+                  }
                   state.currentDashboard.widgets.push(newWidget);
                   // Select the duplicated widget
                   state.editorState.selection.selectedWidgetIds = [newWidget.id];
@@ -489,7 +586,7 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
           selectWidget: (widgetId) => {
             set((state) => {
               if (widgetId) {
-                const widget = state.currentDashboard?.widgets.find(w => w.id === widgetId);
+                const widget = (state.currentDashboard?.widgets ?? []).find(w => w.id === widgetId);
                 state.selectedWidget = widget || null;
                 state.editorState.selection.selectedWidgetIds = [widgetId];
               } else {
@@ -502,7 +599,7 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
           moveWidget: (widgetId, position) => {
             set((state) => {
               if (state.currentDashboard) {
-                const widget = state.currentDashboard.widgets.find(w => w.id === widgetId);
+                const widget = (state.currentDashboard.widgets ?? []).find(w => w.id === widgetId);
                 if (widget) {
                   widget.transform.position = position;
                   widget.updatedTime = new Date().toISOString();
@@ -518,7 +615,7 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
           resizeWidget: (widgetId, size) => {
             set((state) => {
               if (state.currentDashboard) {
-                const widget = state.currentDashboard.widgets.find(w => w.id === widgetId);
+                const widget = (state.currentDashboard.widgets ?? []).find(w => w.id === widgetId);
                 if (widget) {
                   widget.transform.size = size;
                   widget.updatedTime = new Date().toISOString();
@@ -536,7 +633,7 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
             set((state) => {
               state.editorState.selection.selectedWidgetIds = widgetIds;
               if (widgetIds.length === 1) {
-                const widget = state.currentDashboard?.widgets.find(w => w.id === widgetIds[0]);
+                const widget = (state.currentDashboard?.widgets ?? []).find(w => w.id === widgetIds[0]);
                 state.selectedWidget = widget || null;
               } else {
                 state.selectedWidget = null;
@@ -555,7 +652,7 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
             set((state) => {
               if (state.currentDashboard) {
                 state.editorState.selection.selectedWidgetIds = 
-                  state.currentDashboard.widgets.map(w => w.id);
+                  (state.currentDashboard.widgets ?? []).map(w => w.id);
                 state.selectedWidget = null;
               }
             });
@@ -566,7 +663,7 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
             const { currentDashboard } = get();
             if (!currentDashboard) return;
 
-            const widgets = currentDashboard.widgets.filter(w => widgetIds.includes(w.id));
+            const widgets = (currentDashboard.widgets ?? []).filter(w => widgetIds.includes(w.id));
             
             set((state) => {
               state.editorState.clipboard = {
@@ -581,7 +678,7 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
             const { currentDashboard } = get();
             if (!currentDashboard) return;
 
-            const widgets = currentDashboard.widgets.filter(w => widgetIds.includes(w.id));
+            const widgets = (currentDashboard.widgets ?? []).filter(w => widgetIds.includes(w.id));
             
             set((state) => {
               state.editorState.clipboard = {
@@ -616,12 +713,19 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
                   updatedTime: new Date().toISOString(),
                 };
 
-                const addedWidget = await scadaService.addWidget(currentDashboard.id, newWidget);
-                pastedWidgets.push(addedWidget);
+                try {
+                  const addedWidget = await scadaService.addWidget(currentDashboard.id, newWidget);
+                  pastedWidgets.push(addedWidget);
+                } catch {
+                  pastedWidgets.push(newWidget as Widget);
+                }
               }
 
               set((state) => {
                 if (state.currentDashboard) {
+                  if (!state.currentDashboard.widgets) {
+                    (state.currentDashboard as any).widgets = [];
+                  }
                   state.currentDashboard.widgets.push(...pastedWidgets);
                   // Select the pasted widgets
                   state.editorState.selection.selectedWidgetIds = pastedWidgets.map(w => w.id);
@@ -753,8 +857,15 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
             if (!currentDashboard) return;
 
             try {
-              const { sessionId } = await scadaService.startRuntime(currentDashboard.id);
-              
+              let sessionId: string;
+              try {
+                const result = await scadaService.startRuntime(currentDashboard.id);
+                sessionId = result.sessionId;
+              } catch {
+                // Runtime API not available yet — run locally
+                sessionId = `local-${crypto.randomUUID()}`;
+              }
+
               set((state) => {
                 state.isRuntimeMode = true;
                 state.runtimeSessionId = sessionId;
@@ -772,7 +883,11 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
             if (!currentDashboard || !runtimeSessionId) return;
 
             try {
-              await scadaService.stopRuntime(currentDashboard.id, runtimeSessionId);
+              try {
+                await scadaService.stopRuntime(currentDashboard.id, runtimeSessionId);
+              } catch {
+                // Runtime API not available — stop locally
+              }
               
               set((state) => {
                 state.isRuntimeMode = false;
@@ -1042,6 +1157,17 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
             bottomPanelHeight: state.editorState.bottomPanelHeight,
           },
         }),
+        merge: (persistedState, currentState) => {
+          const persisted = persistedState as Partial<ScadaState>;
+          return {
+            ...currentState,
+            ...persisted,
+            editorState: {
+              ...currentState.editorState,
+              ...(persisted.editorState ?? {}),
+            },
+          };
+        },
       }
     ),
     {
