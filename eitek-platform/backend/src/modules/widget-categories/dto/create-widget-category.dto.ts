@@ -1,0 +1,35 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsOptional, IsInt, IsBoolean, Min } from 'class-validator';
+
+export class CreateWidgetCategoryDto {
+  @ApiProperty({ description: 'Category name', example: 'Industrial Controls' })
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiPropertyOptional({ description: 'Category description' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional({ description: 'Category icon name (lucide icon)' })
+  @IsOptional()
+  @IsString()
+  icon?: string;
+
+  @ApiPropertyOptional({ description: 'Display order', default: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  order?: number;
+
+  @ApiPropertyOptional({ description: 'Is category active', default: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Parent category ID for nested tree' })
+  @IsOptional()
+  @IsString()
+  parentId?: string;
+}

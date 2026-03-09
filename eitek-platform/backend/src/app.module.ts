@@ -13,6 +13,8 @@ import { DeviceTemplatesModule } from './modules/device-templates/device-templat
 import { ProfilesModule } from './modules/profiles/profiles.module';
 import { ScadaViewsModule } from './modules/scada-views/scada-views.module';
 import { WidgetsModule } from './modules/widgets/widgets.module';
+import { WidgetCategoriesModule } from './modules/widget-categories/widget-categories.module';
+import { SymbolsModule } from './modules/symbols/symbols.module';
 import { ThingsBoardIntegrationModule } from './modules/thingsboard-integration/thingsboard-integration.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { FilesModule } from './modules/files/files.module';
@@ -47,6 +49,8 @@ import thingsBoardConfig from './config/thingsboard.config';
     ProfilesModule,
     ScadaViewsModule,
     WidgetsModule,
+    WidgetCategoriesModule,
+    SymbolsModule,
 
     // Integration
     ThingsBoardIntegrationModule,

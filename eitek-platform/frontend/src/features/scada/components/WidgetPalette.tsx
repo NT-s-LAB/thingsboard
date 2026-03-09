@@ -193,6 +193,23 @@ const IconMotor: React.FC<{ className?: string }> = ({ className = 'w-8 h-8' }) 
   </svg>
 );
 
+const IconPump: React.FC<{ className?: string }> = ({ className = 'w-8 h-8' }) => (
+  <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="20" cy="20" r="14" fill="#F1F5F9" stroke="#6B7280" strokeWidth="1.5"/>
+    <polygon points="20,10 28,25 12,25" fill="#6B7280" opacity="0.7"/>
+    <line x1="34" y1="20" x2="38" y2="20" stroke="#6B7280" strokeWidth="2"/>
+    <circle cx="32" cy="14" r="3" fill="#6B7280"/>
+  </svg>
+);
+
+const IconIndicator: React.FC<{ className?: string }> = ({ className = 'w-8 h-8' }) => (
+  <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="20" cy="18" r="12" fill="#22C55E" opacity="0.85" stroke="#16A34A" strokeWidth="1.5"/>
+    <text x="20" y="21" textAnchor="middle" dominantBaseline="central" fontSize="8" fontWeight="600" fill="#fff">OK</text>
+    <text x="20" y="36" textAnchor="middle" fontSize="7" fill="#6B7280">Status</text>
+  </svg>
+);
+
 // Map of icon components
 const widgetIcons: Record<string, React.FC<{ className?: string }>> = {
   button: IconButton,
@@ -217,6 +234,8 @@ const widgetIcons: Record<string, React.FC<{ className?: string }>> = {
   valve: IconValve,
   tank: IconTank,
   motor: IconMotor,
+  pump: IconPump,
+  indicator: IconIndicator,
 };
 
 interface PaletteWidget {
@@ -232,13 +251,44 @@ const widgetPalette: Array<{
   widgets: PaletteWidget[];
 }> = [
   {
-    category: 'Basic Controls',
+    category: 'Control',
     widgets: [
-      { type: 'button', name: 'Push Button', iconKey: 'button', description: 'Interactive push button' },
-      { type: 'text', name: 'Label / Text', iconKey: 'text', description: 'Static or dynamic text' },
-      { type: 'button', name: 'Toggle Switch', iconKey: 'switch', description: 'ON/OFF toggle switch' },
-      { type: 'button', name: 'Slider', iconKey: 'slider', description: 'Value slider control' },
-      { type: 'button', name: 'LED Indicator', iconKey: 'led', description: 'Status LED light' },
+      { type: 'button', name: 'Push Button', iconKey: 'button', description: 'Interactive push button with confirm' },
+      { type: 'switch', name: 'Toggle Switch', iconKey: 'switch', description: 'ON/OFF toggle switch' },
+      { type: 'slider', name: 'Slider', iconKey: 'slider', description: 'Value slider for setpoint control' },
+    ],
+  },
+  {
+    category: 'Display',
+    widgets: [
+      { type: 'valueDisplay', name: 'Value Display', iconKey: 'valueDisplay', description: 'Numeric value with unit & threshold' },
+      { type: 'gauge', name: 'Gauge', iconKey: 'gauge', description: 'Circular/linear gauge meter' },
+      { type: 'text', name: 'Text Label', iconKey: 'text', description: 'Static or dynamic text' },
+    ],
+  },
+  {
+    category: 'Industrial',
+    widgets: [
+      { type: 'tank', name: 'Tank', iconKey: 'tank', description: 'Liquid storage tank with fill level' },
+      { type: 'pump', name: 'Pump', iconKey: 'pump', description: 'Pump symbol with rotation animation' },
+      { type: 'valve', name: 'Valve', iconKey: 'valve', description: 'Gate/ball/butterfly valve' },
+      { type: 'motor', name: 'Motor', iconKey: 'motor', description: 'Electric motor with RPM display' },
+      { type: 'pipe', name: 'Pipe', iconKey: 'pipe', description: 'Pipe segment with flow animation' },
+    ],
+  },
+  {
+    category: 'Indicators',
+    widgets: [
+      { type: 'led', name: 'LED Indicator', iconKey: 'led', description: 'Status LED with glow effect' },
+      { type: 'indicator', name: 'Status Indicator', iconKey: 'indicator', description: 'Multi-state status indicator' },
+      { type: 'alarm', name: 'Alarm', iconKey: 'alarm', description: 'Alarm status indicator' },
+    ],
+  },
+  {
+    category: 'Data & Charts',
+    widgets: [
+      { type: 'chart', name: 'Trend Chart', iconKey: 'chart', description: 'Real-time trend chart' },
+      { type: 'table', name: 'Data Table', iconKey: 'table', description: 'Tabular data display' },
     ],
   },
   {
@@ -247,24 +297,6 @@ const widgetPalette: Array<{
       { type: 'shape', name: 'Rectangle', iconKey: 'rectangle', description: 'Rectangle shape', shapeVariant: 'rectangle' },
       { type: 'shape', name: 'Circle', iconKey: 'circle', description: 'Circle/Ellipse shape', shapeVariant: 'circle' },
       { type: 'shape', name: 'Line', iconKey: 'line', description: 'Line connector', shapeVariant: 'line' },
-    ],
-  },
-  {
-    category: 'Data Display',
-    widgets: [
-      { type: 'gauge', name: 'Gauge', iconKey: 'gauge', description: 'Circular gauge meter' },
-      { type: 'chart', name: 'Trend Chart', iconKey: 'chart', description: 'Real-time trend chart' },
-      { type: 'table', name: 'Data Table', iconKey: 'table', description: 'Tabular data display' },
-      { type: 'text', name: 'Value Display', iconKey: 'valueDisplay', description: 'Numeric value display' },
-    ],
-  },
-  {
-    category: 'SCADA Symbols',
-    widgets: [
-      { type: 'custom', name: 'Pipe', iconKey: 'pipe', description: 'Process pipe line' },
-      { type: 'custom', name: 'Valve', iconKey: 'valve', description: 'Control valve' },
-      { type: 'custom', name: 'Tank', iconKey: 'tank', description: 'Liquid storage tank' },
-      { type: 'custom', name: 'Motor', iconKey: 'motor', description: 'Electric motor' },
     ],
   },
   {
@@ -277,10 +309,9 @@ const widgetPalette: Array<{
     ],
   },
   {
-    category: 'Alerts',
+    category: 'Custom',
     widgets: [
-      { type: 'alarm', name: 'Alarm', iconKey: 'alarm', description: 'Alarm status indicator' },
-      { type: 'custom', name: 'Custom Widget', iconKey: 'custom', description: 'Custom component' },
+      { type: 'custom', name: 'Custom Widget', iconKey: 'custom', description: 'Custom SVG component' },
     ],
   },
 ];
@@ -288,7 +319,7 @@ const widgetPalette: Array<{
 export const WidgetPalette: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(['Basic Controls', 'Shapes', 'SCADA Symbols'])
+    new Set(['Control', 'Display', 'Industrial', 'Indicators'])
   );
 
   const { addWidget, currentDashboard } = useScadaStore();
@@ -335,26 +366,26 @@ export const WidgetPalette: React.FC = () => {
     }
   };
 
-  const getDefaultSize = (type: WidgetType, iconKey?: string) => {
-    // SCADA-specific sizes
-    if (iconKey === 'switch') return { width: 80, height: 40 };
-    if (iconKey === 'slider') return { width: 200, height: 30 };
-    if (iconKey === 'led') return { width: 40, height: 40 };
-    if (iconKey === 'valueDisplay') return { width: 160, height: 60 };
-    if (iconKey === 'pipe') return { width: 200, height: 30 };
-    if (iconKey === 'valve') return { width: 60, height: 60 };
-    if (iconKey === 'tank') return { width: 100, height: 140 };
-    if (iconKey === 'motor') return { width: 80, height: 80 };
-
+  const getDefaultSize = (type: WidgetType, _iconKey?: string) => {
     switch (type) {
       case 'button': return { width: 120, height: 40 };
-      case 'text': return { width: 200, height: 30 };
-      case 'gauge': return { width: 150, height: 150 };
+      case 'switch': return { width: 80, height: 60 };
+      case 'slider': return { width: 200, height: 60 };
+      case 'led': return { width: 50, height: 60 };
+      case 'indicator': return { width: 60, height: 80 };
+      case 'valueDisplay': return { width: 160, height: 80 };
+      case 'gauge': return { width: 160, height: 160 };
+      case 'tank': return { width: 100, height: 160 };
+      case 'pump': return { width: 100, height: 100 };
+      case 'valve': return { width: 80, height: 80 };
+      case 'motor': return { width: 100, height: 100 };
+      case 'pipe': return { width: 200, height: 30 };
+      case 'text': return { width: 150, height: 40 };
       case 'chart': return { width: 300, height: 200 };
+      case 'table': return { width: 300, height: 200 };
       case 'image': return { width: 200, height: 150 };
       case 'container': return { width: 250, height: 200 };
       case 'shape': return { width: 100, height: 100 };
-      case 'table': return { width: 300, height: 200 };
       case 'video': return { width: 320, height: 240 };
       case 'map': return { width: 300, height: 200 };
       case 'alarm': return { width: 150, height: 50 };
@@ -362,18 +393,20 @@ export const WidgetPalette: React.FC = () => {
     }
   };
 
-  const getDefaultBackgroundColor = (type: WidgetType, iconKey?: string) => {
-    if (iconKey === 'switch') return '#D1FAE5';
-    if (iconKey === 'led') return '#10B981';
-    if (iconKey === 'valueDisplay') return '#1E293B';
-    if (iconKey === 'pipe') return '#CBD5E1';
-    if (iconKey === 'valve') return '#F59E0B';
-    if (iconKey === 'tank') return '#F1F5F9';
-    if (iconKey === 'motor') return '#F1F5F9';
-
+  const getDefaultBackgroundColor = (type: WidgetType, _iconKey?: string) => {
     switch (type) {
       case 'button': return '#3B82F6';
+      case 'switch': return 'transparent';
+      case 'slider': return 'transparent';
+      case 'led': return 'transparent';
+      case 'indicator': return 'transparent';
+      case 'valueDisplay': return '#F9FAFB';
       case 'gauge': return '#FFFFFF';
+      case 'tank': return 'transparent';
+      case 'pump': return 'transparent';
+      case 'valve': return 'transparent';
+      case 'motor': return 'transparent';
+      case 'pipe': return 'transparent';
       case 'chart': return '#FFFFFF';
       case 'container': return '#F9FAFB';
       case 'alarm': return '#EF4444';
@@ -382,87 +415,43 @@ export const WidgetPalette: React.FC = () => {
   };
 
   const getDefaultProperties = (type: WidgetType, config?: { name?: string; iconKey?: string; shapeVariant?: string }) => {
-    const iconKey = config?.iconKey;
-
-    // SCADA-specific widget properties
-    if (iconKey === 'switch') {
-      return { text: 'Switch', variant: 'toggle', state: false, onColor: '#10B981', offColor: '#D1D5DB' };
-    }
-    if (iconKey === 'slider') {
-      return { min: 0, max: 100, value: 50, step: 1, showValue: true, trackColor: '#3B82F6' };
-    }
-    if (iconKey === 'led') {
-      return { color: '#10B981', state: true, size: 'md', blinkOnAlarm: false };
-    }
-    if (iconKey === 'valueDisplay') {
-      return { value: '24.5', unit: '°C', label: 'Temperature', format: '0.0', textColor: '#10B981' };
-    }
-    if (iconKey === 'pipe') {
-      return { direction: 'horizontal', flowAnimated: true, flowColor: '#60A5FA', pipeColor: '#94A3B8' };
-    }
-    if (iconKey === 'valve') {
-      return { state: 'open', valveType: 'gate', showLabel: true };
-    }
-    if (iconKey === 'tank') {
-      return { level: 60, maxLevel: 100, unit: '%', showLevel: true, liquidColor: '#60A5FA' };
-    }
-    if (iconKey === 'motor') {
-      return { state: 'running', speed: 1500, unit: 'RPM', showLabel: true };
-    }
     switch (type) {
       case 'button':
-        return {
-          text: 'Button',
-          variant: 'primary',
-          size: 'md',
-        };
-      case 'text':
-        return {
-          text: 'Sample Text',
-          autoSize: true,
-        };
+        return { label: 'Button', bgColor: '#3B82F6', textColor: '#FFFFFF', fontSize: 12, borderRadius: 6, disabled: false, confirmRequired: false };
+      case 'switch':
+        return { state: false, label: 'Switch', onColor: '#22C55E', offColor: '#9CA3AF', showLabel: true, disabled: false };
+      case 'slider':
+        return { value: 50, min: 0, max: 100, label: '', unit: '', showValue: true, orientation: 'horizontal', trackColor: '#E5E7EB', fillColor: '#3B82F6', disabled: false };
+      case 'valueDisplay':
+        return { label: 'Value', value: 0, unit: '', decimals: 1, prefix: '', suffix: '', showTrend: false, thresholds: [] };
       case 'gauge':
-        return {
-          min: 0,
-          max: 100,
-          value: 0,
-          unit: '%',
-          showValue: true,
-          showMinMax: true,
-          gaugeType: 'circular',
-        };
+        return { min: 0, max: 100, value: 0, unit: '%', gaugeType: 'circular', ranges: [{ from: 0, to: 50, color: '#22C55E' }, { from: 50, to: 80, color: '#F59E0B' }, { from: 80, to: 100, color: '#EF4444' }] };
+      case 'text':
+        return { text: 'Label', fontSize: 14, fontWeight: 'normal', fontFamily: 'Arial, sans-serif', textColor: '#1F2937', align: 'center', bgColor: 'transparent', borderColor: 'transparent', borderWidth: 0 };
+      case 'tank':
+        return { minLevel: 0, maxLevel: 100, level: 50, label: '', unit: '%', showLevel: true, fillColor: '#3B82F6', outlineColor: '#64748B', tankShape: 'rectangular' };
+      case 'pump':
+        return { state: 'stopped', label: '', runningColor: '#22C55E', stoppedColor: '#6B7280', faultColor: '#EF4444' };
+      case 'valve':
+        return { state: 'closed', openPercent: 0, label: '', valveType: 'gate', openColor: '#22C55E', closedColor: '#EF4444' };
+      case 'motor':
+        return { state: 'stopped', rpm: 0, label: '', showRPM: true, runningColor: '#22C55E', stoppedColor: '#6B7280', faultColor: '#EF4444' };
+      case 'pipe':
+        return { orientation: 'horizontal', flowActive: false, pipeColor: '#94A3B8', flowColor: '#3B82F6', pipeWidth: 12, endCaps: true, label: '' };
+      case 'led':
+        return { state: false, label: '', onColor: '#22C55E', offColor: '#6B7280', shape: 'circle', blinkWhenOn: false };
+      case 'indicator':
+        return { value: '', label: '', shape: 'circle', showValue: true, states: [{ value: 'running', color: '#22C55E', label: 'Running' }, { value: 'stopped', color: '#6B7280', label: 'Stopped' }, { value: 'fault', color: '#EF4444', label: 'Fault' }] };
       case 'chart':
-        return {
-          chartType: 'line',
-          datasets: [],
-          xAxis: { type: 'time', title: 'Time' },
-          yAxis: { type: 'linear', title: 'Value' },
-          timeRange: { duration: 60, unit: 'minutes', realtime: true },
-          legend: { show: true, position: 'top' },
-          grid: { show: true, color: '#E5E7EB' },
-        };
+        return { chartType: 'line', datasets: [], xAxis: { type: 'time', title: 'Time' }, yAxis: { type: 'linear', title: 'Value' }, timeRange: { duration: 60, unit: 'minutes', realtime: true }, legend: { show: true, position: 'top' }, grid: { show: true, color: '#E5E7EB' } };
       case 'image':
-        return {
-          src: '/placeholder.png',
-          alt: 'Image',
-          objectFit: 'contain',
-          loading: 'lazy',
-        };
+        return { src: '/placeholder.png', alt: 'Image', objectFit: 'contain', loading: 'lazy' };
       case 'shape':
-        return {
-          shape: config?.shapeVariant || 'rectangle',
-          fill: true,
-          fillColor: '#E5E7EB',
-          strokeColor: '#374151',
-          strokeWidth: 1,
-        };
+        return { shape: config?.shapeVariant || 'rectangle', fill: true, fillColor: '#E5E7EB', strokeColor: '#374151', strokeWidth: 1 };
       case 'container':
-        return {
-          layout: 'free',
-          padding: 10,
-          scrollable: false,
-          children: [],
-        };
+        return { layout: 'free', padding: 10, scrollable: false, children: [] };
+      case 'alarm':
+        return { severity: 'CRITICAL', text: 'Alarm', showTimestamp: true };
       default:
         return {};
     }
@@ -569,17 +558,17 @@ export const WidgetPalette: React.FC = () => {
         <div className="grid grid-cols-4 gap-1">
           {[
             { type: 'button' as WidgetType, iconKey: 'button', name: 'Button', tip: 'Button' },
-            { type: 'text' as WidgetType, iconKey: 'text', name: 'Text', tip: 'Text' },
+            { type: 'switch' as WidgetType, iconKey: 'switch', name: 'Switch', tip: 'Switch' },
             { type: 'gauge' as WidgetType, iconKey: 'gauge', name: 'Gauge', tip: 'Gauge' },
-            { type: 'shape' as WidgetType, iconKey: 'rectangle', name: 'Rectangle', tip: 'Rect', shapeVariant: 'rectangle' },
-            { type: 'shape' as WidgetType, iconKey: 'circle', name: 'Circle', tip: 'Circle', shapeVariant: 'circle' },
-            { type: 'button' as WidgetType, iconKey: 'led', name: 'LED', tip: 'LED' },
-            { type: 'custom' as WidgetType, iconKey: 'valve', name: 'Valve', tip: 'Valve' },
-            { type: 'custom' as WidgetType, iconKey: 'tank', name: 'Tank', tip: 'Tank' },
+            { type: 'tank' as WidgetType, iconKey: 'tank', name: 'Tank', tip: 'Tank' },
+            { type: 'pump' as WidgetType, iconKey: 'pump', name: 'Pump', tip: 'Pump' },
+            { type: 'valve' as WidgetType, iconKey: 'valve', name: 'Valve', tip: 'Valve' },
+            { type: 'motor' as WidgetType, iconKey: 'motor', name: 'Motor', tip: 'Motor' },
+            { type: 'led' as WidgetType, iconKey: 'led', name: 'LED', tip: 'LED' },
           ].map((item) => (
             <button
               key={item.iconKey}
-              onClick={() => handleAddWidget(item.type, { name: item.name, iconKey: item.iconKey, ...(item.shapeVariant ? { shapeVariant: item.shapeVariant } : {}) })}
+              onClick={() => handleAddWidget(item.type, { name: item.name, iconKey: item.iconKey })}
               className="flex flex-col items-center p-1.5 rounded hover:bg-blue-50 transition-colors group"
               title={item.name}
             >

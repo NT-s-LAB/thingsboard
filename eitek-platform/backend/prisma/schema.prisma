@@ -329,14 +329,18 @@ model ScadaWidget {
 // ================================
 
 model WidgetCategory {
-  id          String  @id @default(uuid())
-  name        String  @unique
+  id          String           @id @default(uuid())
+  name        String
   description String?
   icon        String?
-  order       Int     @default(0)
-  isActive    Boolean @default(true)
+  order       Int              @default(0)
+  isActive    Boolean          @default(true)
+  parentId    String?
+  parent      WidgetCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    WidgetCategory[] @relation("CategoryTree")
   widgets     Widget[]
 
+  @@unique([name, parentId])
   @@map("widget_categories")
 }
 

@@ -14,7 +14,9 @@ import {
   User,
   Search,
   Menu,
-  X
+  X,
+  MonitorDot,
+  Puzzle
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
@@ -59,9 +61,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       label: 'Projects'
     },
     {
+      href: '/scada-v2/new',
+      icon: <MonitorDot className="w-5 h-5" />,
+      label: 'SCADA V2'
+    },
+    {
       href: '/templates',
       icon: <Template className="w-5 h-5" />,
       label: 'Templates'
+    },
+    {
+      href: '/widget-library',
+      icon: <Puzzle className="w-5 h-5" />,
+      label: 'Widget Library'
     },
     {
       href: '/settings',

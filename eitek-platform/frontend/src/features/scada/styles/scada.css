@@ -1,0 +1,173 @@
+/**
+ * SCADA CSS Animations
+ *
+ * Used by SVG widget renderers for alarm blink, rotation, pulse effects.
+ */
+
+/* ── Alarm blink — red/yellow pulsing border ────────────────────────────── */
+@keyframes scada-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.scada-alarm-blink {
+  animation: scada-blink 1s ease-in-out infinite;
+}
+
+/* ── Rotate — continuous rotation (pumps, motors) ───────────────────────── */
+@keyframes scada-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.scada-rotate {
+  animation: scada-spin 2s linear infinite;
+  transform-origin: center center;
+}
+
+.scada-rotate-slow {
+  animation: scada-spin 4s linear infinite;
+  transform-origin: center center;
+}
+
+.scada-rotate-fast {
+  animation: scada-spin 1s linear infinite;
+  transform-origin: center center;
+}
+
+/* ── Pulse — gentle glow / size pulse ───────────────────────────────────── */
+@keyframes scada-pulse-kf {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.scada-pulse {
+  animation: scada-pulse-kf 1s ease infinite;
+}
+
+/* ── Flow dash — animate stroke-dashoffset for pipe flow ────────────────── */
+@keyframes scada-flow-dash {
+  to { stroke-dashoffset: -20; }
+}
+
+.scada-flow {
+  stroke-dasharray: 6, 4;
+  animation: scada-flow-dash 0.5s linear infinite;
+}
+
+/* ── Runtime container ──────────────────────────────────────────────────── */
+.scada-runtime {
+  position: relative;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.scada-runtime--fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+}
+
+/* ── Widget wrapper on screen ───────────────────────────────────────────── */
+.scada-widget-wrapper {
+  position: absolute;
+  transition: none;
+}
+
+.scada-widget-wrapper--selected {
+  outline: 2px solid #3B82F6;
+  outline-offset: 2px;
+}
+
+.scada-widget-wrapper--editing {
+  cursor: move;
+}
+
+.scada-widget-wrapper--locked {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* ── Alarm overlay badges ───────────────────────────────────────────────── */
+.scada-alarm-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.scada-alarm-badge--critical { background: #DC2626; }
+.scada-alarm-badge--major { background: #EA580C; }
+.scada-alarm-badge--minor { background: #D97706; }
+.scada-alarm-badge--warning { background: #CA8A04; }
+
+/* ── Editor canvas grid ─────────────────────────────────────────────────── */
+.scada-canvas-grid {
+  background-image:
+    linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ── Editor panels ──────────────────────────────────────────────────────── */
+.scada-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.scada-panel__header {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.scada-panel__body {
+  padding: 8px;
+  overflow-y: auto;
+}
+
+/* ── Widget palette item ────────────────────────────────────────────────── */
+.scada-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: grab;
+  font-size: 12px;
+  color: #374151;
+  transition: background 0.15s;
+}
+
+.scada-palette-item:hover {
+  background: #f3f4f6;
+}
+
+.scada-palette-item:active {
+  cursor: grabbing;
+}
+
+.scada-palette-item__icon {
+  font-size: 16px;
+  width: 24px;
+  text-align: center;
+}
