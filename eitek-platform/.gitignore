@@ -67,7 +67,7 @@ prisma/migrations/
 # ================================
 # Uploads & Generated
 # ================================
-uploads/
+# uploads/
 tmp/
 temp/
 
