@@ -234,8 +234,9 @@ const PopupOverlay: React.FC<{
   zIndex: number;
   onClose: () => void;
 }> = ({ page, project, zIndex, onClose }) => {
-  const popupWidth = page.popupSettings?.width ?? page.canvasSize.width;
-  const popupHeight = page.popupSettings?.height ?? page.canvasSize.height;
+  // Use canvasSize as the source of truth for popup dimensions
+  const popupWidth = page.canvasSize.width;
+  const popupHeight = page.canvasSize.height;
   const showTitle = page.popupSettings?.showTitleBar ?? true;
   const title = page.popupSettings?.title ?? page.name;
   const closeOnBackdrop = page.popupSettings?.closeOnBackdropClick ?? true;

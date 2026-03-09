@@ -89,9 +89,9 @@ export interface ScadaPage {
 }
 
 export interface PopupSettings {
-  /** Width/height of the popup dialog overlay */
-  width: number;
-  height: number;
+  /** Width/height of the popup dialog overlay (deprecated - use canvasSize instead) */
+  width?: number;
+  height?: number;
   /** Whether clicking backdrop closes the popup */
   closeOnBackdropClick: boolean;
   /** Whether to show a title bar */
@@ -328,10 +328,8 @@ export function createPopupPage(name: string, order: number): ScadaPage {
     ...createDefaultPage(name, order),
     id: `popup_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     pageType: 'popup',
-    canvasSize: { width: 800, height: 600 },
+    canvasSize: { width: 400, height: 300 },
     popupSettings: {
-      width: 800,
-      height: 600,
       closeOnBackdropClick: true,
       showTitleBar: true,
       title: name,

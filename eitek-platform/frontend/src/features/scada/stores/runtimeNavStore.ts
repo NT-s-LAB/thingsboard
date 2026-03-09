@@ -7,12 +7,15 @@
  *   - Navigation history stack (for goBack())
  *   - Popup stack (overlay pages)
  *   - Page transition type
+ *   - Dashboard time window (for charts/data queries)
  */
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { PageTransition } from '../core/types/project.types';
+import type { DashboardTimeWindow, AggregationType, TimeUnit } from '../core/types/timeWindow.types';
+import { getDefaultTimeWindow, timeUnitToMs } from '../core/types/timeWindow.types';
 
 // ─── State Shape ─────────────────────────────────────────────────────────────
 
@@ -27,6 +30,10 @@ interface RuntimeNavState {
   popupStack: string[];
   /** Current transition type */
   transition: PageTransition;
+  /** Dashboard time window for charts and data queries */
+  timeWindow: DashboardTimeWindow;
+  /** Whether time window panel is open */
+  timeWindowPanelOpen: boolean;
 
   // ── Actions ──
   /** Initialize navigation with a project */
@@ -49,6 +56,24 @@ interface RuntimeNavState {
   canGoBack: () => boolean;
   /** Reset navigation state */
   reset: () => void;
+
+  // ── Time Window Actions ──
+  /** Update the entire time window */
+  setTimeWindow: (tw: DashboardTimeWindow) => void;
+  /** Set mode (realtime or history) */
+  setTimeWindowMode: (mode: 'realtime' | 'history') => void;
+  /** Set realtime "last X time" */
+  setRealtimeLast: (value: number, unit: TimeUnit) => void;
+  /** Set history date range */
+  setHistoryRange: (startTs: number, endTs: number) => void;
+  /** Set aggregation type */
+  setAggregation: (agg: AggregationType) => void;
+  /** Set grouping interval in milliseconds */
+  setGroupingInterval: (ms: number) => void;
+  /** Toggle time window panel */
+  toggleTimeWindowPanel: () => void;
+  /** Get computed time range (startTs, endTs) */
+  getTimeRange: () => { startTs: number; endTs: number };
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -61,6 +86,8 @@ export const useRuntimeNavStore = create<RuntimeNavState>()(
       homePageId: null,
       popupStack: [],
       transition: 'none' as PageTransition,
+      timeWindow: getDefaultTimeWindow(),
+      timeWindowPanelOpen: false,
 
       init: (homePageId, transition = 'none') =>
         set((s) => {
@@ -129,7 +156,69 @@ export const useRuntimeNavStore = create<RuntimeNavState>()(
           s.homePageId = null;
           s.popupStack = [];
           s.transition = 'none';
+          s.timeWindow = getDefaultTimeWindow();
+          s.timeWindowPanelOpen = false;
         }),
+
+      // ── Time Window Actions ──
+      setTimeWindow: (tw) =>
+        set((s) => {
+          s.timeWindow = tw;
+        }),
+
+      setTimeWindowMode: (mode) =>
+        set((s) => {
+          s.timeWindow.mode = mode;
+        }),
+
+      setRealtimeLast: (value, unit) =>
+        set((s) => {
+          s.timeWindow.realtime.type = 'last';
+          s.timeWindow.realtime.lastValue = value;
+          s.timeWindow.realtime.lastUnit = unit;
+        }),
+
+      setHistoryRange: (startTs, endTs) =>
+        set((s) => {
+          s.timeWindow.history.startTs = startTs;
+          s.timeWindow.history.endTs = endTs;
+        }),
+
+      setAggregation: (agg) =>
+        set((s) => {
+          s.timeWindow.aggregation = agg;
+        }),
+
+      setGroupingInterval: (ms) =>
+        set((s) => {
+          s.timeWindow.groupingIntervalMs = ms;
+        }),
+
+      toggleTimeWindowPanel: () =>
+        set((s) => {
+          s.timeWindowPanelOpen = !s.timeWindowPanelOpen;
+        }),
+
+      getTimeRange: () => {
+        const { timeWindow } = get();
+        const now = Date.now();
+        
+        if (timeWindow.mode === 'history') {
+          return { startTs: timeWindow.history.startTs, endTs: timeWindow.history.endTs };
+        }
+        
+        // Realtime mode
+        if (timeWindow.realtime.type === 'last') {
+          const durationMs = timeUnitToMs(timeWindow.realtime.lastValue, timeWindow.realtime.lastUnit);
+          return { startTs: now - durationMs, endTs: now };
+        }
+        
+        // Relative mode
+        return {
+          startTs: now - (timeWindow.realtime.relativeStartMs ?? 0),
+          endTs: now - (timeWindow.realtime.relativeEndMs ?? 0),
+        };
+      },
     })),
     { name: 'scada-runtime-nav-store' },
   ),

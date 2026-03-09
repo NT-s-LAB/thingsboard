@@ -7,6 +7,7 @@
 
 import React, { useCallback, useEffect } from 'react';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
+import { TimeWindowSelector } from '../runtime/TimeWindowSelector';
 
 interface EditorToolbarProps {
   onSave?: () => void;
@@ -119,6 +120,9 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName
       )}
 
       <div style={{ flex: 1 }} />
+
+      {/* Time Window (runtime only) */}
+      {isRuntime && <TimeWindowSelector />}
 
       {/* Runtime toggle */}
       <ToolBtn onClick={toggleRuntime} active={isRuntime} title={isRuntime ? 'Stop Runtime' : 'Start Runtime'}>

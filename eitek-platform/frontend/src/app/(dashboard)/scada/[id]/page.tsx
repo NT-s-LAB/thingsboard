@@ -22,6 +22,7 @@ import { registerBuiltinWidgets } from '@/features/scada/widgets/definitions';
 import { screenDefinitionToProject } from '@/features/scada/core/migrations/projectMigration';
 import { projectToScreenDefinition } from '@/features/scada/core/migrations/projectMigration';
 import { createDefaultProject } from '@/features/scada/core/types/project.types';
+import { TimeWindowSelector } from '@/features/scada/engine/runtime/TimeWindowSelector';
 import type { ScreenDefinition } from '@/features/scada/core/types';
 import type { ScadaProject } from '@/features/scada/core/types/project.types';
 
@@ -235,21 +236,22 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
         ref={viewContainerRef}
         style={{ height: '100vh', width: '100%', position: 'relative', overflow: 'hidden', background: canvasBg }}
       >
-        {/* Floating header */}
-        {!viewFullscreen && (
-          <ViewModeHeader
-            screenName={screen.name}
-            onBack={handleGoBack}
-            onEdit={switchToEdit}
-            onFullscreen={toggleViewFullscreen}
-          />
-        )}
+        {/* Floating header - always visible */}
+        <ViewModeHeader
+          screenName={screen.name}
+          onBack={handleGoBack}
+          onEdit={switchToEdit}
+          onFullscreen={toggleViewFullscreen}
+          isFullscreen={viewFullscreen}
+          project={project}
+          screen={screen}
+        />
 
         {/* Runtime renderer — multi-page or single-page fallback */}
         <div style={{
           width: '100%',
-          height: viewFullscreen ? '100%' : 'calc(100% - 52px)',
-          marginTop: viewFullscreen ? 0 : 52,
+          height: 'calc(100% - 52px)',
+          marginTop: 52,
         }}>
           {project ? (
             <MultiPageRuntime project={project} autoFit />
@@ -258,23 +260,7 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
           )}
         </div>
 
-        {/* Fullscreen exit button */}
-        {viewFullscreen && (
-          <button
-            onClick={toggleViewFullscreen}
-            style={{
-              position: 'fixed', top: 16, right: 16, zIndex: 10000,
-              background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none',
-              padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-              cursor: 'pointer', backdropFilter: 'blur(8px)',
-              opacity: 0.7, transition: 'opacity 0.2s',
-            }}
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.opacity = '1'; }}
-            onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '0.7'; }}
-          >
-            ✕ Exit Fullscreen
-          </button>
-        )}
+        {/* Fullscreen exit button removed - now in header */}
       </div>
     );
   }
@@ -301,90 +287,133 @@ const ViewModeHeader: React.FC<{
   onBack: () => void;
   onEdit: () => void;
   onFullscreen: () => void;
-}> = ({ screenName, onBack, onEdit, onFullscreen }) => (
-  <div
-    style={{
-      position: 'absolute', top: 0, left: 0, right: 0, zIndex: 100,
-      height: 52,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 16px',
-      background: 'rgba(15, 23, 42, 0.92)',
-      backdropFilter: 'blur(16px)',
-      borderBottom: '1px solid rgba(255,255,255,0.06)',
-    }}
-  >
-    {/* Left: Back + title + status */}
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <HeaderBtn onClick={onBack}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M19 12H5M12 19l-7-7 7-7" />
-        </svg>
-        <span>Back</span>
-      </HeaderBtn>
+  isFullscreen?: boolean;
+  project?: ScadaProject | null;
+  screen?: ScreenDefinition | null;
+}> = ({ screenName, onBack, onEdit, onFullscreen, isFullscreen, project, screen }) => {
+  // Export dashboard as JSON
+  const handleExport = useCallback(() => {
+    const dataToExport = project ?? screen;
+    if (!dataToExport) return;
+    
+    const jsonStr = JSON.stringify(dataToExport, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${screenName || 'scada-dashboard'}_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [project, screen, screenName]);
 
-      <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.1)' }} />
+  return (
+    <div
+      style={{
+        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 100,
+        height: 52,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 16px',
+        background: 'rgba(15, 23, 42, 0.92)',
+        backdropFilter: 'blur(16px)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      {/* Left: Back + title + status */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <HeaderBtn onClick={onBack}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          <span>Back</span>
+        </HeaderBtn>
 
-      <div>
-        <h2 style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 600, margin: 0, lineHeight: 1.2 }}>
-          {screenName}
-        </h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-          <span style={{
-            width: 6, height: 6, borderRadius: '50%',
-            background: '#10b981',
-            boxShadow: '0 0 8px rgba(16,185,129,0.6)',
-            animation: 'pulse 2s ease-in-out infinite',
-          }} />
-          <span style={{
-            color: '#64748b', fontSize: 10, fontWeight: 600,
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-          }}>
-            Runtime Active
-          </span>
+        <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.1)' }} />
+
+        <div>
+          <h2 style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 600, margin: 0, lineHeight: 1.2 }}>
+            {screenName}
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+            <span style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: '#10b981',
+              boxShadow: '0 0 8px rgba(16,185,129,0.6)',
+              animation: 'pulse 2s ease-in-out infinite',
+            }} />
+            <span style={{
+              color: '#64748b', fontSize: 10, fontWeight: 600,
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+            }}>
+              Runtime Active
+            </span>
+          </div>
         </div>
       </div>
-    </div>
 
-    {/* Right: Edit + Fullscreen */}
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <button
-        onClick={onEdit}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 16px', borderRadius: 8,
-          background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(99,102,241,0.2))',
-          border: '1px solid rgba(99,102,241,0.35)',
-          color: '#818cf8', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-          transition: 'all 0.2s ease',
-        }}
-        onMouseEnter={(e) => {
-          const el = e.currentTarget;
-          el.style.background = 'linear-gradient(135deg, rgba(59,130,246,0.35), rgba(99,102,241,0.35))';
-          el.style.color = '#a5b4fc';
-          el.style.borderColor = 'rgba(99,102,241,0.5)';
-        }}
-        onMouseLeave={(e) => {
-          const el = e.currentTarget;
-          el.style.background = 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(99,102,241,0.2))';
-          el.style.color = '#818cf8';
-          el.style.borderColor = 'rgba(99,102,241,0.35)';
-        }}
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
-        Edit
-      </button>
+      {/* Center: Time Window */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <TimeWindowSelector />
+      </div>
 
-      <HeaderBtn onClick={onFullscreen} title="Fullscreen">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-        </svg>
-      </HeaderBtn>
+      {/* Right: Export + Edit + Fullscreen */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Export button */}
+        <HeaderBtn onClick={handleExport} title="Export Dashboard JSON">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span>Export</span>
+        </HeaderBtn>
+
+        <button
+          onClick={onEdit}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '7px 16px', borderRadius: 8,
+            background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(99,102,241,0.2))',
+            border: '1px solid rgba(99,102,241,0.35)',
+            color: '#818cf8', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget;
+            el.style.background = 'linear-gradient(135deg, rgba(59,130,246,0.35), rgba(99,102,241,0.35))';
+            el.style.color = '#a5b4fc';
+            el.style.borderColor = 'rgba(99,102,241,0.5)';
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget;
+            el.style.background = 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(99,102,241,0.2))';
+            el.style.color = '#818cf8';
+            el.style.borderColor = 'rgba(99,102,241,0.35)';
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+          Edit
+        </button>
+
+        <HeaderBtn onClick={onFullscreen} title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+          {isFullscreen ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            </svg>
+          )}
+        </HeaderBtn>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Header Button (dark glass style) ────────────────────────────────────────
 
