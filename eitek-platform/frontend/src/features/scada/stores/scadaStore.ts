@@ -24,6 +24,22 @@ function normalizeDashboard(raw: any): ScadaDashboard | null {
       if (sw.transform) return sw;
       // Transform raw ScadaWidget + Widget relation
       const pos = sw.position || {};
+      // Unwrap bindings: support both plain array and { items: [...] } format
+      const rawBindings = sw.bindings;
+      let bindings: any[] = [];
+      if (Array.isArray(rawBindings)) {
+        bindings = rawBindings;
+      } else if (rawBindings && Array.isArray(rawBindings.items)) {
+        bindings = rawBindings.items;
+      }
+      // Unwrap actions
+      const rawActions = sw.actions;
+      let actions: any[] = [];
+      if (Array.isArray(rawActions)) {
+        actions = rawActions;
+      } else if (rawActions && Array.isArray(rawActions.items)) {
+        actions = rawActions.items;
+      }
       return {
         id: sw.id,
         type: sw.widget?.type || sw.properties?.widgetType || 'custom',
@@ -40,8 +56,8 @@ function normalizeDashboard(raw: any): ScadaDashboard | null {
         visible: sw.isVisible ?? true,
         enabled: true,
         locked: false,
-        dataBindings: Array.isArray(sw.bindings) ? sw.bindings : [],
-        actions: [],
+        dataBindings: bindings,
+        actions: actions,
         properties: sw.properties || {},
         createdTime: sw.createdAt || new Date().toISOString(),
         updatedTime: sw.updatedAt || new Date().toISOString(),

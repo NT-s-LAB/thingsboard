@@ -15,6 +15,7 @@ import { CanvasEditor } from './CanvasEditor';
 import { WidgetPaletteV2 } from './WidgetPaletteV2';
 import { PropertyPanelV2 } from './PropertyPanelV2';
 import { BindingPanelV2 } from './BindingPanelV2';
+import { ActionPanelV2 } from './ActionPanelV2';
 import { LayerPanel } from './LayerPanel';
 import { EditorToolbar } from './EditorToolbar';
 import { RuntimeRenderer } from '../runtime/RuntimeRenderer';
@@ -41,7 +42,7 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
   screen: screenProp,
   onSave,
 }) => {
-  const [rightPanel, setRightPanel] = useState<'properties' | 'bindings'>('properties');
+  const [rightPanel, setRightPanel] = useState<'properties' | 'bindings' | 'actions'>('properties');
 
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
 
@@ -200,9 +201,14 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
               <TabBtn active={rightPanel === 'bindings'} onClick={() => setRightPanel('bindings')}>
                 Bindings
               </TabBtn>
+              <TabBtn active={rightPanel === 'actions'} onClick={() => setRightPanel('actions')}>
+                Actions
+              </TabBtn>
             </div>
 
-            {rightPanel === 'properties' ? <PropertyPanelV2 /> : <BindingPanelV2 />}
+            {rightPanel === 'properties' && <PropertyPanelV2 />}
+            {rightPanel === 'bindings' && <BindingPanelV2 />}
+            {rightPanel === 'actions' && <ActionPanelV2 />}
             <LayerPanel />
           </div>
         )}

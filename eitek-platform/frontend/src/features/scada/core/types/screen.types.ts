@@ -211,7 +211,15 @@ export type ActionTrigger =
   | 'mouseLeave'
   | 'valueChange'
   | 'alarmActive'
-  | 'alarmCleared';
+  | 'alarmCleared'
+  | 'toggle'
+  | 'turnOn'
+  | 'turnOff'
+  | 'start'
+  | 'stop'
+  | 'open'
+  | 'close'
+  | 'change';
 
 export type ActionType =
   | 'navigate'

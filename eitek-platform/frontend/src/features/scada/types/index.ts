@@ -87,7 +87,10 @@ export type EventType =
   | 'onAlarm'
   | 'onTimer'
   | 'onRpcResponse'
-  | 'onConnectionStatus';
+  | 'onConnectionStatus'
+  | 'onToggle'
+  | 'onTurnOn'
+  | 'onTurnOff';
 
 export type ActionType =
   | 'navigate'

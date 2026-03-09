@@ -312,6 +312,7 @@ model ScadaWidget {
   position    Json
   properties  Json
   bindings    Json
+  actions     Json      @default("[]")
   styles      Json?
   isVisible   Boolean   @default(true)
   createdAt   DateTime  @default(now())

@@ -319,6 +319,7 @@ export class ScadaViewsService {
         position: dto.position || dto.transform || { x: 100, y: 100, width: 100, height: 50 },
         properties: dto.properties || {},
         bindings: dto.bindings || dto.dataBindings || [],
+        actions: dto.actions || [],
         styles: dto.styles || dto.style || {},
         isVisible: dto.isVisible ?? dto.visible ?? true,
       },
@@ -348,6 +349,7 @@ export class ScadaViewsService {
         position: dto.position ?? undefined,
         properties: dto.properties ?? undefined,
         bindings: dto.bindings ?? undefined,
+        actions: dto.actions ?? undefined,
         styles: dto.styles ?? undefined,
         isVisible: dto.isVisible ?? undefined,
       },
@@ -381,15 +383,20 @@ export class ScadaViewsService {
       });
       if (!existing) continue;
 
+      const updateData: any = {};
+      if (w.position !== undefined) updateData.position = w.position;
+      if (w.properties !== undefined) updateData.properties = w.properties;
+      if (w.bindings !== undefined) updateData.bindings = w.bindings;
+      if (w.actions !== undefined) updateData.actions = w.actions;
+      if (w.styles !== undefined) updateData.styles = w.styles;
+      if (w.isVisible !== undefined) updateData.isVisible = w.isVisible;
+      // Update widget name in properties if provided
+      if (w.name && w.properties) {
+        updateData.properties = { ...w.properties, name: w.name };
+      }
       const updated = await this.prisma.scadaWidget.update({
         where: { id: w.id },
-        data: {
-          position: w.position ?? undefined,
-          properties: w.properties ?? undefined,
-          bindings: w.bindings ?? undefined,
-          styles: w.styles ?? undefined,
-          isVisible: w.isVisible ?? undefined,
-        },
+        data: updateData,
         include: { widget: true },
       });
       results.push(this.transformScadaWidgetToFE(updated));
@@ -416,6 +423,7 @@ export class ScadaViewsService {
         position: { ...pos, x: (pos?.x || 0) + 20, y: (pos?.y || 0) + 20 },
         properties: original.properties as any,
         bindings: original.bindings as any,
+        actions: original.actions as any,
         styles: original.styles as any,
         isVisible: original.isVisible,
       },
@@ -428,6 +436,22 @@ export class ScadaViewsService {
   /** Transform a Prisma ScadaWidget (with widget relation) into the shape the FE expects */
   private transformScadaWidgetToFE(sw: any) {
     const pos = sw.position as any || {};
+    // Unwrap bindings: support both plain array and { items: [...] } format
+    const rawBindings = sw.bindings;
+    let bindings: any[] = [];
+    if (Array.isArray(rawBindings)) {
+      bindings = rawBindings;
+    } else if (rawBindings && Array.isArray(rawBindings.items)) {
+      bindings = rawBindings.items;
+    }
+    // Unwrap actions: support both plain array and { items: [...] } format
+    const rawActions = sw.actions;
+    let actions: any[] = [];
+    if (Array.isArray(rawActions)) {
+      actions = rawActions;
+    } else if (rawActions && Array.isArray(rawActions.items)) {
+      actions = rawActions.items;
+    }
     return {
       id: sw.id,
       type: sw.widget?.type || (sw.properties as any)?.widgetType || 'custom',
@@ -444,8 +468,8 @@ export class ScadaViewsService {
       visible: sw.isVisible ?? true,
       enabled: true,
       locked: false,
-      dataBindings: Array.isArray(sw.bindings) ? sw.bindings : [],
-      actions: [],
+      dataBindings: bindings,
+      actions: actions,
       properties: sw.properties || {},
       createdTime: sw.createdAt?.toISOString?.() || new Date().toISOString(),
       updatedTime: sw.updatedAt?.toISOString?.() || new Date().toISOString(),

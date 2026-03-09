@@ -1,13 +1,659 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Section, Field, inputCls, selectCls, numCls, btnSmCls } from '../PropertyPanel';
-import type { Widget, WidgetAction, EventType, ActionType, TbAttributeScope, TbAlarmSeverity } from '../../types';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Section, Field, inputCls, selectCls, numCls, btnSmCls, checkCls } from '../PropertyPanel';
+import type { Widget, WidgetAction, EventType, ActionType, DataBinding, DataBindingType, TbAttributeScope, TbAlarmSeverity } from '../../types';
+import { deviceService } from '@/features/devices/services/deviceService';
+import type { Device } from '@/features/devices/types';
 
 interface ActionsTabProps {
   widget: Widget;
   onUpdate: (updates: Partial<Widget>) => void;
 }
+
+/* ================================================================
+   Control widget behavior configuration (ThingsBoard-style)
+   ================================================================ */
+
+const CONTROL_WIDGET_TYPES = ['switch', 'valve', 'motor', 'pump'] as const;
+
+interface BehaviorLabels {
+  onLabel: string;
+  offLabel: string;
+  onTrigger: EventType;
+  offTrigger: EventType;
+}
+
+const BEHAVIOR_LABELS: Record<string, BehaviorLabels> = {
+  switch: { onLabel: 'Turn On action', offLabel: 'Turn Off action', onTrigger: 'onTurnOn', offTrigger: 'onTurnOff' },
+  valve:  { onLabel: 'Open action',    offLabel: 'Close action',    onTrigger: 'onTurnOn', offTrigger: 'onTurnOff' },
+  motor:  { onLabel: 'Start action',   offLabel: 'Stop action',     onTrigger: 'onTurnOn', offTrigger: 'onTurnOff' },
+  pump:   { onLabel: 'Start action',   offLabel: 'Stop action',     onTrigger: 'onTurnOn', offTrigger: 'onTurnOff' },
+};
+
+function isControlWidget(type: string): boolean {
+  return (CONTROL_WIDGET_TYPES as readonly string[]).includes(type);
+}
+
+/* ================================================================
+   Main ActionsTab - shows Behavior panel for control widgets,
+   generic panel for others
+   ================================================================ */
+
+export const ActionsTab: React.FC<ActionsTabProps> = ({ widget, onUpdate }) => {
+  if (isControlWidget(widget.type)) {
+    return <BehaviorPanel widget={widget} onUpdate={onUpdate} />;
+  }
+  return <GenericActionsPanel widget={widget} onUpdate={onUpdate} />;
+};
+
+/* ================================================================
+   BehaviorPanel – ThingsBoard-style for switch/valve/motor/pump
+   ================================================================ */
+
+type InitialStateSource = 'telemetry' | 'attribute' | 'static';
+type BehaviorActionType = 'rpcCall' | 'updateAttribute';
+
+const BehaviorPanel: React.FC<ActionsTabProps> = ({ widget, onUpdate }) => {
+  const labels = BEHAVIOR_LABELS[widget.type] ?? BEHAVIOR_LABELS['switch']!;
+  const actions: WidgetAction[] = widget.actions ?? [];
+  const bindings: DataBinding[] = widget.dataBindings ?? [];
+
+  // ── Find or derive device ID from existing bindings/actions ──
+  const existingDeviceId =
+    actions.find((a) => a.parameters.deviceId)?.parameters.deviceId ??
+    bindings.find((b) => b.entityId)?.entityId ??
+    '';
+  const existingDeviceName =
+    bindings.find((b) => b.entityName)?.entityName ?? '';
+
+  // ── Find existing behavior actions ──
+  const turnOnAction = actions.find((a) => a.trigger === labels.onTrigger);
+  const turnOffAction = actions.find((a) => a.trigger === labels.offTrigger);
+
+  // ── Find initial state binding (convention: label === '__initial_state') ──
+  const stateBinding = bindings.find((b) => b.label === '__initial_state');
+
+  // ── Expanded cards ──
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const toggle = (card: string) => setExpandedCard(expandedCard === card ? null : card);
+
+  // ── Device selection ──
+  const handleDeviceSelect = (device: Device) => {
+    // Update all actions' deviceId
+    const updatedActions = actions.map((a) => ({
+      ...a,
+      parameters: { ...a.parameters, deviceId: device.id },
+    }));
+    // Update all bindings' entityId/entityName
+    const updatedBindings = bindings.map((b) => ({
+      ...b,
+      entityId: device.id,
+      entityName: device.name,
+    }));
+    onUpdate({ actions: updatedActions, dataBindings: updatedBindings });
+  };
+
+  // ── Upsert an action by trigger ──
+  const upsertAction = (trigger: EventType, updates: Partial<WidgetAction>) => {
+    const existing = actions.find((a) => a.trigger === trigger);
+    if (existing) {
+      onUpdate({
+        actions: actions.map((a) =>
+          a.trigger === trigger
+            ? { ...a, ...updates, parameters: { ...a.parameters, ...(updates.parameters ?? {}) } }
+            : a
+        ),
+      });
+    } else {
+      const newAction: WidgetAction = {
+        id: crypto.randomUUID(),
+        type: updates.type ?? 'rpcCall',
+        trigger,
+        enabled: true,
+        name: updates.name ?? '',
+        parameters: { deviceId: existingDeviceId, ...(updates.parameters ?? {}) },
+      };
+      onUpdate({ actions: [...actions, newAction] });
+    }
+  };
+
+  // ── Upsert initial state binding ──
+  const upsertStateBinding = (patch: Partial<DataBinding>) => {
+    if (stateBinding) {
+      onUpdate({
+        dataBindings: bindings.map((b) =>
+          b.label === '__initial_state' ? { ...b, ...patch } : b
+        ),
+      });
+    } else {
+      const newBinding: DataBinding = {
+        id: crypto.randomUUID(),
+        type: (patch.type as DataBindingType) ?? 'telemetry',
+        label: '__initial_state',
+        entityType: 'DEVICE',
+        entityId: existingDeviceId,
+        entityName: existingDeviceName,
+        telemetryKey: '',
+        defaultValue: false,
+        thresholds: [],
+        ...patch,
+      };
+      onUpdate({ dataBindings: [...bindings, newBinding] });
+    }
+  };
+
+  return (
+    <div className="p-3 space-y-3">
+      {/* ── Target Device ── */}
+      <Section title="Target Device">
+        <Field label="Device">
+          <DeviceSearchDropdown
+            selectedDeviceId={existingDeviceId || undefined}
+            selectedDeviceName={existingDeviceName || undefined}
+            onSelect={handleDeviceSelect}
+          />
+        </Field>
+      </Section>
+
+      {/* ── Behavior Cards ── */}
+      <Section title="Behavior">
+        <div className="space-y-2">
+          {/* Initial State */}
+          <BehaviorCard
+            label="Initial state"
+            summary={stateBinding ? `${stateBinding.type}: ${stateBinding.telemetryKey || stateBinding.attributeKey || '—'}` : 'Not configured'}
+            expanded={expandedCard === 'initialState'}
+            onToggle={() => toggle('initialState')}
+            color="blue"
+          >
+            <InitialStateEditor
+              binding={stateBinding}
+              deviceId={existingDeviceId}
+              onUpdate={upsertStateBinding}
+            />
+          </BehaviorCard>
+
+          {/* Turn On / Open / Start */}
+          <BehaviorCard
+            label={labels.onLabel}
+            summary={turnOnAction ? `${turnOnAction.type === 'rpcCall' ? 'RPC' : 'Attribute'}: ${turnOnAction.parameters.method || turnOnAction.parameters.attributeKey || '—'}` : 'Not configured'}
+            expanded={expandedCard === 'turnOn'}
+            onToggle={() => toggle('turnOn')}
+            color="green"
+          >
+            <BehaviorActionEditor
+              action={turnOnAction}
+              deviceId={existingDeviceId}
+              triggerLabel={labels.onLabel}
+              onUpdate={(updates) => upsertAction(labels.onTrigger, { name: labels.onLabel, ...updates })}
+            />
+          </BehaviorCard>
+
+          {/* Turn Off / Close / Stop */}
+          <BehaviorCard
+            label={labels.offLabel}
+            summary={turnOffAction ? `${turnOffAction.type === 'rpcCall' ? 'RPC' : 'Attribute'}: ${turnOffAction.parameters.method || turnOffAction.parameters.attributeKey || '—'}` : 'Not configured'}
+            expanded={expandedCard === 'turnOff'}
+            onToggle={() => toggle('turnOff')}
+            color="red"
+          >
+            <BehaviorActionEditor
+              action={turnOffAction}
+              deviceId={existingDeviceId}
+              triggerLabel={labels.offLabel}
+              onUpdate={(updates) => upsertAction(labels.offTrigger, { name: labels.offLabel, ...updates })}
+            />
+          </BehaviorCard>
+
+          {/* Disabled State */}
+          <BehaviorCard
+            label="Disabled state"
+            summary={widget.enabled === false ? 'Disabled' : 'Enabled'}
+            expanded={expandedCard === 'disabled'}
+            onToggle={() => toggle('disabled')}
+            color="gray"
+          >
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className={checkCls}
+                checked={widget.enabled === false}
+                onChange={(e) => onUpdate({ enabled: !e.target.checked })}
+              />
+              <span className="text-xs text-gray-700">Widget disabled (read-only in runtime)</span>
+            </label>
+          </BehaviorCard>
+        </div>
+      </Section>
+
+      {/* ── Advanced Actions (existing generic editor) ── */}
+      <Section title="Advanced Actions" defaultOpen={false}>
+        <GenericActionsPanel widget={widget} onUpdate={onUpdate} />
+      </Section>
+    </div>
+  );
+};
+
+/* ── Behavior Card (expandable row) ── */
+
+const CARD_COLORS: Record<string, string> = {
+  blue: 'border-l-blue-500',
+  green: 'border-l-green-500',
+  red: 'border-l-red-500',
+  gray: 'border-l-gray-400',
+};
+
+const BehaviorCard: React.FC<{
+  label: string;
+  summary: string;
+  expanded: boolean;
+  onToggle: () => void;
+  color: string;
+  children: React.ReactNode;
+}> = ({ label, summary, expanded, onToggle, color, children }) => (
+  <div className={`border border-gray-200 rounded-md overflow-hidden border-l-4 ${CARD_COLORS[color] ?? ''}`}>
+    <div
+      className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 bg-gray-50/50"
+      onClick={onToggle}
+    >
+      <div className="min-w-0">
+        <div className="text-xs font-medium text-gray-800">{label}</div>
+        <div className="text-[10px] text-gray-500 truncate">{summary}</div>
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <span className="text-gray-400 text-[10px]">{expanded ? '▼' : '▶'}</span>
+      </div>
+    </div>
+    {expanded && (
+      <div className="px-3 py-2 space-y-2 bg-white border-t border-gray-100">
+        {children}
+      </div>
+    )}
+  </div>
+);
+
+/* ── Initial State Editor ── */
+
+const InitialStateEditor: React.FC<{
+  binding: DataBinding | undefined;
+  deviceId: string;
+  onUpdate: (patch: Partial<DataBinding>) => void;
+}> = ({ binding, deviceId, onUpdate }) => {
+  const sourceType: InitialStateSource = (binding?.type as InitialStateSource) || 'telemetry';
+
+  return (
+    <div className="space-y-2">
+      <Field label="Source">
+        <select
+          className={selectCls}
+          value={sourceType}
+          onChange={(e) => onUpdate({ type: e.target.value as DataBindingType })}
+        >
+          <option value="telemetry">Telemetry</option>
+          <option value="attribute">Attribute</option>
+          <option value="static">Static value</option>
+        </select>
+      </Field>
+
+      {sourceType === 'telemetry' && (
+        <Field label="Telemetry Key">
+          <KeyDropdown
+            deviceId={deviceId}
+            value={binding?.telemetryKey ?? ''}
+            onChange={(key) => onUpdate({ telemetryKey: key })}
+            keyType="telemetry"
+            placeholder="e.g. state, isOn"
+          />
+        </Field>
+      )}
+
+      {sourceType === 'attribute' && (
+        <>
+          <Field label="Scope">
+            <select
+              className={selectCls}
+              value={binding?.attributeScope ?? 'SERVER_SCOPE'}
+              onChange={(e) => onUpdate({ attributeScope: e.target.value as TbAttributeScope })}
+            >
+              <option value="SERVER_SCOPE">Server</option>
+              <option value="CLIENT_SCOPE">Client</option>
+              <option value="SHARED_SCOPE">Shared</option>
+            </select>
+          </Field>
+          <Field label="Attribute Key">
+            <KeyDropdown
+              deviceId={deviceId}
+              value={binding?.attributeKey ?? ''}
+              onChange={(key) => onUpdate({ attributeKey: key })}
+              keyType="attribute"
+              attributeScope={binding?.attributeScope ?? 'SERVER_SCOPE'}
+              placeholder="e.g. isActive"
+            />
+          </Field>
+        </>
+      )}
+
+      {sourceType === 'static' && (
+        <Field label="Static Value">
+          <select
+            className={selectCls}
+            value={String(binding?.staticValue ?? 'false')}
+            onChange={(e) => onUpdate({ staticValue: e.target.value === 'true' })}
+          >
+            <option value="true">ON (true)</option>
+            <option value="false">OFF (false)</option>
+          </select>
+        </Field>
+      )}
+    </div>
+  );
+};
+
+/* ── Behavior Action Editor (Turn On / Turn Off) ── */
+
+const BehaviorActionEditor: React.FC<{
+  action: WidgetAction | undefined;
+  deviceId: string;
+  triggerLabel: string;
+  onUpdate: (updates: Partial<WidgetAction>) => void;
+}> = ({ action, onUpdate }) => {
+  const actionType: BehaviorActionType = (action?.type as BehaviorActionType) || 'rpcCall';
+  const params = action?.parameters ?? {};
+
+  const setParam = (key: string, value: any) => {
+    onUpdate({ parameters: { ...params, [key]: value } });
+  };
+
+  return (
+    <div className="space-y-2">
+      <Field label="Action">
+        <select
+          className={selectCls}
+          value={actionType}
+          onChange={(e) => onUpdate({ type: e.target.value as ActionType })}
+        >
+          <option value="rpcCall">Execute RPC</option>
+          <option value="updateAttribute">Set attribute</option>
+        </select>
+      </Field>
+
+      {actionType === 'rpcCall' && (
+        <>
+          <Field label="RPC Method">
+            <input
+              className={inputCls}
+              value={params.method ?? ''}
+              placeholder="e.g. setValue, toggleRelay"
+              onChange={(e) => setParam('method', e.target.value)}
+            />
+          </Field>
+          <Field label="RPC Parameters (JSON)">
+            <textarea
+              className={inputCls + ' min-h-[40px] resize-y font-mono'}
+              value={typeof params.params === 'string' ? params.params : JSON.stringify(params.params ?? {}, null, 2)}
+              placeholder='{"pin": 1, "value": true}'
+              onChange={(e) => {
+                try { setParam('params', JSON.parse(e.target.value)); } catch { setParam('params', e.target.value); }
+              }}
+            />
+          </Field>
+          <Field label="Direction">
+            <select
+              className={selectCls}
+              value={params.rpcOneWay ? 'oneway' : 'twoway'}
+              onChange={(e) => setParam('rpcOneWay', e.target.value === 'oneway')}
+            >
+              <option value="twoway">Two-way (wait response)</option>
+              <option value="oneway">One-way (fire & forget)</option>
+            </select>
+          </Field>
+        </>
+      )}
+
+      {actionType === 'updateAttribute' && (
+        <>
+          <Field label="Scope">
+            <select
+              className={selectCls}
+              value={params.attributeScope ?? 'SHARED_SCOPE'}
+              onChange={(e) => setParam('attributeScope', e.target.value)}
+            >
+              <option value="SERVER_SCOPE">Server</option>
+              <option value="SHARED_SCOPE">Shared</option>
+            </select>
+          </Field>
+          <Field label="Key">
+            <input
+              className={inputCls}
+              value={params.attributeKey ?? ''}
+              placeholder="e.g. isOn"
+              onChange={(e) => setParam('attributeKey', e.target.value)}
+            />
+          </Field>
+          <Field label="Value">
+            <input
+              className={inputCls}
+              value={params.attributeValue ?? ''}
+              placeholder="e.g. true"
+              onChange={(e) => setParam('attributeValue', e.target.value)}
+            />
+          </Field>
+        </>
+      )}
+    </div>
+  );
+};
+
+/* ================================================================
+   Device Search Dropdown (inline, same pattern as DataBindingTab)
+   ================================================================ */
+
+const DeviceSearchDropdown: React.FC<{
+  selectedDeviceId: string | undefined;
+  selectedDeviceName: string | undefined;
+  onSelect: (device: Device) => void;
+}> = ({ selectedDeviceId, selectedDeviceName, onSelect }) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const fetchDevices = useCallback(async (query: string) => {
+    try {
+      setLoading(true);
+      const params: Record<string, any> = { page: 1, pageSize: 20 };
+      if (query) params.textSearch = query;
+      const res = await deviceService.getDevices(params);
+      setDevices(res.data || []);
+    } catch {
+      setDevices([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) fetchDevices(search);
+  }, [open, search, fetchDevices]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setTimeout(() => inputRef.current?.focus(), 50); }}
+        className={`${inputCls} text-left flex items-center justify-between cursor-pointer`}
+      >
+        <span className={selectedDeviceId ? 'text-gray-900' : 'text-gray-400'}>
+          {selectedDeviceName || (selectedDeviceId ? `ID: ${selectedDeviceId.slice(0, 8)}...` : 'Select device...')}
+        </span>
+        <span className="text-gray-400 text-[10px]">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-hidden">
+          <div className="p-1.5 border-b border-gray-100">
+            <input
+              ref={inputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search devices..."
+              className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {loading ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500 text-center">Loading...</div>
+            ) : devices.length === 0 ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500 text-center">No devices found</div>
+            ) : (
+              devices.map((device) => (
+                <button
+                  key={device.id}
+                  type="button"
+                  onClick={() => { onSelect(device); setOpen(false); setSearch(''); }}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 flex items-center justify-between transition-colors ${
+                    device.id === selectedDeviceId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{device.name}</div>
+                    <div className="text-[10px] text-gray-400 truncate">
+                      {device.deviceType?.name || device.model || 'Device'}
+                    </div>
+                  </div>
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ml-2 ${device.isOnline ? 'bg-green-500' : 'bg-gray-300'}`} />
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ================================================================
+   Key Dropdown (telemetry / attribute key autocomplete)
+   ================================================================ */
+
+const KeyDropdown: React.FC<{
+  deviceId: string | undefined;
+  value: string;
+  onChange: (key: string) => void;
+  keyType: 'telemetry' | 'attribute';
+  attributeScope?: string;
+  placeholder?: string;
+}> = ({ deviceId, value, onChange, keyType, attributeScope, placeholder }) => {
+  const [open, setOpen] = useState(false);
+  const [keys, setKeys] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const fetchKeys = useCallback(async () => {
+    if (!deviceId) { setKeys([]); return; }
+    try {
+      setLoading(true);
+      if (keyType === 'telemetry') {
+        const data = await deviceService.getDeviceTelemetry(deviceId);
+        setKeys(data && typeof data === 'object' ? Object.keys(data).sort() : []);
+      } else {
+        const scope = attributeScope || 'SERVER_SCOPE';
+        const data = await deviceService.getDeviceAttributes(deviceId, scope);
+        setKeys(data && typeof data === 'object' ? Object.keys(data).sort() : []);
+      }
+    } catch {
+      setKeys([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [deviceId, keyType, attributeScope]);
+
+  useEffect(() => {
+    if (open) fetchKeys();
+  }, [open, fetchKeys]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          className={inputCls}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder || (keyType === 'telemetry' ? 'e.g. temperature' : 'e.g. firmwareVersion')}
+        />
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          disabled={!deviceId}
+          className={`px-1.5 py-1 text-xs border rounded transition-colors flex-shrink-0 ${
+            deviceId
+              ? 'border-gray-300 text-gray-600 hover:bg-gray-100 cursor-pointer'
+              : 'border-gray-200 text-gray-300 cursor-not-allowed'
+          }`}
+          title={deviceId ? 'Browse available keys' : 'Select a device first'}
+        >
+          ▼
+        </button>
+      </div>
+
+      {open && deviceId && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-hidden">
+          <div className="max-h-48 overflow-y-auto">
+            {loading ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500 text-center">Loading keys...</div>
+            ) : keys.length === 0 ? (
+              <div className="px-3 py-2 text-[10px] text-gray-500 text-center">No keys found</div>
+            ) : (
+              keys.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => { onChange(key); setOpen(false); }}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 transition-colors font-mono ${
+                    key === value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                  }`}
+                >
+                  {key}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ================================================================
+   Generic Actions Panel (existing editor for non-control widgets)
+   ================================================================ */
 
 const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: 'onClick', label: '🖱️ Click' },
@@ -20,6 +666,9 @@ const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: 'onTimer', label: '⏲️ Timer' },
   { value: 'onRpcResponse', label: '📥 RPC Response' },
   { value: 'onConnectionStatus', label: '🔌 Connection' },
+  { value: 'onToggle', label: '🔀 Toggle' },
+  { value: 'onTurnOn', label: '✅ Turn On' },
+  { value: 'onTurnOff', label: '❌ Turn Off' },
 ];
 
 const ACTION_TYPES: { value: ActionType; label: string; color: string }[] = [
@@ -36,7 +685,7 @@ const ACTION_TYPES: { value: ActionType; label: string; color: string }[] = [
   { value: 'custom', label: '🧩 Custom Script', color: 'text-gray-700' },
 ];
 
-export const ActionsTab: React.FC<ActionsTabProps> = ({ widget, onUpdate }) => {
+const GenericActionsPanel: React.FC<ActionsTabProps> = ({ widget, onUpdate }) => {
   const actions: WidgetAction[] = widget.actions ?? [];
   const [expandedId, setExpandedId] = useState<string | null>(null);
 

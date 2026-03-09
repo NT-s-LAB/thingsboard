@@ -29,7 +29,14 @@ export const SwitchRenderer: React.FC<WidgetRendererProps> = ({
 
   const handleClick = useCallback(() => {
     if (!isRuntime || disabled) return;
-    onAction?.('toggle', { value: !state });
+    const newState = !state;
+    onAction?.('toggle', { value: newState });
+    // Fire specific turnOn / turnOff trigger
+    if (newState) {
+      onAction?.('turnOn', { value: true });
+    } else {
+      onAction?.('turnOff', { value: false });
+    }
   }, [isRuntime, disabled, state, onAction]);
 
   const trackColor = state ? onColor : offColor;

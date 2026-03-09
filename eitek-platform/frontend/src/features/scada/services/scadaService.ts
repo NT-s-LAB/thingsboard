@@ -77,6 +77,7 @@ class ScadaService {
             width: w.transform.size?.width ?? 100,
             height: w.transform.size?.height ?? 50,
             rotation: w.transform.rotation ?? 0,
+            scale: w.transform.scale ?? 1,
             zIndex: w.transform.zIndex ?? 0,
           }
         : w.position || { x: 100, y: 100, width: 100, height: 50 },
@@ -84,7 +85,8 @@ class ScadaService {
     };
     if (w.description) payload.description = w.description;
     if (w.style) payload.styles = w.style;
-    if (w.dataBindings) payload.bindings = { items: w.dataBindings };
+    if (w.dataBindings) payload.bindings = w.dataBindings;
+    if (w.actions) payload.actions = w.actions;
     if (w.visible !== undefined) payload.isVisible = w.visible;
 
     const response = await apiClient.post<Widget>(`/scada-views/${dashboardId}/widgets`, payload);
@@ -103,12 +105,14 @@ class ScadaService {
         width: w.transform.size?.width ?? 100,
         height: w.transform.size?.height ?? 50,
         rotation: w.transform.rotation ?? 0,
+        scale: w.transform.scale ?? 1,
         zIndex: w.transform.zIndex ?? 0,
       };
     }
     if (w.properties) payload.properties = w.properties;
     if (w.style) payload.styles = w.style;
-    if (w.dataBindings) payload.bindings = { items: w.dataBindings };
+    if (w.dataBindings) payload.bindings = w.dataBindings;
+    if (w.actions) payload.actions = w.actions;
     if (w.visible !== undefined) payload.isVisible = w.visible;
 
     const response = await apiClient.put<Widget>(`/scada-views/${dashboardId}/widgets/${widget.id}`, payload);
@@ -129,6 +133,8 @@ class ScadaService {
     const payloadWidgets = widgets.map((widget) => {
       const w = widget as any;
       const item: Record<string, any> = { id: w.id };
+      if (w.type) item.type = w.type;
+      if (w.name) item.name = w.name;
       if (w.transform) {
         item.position = {
           x: w.transform.position?.x ?? 0,
@@ -136,12 +142,14 @@ class ScadaService {
           width: w.transform.size?.width ?? 100,
           height: w.transform.size?.height ?? 50,
           rotation: w.transform.rotation ?? 0,
+          scale: w.transform.scale ?? 1,
           zIndex: w.transform.zIndex ?? 0,
         };
       }
       if (w.properties) item.properties = w.properties;
       if (w.style) item.styles = w.style;
-      if (w.dataBindings) item.bindings = { items: w.dataBindings };
+      if (w.dataBindings) item.bindings = w.dataBindings;
+      if (w.actions) item.actions = w.actions;
       if (w.visible !== undefined) item.isVisible = w.visible;
       return item;
     });

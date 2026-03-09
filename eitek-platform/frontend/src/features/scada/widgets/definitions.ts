@@ -252,6 +252,8 @@ const switchWidget: WidgetDefinition = {
   ],
   actionSchema: [
     { trigger: 'toggle', label: 'On Toggle', description: 'Fired when user toggles the switch' },
+    { trigger: 'turnOn', label: 'Turn On', description: 'Fired when switch is turned ON' },
+    { trigger: 'turnOff', label: 'Turn Off', description: 'Fired when switch is turned OFF' },
   ],
   renderer: SwitchRenderer,
 };
