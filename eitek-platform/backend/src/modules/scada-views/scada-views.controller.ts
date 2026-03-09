@@ -77,6 +77,7 @@ export class ScadaViewsController {
     @Body() updateDto: UpdateScadaViewDto,
     @CurrentUser() user: RequestUser,
   ) {
+    console.log('[ScadaViews] PUT /:id - update payload keys:', Object.keys(updateDto));
     const view = await this.scadaViewsService.update(id, updateDto, user);
     return {
       success: true,

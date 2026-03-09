@@ -72,6 +72,16 @@ class ScreenService {
 
 // ─── Mapping helpers ─────────────────────────────────────────────────────────
 
+/** Safely parse a JSON field that may come back as a string from the DB. */
+function parseJsonField<T>(val: unknown, fallback: T): T {
+  if (val == null) return fallback;
+  if (typeof val === 'object') return val as T;
+  if (typeof val === 'string') {
+    try { return JSON.parse(val) as T; } catch { return fallback; }
+  }
+  return fallback;
+}
+
 /** Map backend ScadaView model to ScreenDefinition. */
 function mapBackendToScreen(raw: any): ScreenDefinition {
   return {
@@ -79,8 +89,8 @@ function mapBackendToScreen(raw: any): ScreenDefinition {
     version: raw.version ?? 1,
     name: raw.name ?? '',
     description: raw.description ?? '',
-    canvasSize: raw.canvasSize ?? raw.settings?.canvasSize ?? { width: 1920, height: 1080 },
-    background: raw.background ?? raw.settings?.background ?? { type: 'color', color: '#f8fafc' },
+    canvasSize: parseJsonField(raw.canvasSize, null) ?? parseJsonField(raw.settings?.canvasSize, null) ?? { width: 1920, height: 1080 },
+    background: parseJsonField(raw.background, null) ?? parseJsonField(raw.settings?.background, null) ?? { type: 'color', color: '#f8fafc' },
     layers: raw.layers ?? raw.layout?.layers ?? [{ id: 'default', name: 'Default', visible: true, locked: false, opacity: 1, order: 0 }],
     widgets: (raw.widgets ?? raw.scadaWidgets ?? []).map(mapBackendWidget),
     variables: raw.variables ?? raw.layout?.variables ?? [],
@@ -118,6 +128,23 @@ function mapBackendWidget(raw: any): import('../core/types/screen.types').Widget
   };
 }
 
+/** Map a WidgetInstance to the backend widget shape. */
+function mapWidgetToBackend(w: import('../core/types/screen.types').WidgetInstance): Record<string, unknown> {
+  return {
+    id: w.id,
+    type: w.type,
+    name: w.name,
+    layerId: w.layerId,
+    transform: w.transform,
+    properties: w.properties,
+    bindings: w.bindings,
+    actions: w.actions,
+    svgAssetId: w.svgAssetId,
+    locked: w.locked ?? false,
+    visible: w.visible ?? true,
+  };
+}
+
 /** Map ScreenDefinition to backend payload. */
 function mapScreenToBackend(screen: ScreenDefinition): Record<string, unknown> {
   return {
@@ -129,6 +156,7 @@ function mapScreenToBackend(screen: ScreenDefinition): Record<string, unknown> {
       layers: screen.layers,
       variables: screen.variables,
     },
+    widgets: (screen.widgets ?? []).map(mapWidgetToBackend),
     settings: {
       canvasSize: screen.canvasSize,
       background: screen.background,

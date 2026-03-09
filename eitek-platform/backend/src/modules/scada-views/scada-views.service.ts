@@ -256,15 +256,90 @@ export class ScadaViewsService {
       }
     }
 
-    return this.prisma.scadaView.update({
+    // Separate widgets, tags and other non-Prisma fields
+    const { widgets, tags, projectId, areaId, ...rest } = updateDto as any;
+
+    // Build Prisma-compatible data object (only known ScadaView columns)
+    const prismaData: any = {};
+    if (rest.name !== undefined) prismaData.name = rest.name;
+    if (rest.description !== undefined) prismaData.description = rest.description;
+    if (rest.layout !== undefined) prismaData.layout = rest.layout;
+    if (rest.canvasSize !== undefined) prismaData.canvasSize = rest.canvasSize;
+    if (rest.settings !== undefined) prismaData.settings = rest.settings;
+    if (rest.isActive !== undefined) prismaData.isActive = rest.isActive;
+    // background: Prisma column is String?, so stringify objects
+    if (rest.background !== undefined) {
+      prismaData.background = typeof rest.background === 'object'
+        ? JSON.stringify(rest.background)
+        : rest.background;
+    }
+
+    // Update the ScadaView record (only Prisma-compatible fields)
+    const updatedView = await this.prisma.scadaView.update({
       where: { id },
-      data: updateDto,
+      data: prismaData,
       include: {
         area: { select: { id: true, name: true } },
         project: { select: { id: true, name: true } },
-        scadaWidgets: true,
+        scadaWidgets: { include: { widget: true } },
       },
     });
+
+    // If widgets array was sent, sync them (full replace)
+    if (Array.isArray(widgets)) {
+      await this.syncWidgets(id, widgets);
+      // Re-fetch with updated widgets
+      return this.prisma.scadaView.findFirst({
+        where: { id },
+        include: {
+          area: { select: { id: true, name: true } },
+          project: { select: { id: true, name: true } },
+          scadaWidgets: { include: { widget: true } },
+        },
+      });
+    }
+
+    return updatedView;
+  }
+
+  /**
+   * Full-replace sync: delete all existing ScadaWidgets for a view,
+   * then re-create from the provided widget array.
+   */
+  private async syncWidgets(viewId: string, widgets: any[]): Promise<void> {
+    // Delete existing widgets for this view
+    await this.prisma.scadaWidget.deleteMany({ where: { scadaViewId: viewId } });
+
+    // Re-create from the incoming array
+    for (const w of widgets) {
+      const widgetType = w.type || 'custom';
+      const widgetName = w.name || 'Widget';
+      const widgetId = await this.ensureWidgetLibraryEntry(widgetType, widgetName);
+
+      const position = w.transform
+        ? {
+            x: w.transform.position?.x ?? 0,
+            y: w.transform.position?.y ?? 0,
+            width: w.transform.size?.width ?? 100,
+            height: w.transform.size?.height ?? 50,
+            rotation: w.transform.rotation ?? 0,
+            zIndex: w.transform.zIndex ?? 0,
+          }
+        : w.position ?? { x: 0, y: 0, width: 100, height: 50 };
+
+      await this.prisma.scadaWidget.create({
+        data: {
+          scadaViewId: viewId,
+          widgetId,
+          position,
+          properties: { ...w.properties, name: widgetName, widgetType },
+          bindings: w.bindings ?? [],
+          actions: w.actions ?? [],
+          styles: w.styles ?? {},
+          isVisible: w.visible ?? w.isVisible ?? true,
+        },
+      });
+    }
   }
 
   async remove(id: string, user: RequestUser): Promise<void> {

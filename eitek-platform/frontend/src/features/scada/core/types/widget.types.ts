@@ -20,7 +20,8 @@ export type PropFieldType =
   | 'select'
   | 'range'
   | 'json'
-  | 'svgAsset';
+  | 'svgAsset'
+  | 'image';
 
 export interface PropField {
   key: string;

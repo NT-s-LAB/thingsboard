@@ -1,3 +1,7 @@
+﻿/**
+ * @deprecated V1 SCADA — This file belongs to the legacy V1 engine (Konva-based).
+ * Replaced by V2 engine in /engine/ and /core/. Scheduled for removal.
+ */
 import React, { useState } from 'react';
 import { Input } from '@/shared/components/ui/Input';
 import { Card } from '@/shared/components/ui/Card';

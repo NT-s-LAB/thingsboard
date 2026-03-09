@@ -1,6 +1,10 @@
+﻿/**
+ * @deprecated V1 SCADA — This file belongs to the legacy V1 engine (Konva-based).
+ * Replaced by V2 engine in /engine/ and /core/. Scheduled for removal.
+ */
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Stage, Layer, Rect, Circle, Line, Text, Group, Transformer, Arc, Arrow, Ellipse, Image as KImage } from 'react-konva';
 import Konva from 'konva';
 import { useScadaStore } from '../stores/scadaStore';
@@ -86,16 +90,31 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
 
-  const {
-    currentDashboard, editorState, isRuntimeMode, realtimeData,
-    selectWidget, selectWidgets, clearSelection,
-    moveWidget, resizeWidget, setViewport,
-    deleteWidget, duplicateWidget,
-    copyWidgets, cutWidgets, pasteWidgets,
-    undo, redo,
-  } = useScadaStore();
+  /* ── Granular store selectors — avoid full re-render on any state change ── */
+  const currentDashboard = useScadaStore(s => s.currentDashboard);
+  const editorState = useScadaStore(s => s.editorState);
+  const isRuntimeMode = useScadaStore(s => s.isRuntimeMode);
+  const realtimeData = useScadaStore(s => s.realtimeData);
+  const selectWidget = useScadaStore(s => s.selectWidget);
+  const selectWidgets = useScadaStore(s => s.selectWidgets);
+  const clearSelection = useScadaStore(s => s.clearSelection);
+  const moveWidget = useScadaStore(s => s.moveWidget);
+  const resizeWidget = useScadaStore(s => s.resizeWidget);
+  const setViewport = useScadaStore(s => s.setViewport);
+  const deleteWidget = useScadaStore(s => s.deleteWidget);
+  const duplicateWidget = useScadaStore(s => s.duplicateWidget);
+  const copyWidgets = useScadaStore(s => s.copyWidgets);
+  const cutWidgets = useScadaStore(s => s.cutWidgets);
+  const pasteWidgets = useScadaStore(s => s.pasteWidgets);
+  const undo = useScadaStore(s => s.undo);
+  const redo = useScadaStore(s => s.redo);
 
   const [selectedShapes, setSelectedShapes] = useState<string[]>([]);
+
+  /* ── Rubber-band / marquee selection state ── */
+  const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const isSelecting = useRef(false);
+  const selectionStartPt = useRef({ x: 0, y: 0 });
 
   /* ── Image cache for widgets with onImageUrl / offImageUrl ── */
   const [loadedImages, setLoadedImages] = useState<Record<string, HTMLImageElement>>({});
@@ -296,32 +315,44 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
     setSelectedShapes(editorState?.selection?.selectedWidgetIds ?? []);
   }, [editorState?.selection?.selectedWidgetIds]);
 
-  /* ── Event handlers ── */
-  const handleStageClick = (e: any) => {
+  /* ── Event handlers (stable references via useCallback) ── */
+  const handleStageClick = useCallback((e: any) => {
     if (isRuntimeMode) return;
     if (e.target === e.target.getStage()) clearSelection();
-  };
+  }, [isRuntimeMode, clearSelection]);
 
-  const handleShapeClick = (widgetId: string, e: any) => {
+  const handleShapeClick = useCallback((widgetId: string, e: any) => {
     if (isRuntimeMode) return;
     e.cancelBubble = true;
     if (e.evt.ctrlKey || e.evt.metaKey) {
-      const cur = [...(editorState?.selection?.selectedWidgetIds ?? [])];
+      const cur = [...(useScadaStore.getState().editorState?.selection?.selectedWidgetIds ?? [])];
       const idx = cur.indexOf(widgetId);
       if (idx === -1) cur.push(widgetId); else cur.splice(idx, 1);
       selectWidgets(cur);
     } else {
       selectWidget(widgetId);
     }
-  };
+  }, [isRuntimeMode, selectWidget, selectWidgets]);
 
-  const handleDragEnd = (widgetId: string, e: any) => {
+  const handleDragMove = useCallback((e: any) => {
+    if (isRuntimeMode) return;
+    const state = useScadaStore.getState();
+    const snapEnabled = state.editorState?.snapToGrid;
+    if (!snapEnabled) return;
+    const settings = state.currentDashboard?.settings as any;
+    const gridSize = settings?.grid?.size || 20;
+    const n = e.target;
+    n.x(Math.round(n.x() / gridSize) * gridSize);
+    n.y(Math.round(n.y() / gridSize) * gridSize);
+  }, [isRuntimeMode]);
+
+  const handleDragEnd = useCallback((widgetId: string, e: any) => {
     if (isRuntimeMode) return;
     const n = e.target;
     moveWidget(widgetId, { x: n.x(), y: n.y() });
-  };
+  }, [isRuntimeMode, moveWidget]);
 
-  const handleTransformEnd = (e: any) => {
+  const handleTransformEnd = useCallback((e: any) => {
     if (isRuntimeMode) return;
     const n = e.target;
     const sx = n.scaleX();
@@ -333,13 +364,74 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
       moveWidget(wid, { x: n.x(), y: n.y() });
       resizeWidget(wid, { width: Math.max(10, n.width() * sx), height: Math.max(10, n.height() * sy) });
     }
-  };
+  }, [isRuntimeMode, moveWidget, resizeWidget]);
+
+  /* ── Rubber-band / marquee selection handlers ── */
+  const handleStageMouseDown = useCallback((e: any) => {
+    if (isRuntimeMode) return;
+    // Only start selection on empty stage (not on a widget)
+    if (e.target !== e.target.getStage()) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+    const scale = stage.scaleX();
+    const stagePos = stage.position();
+    // Convert to canvas coordinates
+    const canvasX = (pos.x - stagePos.x) / scale;
+    const canvasY = (pos.y - stagePos.y) / scale;
+    isSelecting.current = true;
+    selectionStartPt.current = { x: canvasX, y: canvasY };
+    setSelectionRect({ x: canvasX, y: canvasY, width: 0, height: 0 });
+  }, [isRuntimeMode]);
+
+  const handleStageMouseMove = useCallback((_e: any) => {
+    if (!isSelecting.current) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+    const scale = stage.scaleX();
+    const stagePos = stage.position();
+    const canvasX = (pos.x - stagePos.x) / scale;
+    const canvasY = (pos.y - stagePos.y) / scale;
+    const sx = selectionStartPt.current.x;
+    const sy = selectionStartPt.current.y;
+    setSelectionRect({
+      x: Math.min(sx, canvasX),
+      y: Math.min(sy, canvasY),
+      width: Math.abs(canvasX - sx),
+      height: Math.abs(canvasY - sy),
+    });
+  }, []);
+
+  const handleStageMouseUp = useCallback(() => {
+    if (!isSelecting.current) return;
+    isSelecting.current = false;
+    const rect = selectionRect;
+    setSelectionRect(null);
+    if (!rect || (rect.width < 5 && rect.height < 5)) return; // Too small, treat as click
+    // Find widgets intersecting the selection rectangle
+    const state = useScadaStore.getState();
+    const widgets: Widget[] = (state.currentDashboard as any)?.widgets ?? [];
+    const intersecting = widgets.filter((w: Widget) => {
+      if (w.visible === false) return false;
+      const wx = w.transform.position.x;
+      const wy = w.transform.position.y;
+      const ww = w.transform.size.width;
+      const wh = w.transform.size.height;
+      return !(wx + ww < rect.x || wx > rect.x + rect.width || wy + wh < rect.y || wy > rect.y + rect.height);
+    });
+    if (intersecting.length > 0) {
+      selectWidgets(intersecting.map(w => w.id));
+    }
+  }, [selectionRect, selectWidgets]);
 
   /* ════════════════════════════════════════════════════
      Widget Renderers
      ════════════════════════════════════════════════════ */
 
-  const commonProps = (w: Widget) => ({
+  const commonProps = useCallback((w: Widget) => ({
     id: w.id,
     x: w.transform.position.x,
     y: w.transform.position.y,
@@ -348,10 +440,11 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
     rotation: w.transform.rotation || 0,
     draggable: !isRuntimeMode && !w.locked,
     onClick: (e: any) => handleShapeClick(w.id, e),
+    onDragMove: handleDragMove,
     onDragEnd: (e: any) => handleDragEnd(w.id, e),
     onTransformEnd: handleTransformEnd,
     opacity: w.style.opacity ?? 1,
-  });
+  }), [isRuntimeMode, handleShapeClick, handleDragMove, handleDragEnd, handleTransformEnd]);
 
   const renderWidget = (w: Widget) => {
     const cp = commonProps(w);
@@ -851,8 +944,8 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
     }
   };
 
-  /* ── Grid ── */
-  const renderGrid = () => {
+  /* ── Grid (memoized to avoid re-creating hundreds of Line elements) ── */
+  const gridElements = useMemo(() => {
     if (!editorState?.showGrid || isRuntimeMode) return null;
     const settings = currentDashboard?.settings as any;
     const gridSize = settings?.grid?.size || 20;
@@ -861,13 +954,13 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
     const cw = cs?.width || 1920, ch = cs?.height || 1080;
     const lines: React.ReactElement[] = [];
     for (let i = 0; i <= cw; i += gridSize) {
-      lines.push(<Line key={`v-${i}`} points={[i, 0, i, ch]} stroke={gridColor} strokeWidth={1} opacity={0.3} />);
+      lines.push(<Line key={`v-${i}`} points={[i, 0, i, ch]} stroke={gridColor} strokeWidth={1} opacity={0.3} listening={false} />);
     }
     for (let i = 0; i <= ch; i += gridSize) {
-      lines.push(<Line key={`h-${i}`} points={[0, i, cw, i]} stroke={gridColor} strokeWidth={1} opacity={0.3} />);
+      lines.push(<Line key={`h-${i}`} points={[0, i, cw, i]} stroke={gridColor} strokeWidth={1} opacity={0.3} listening={false} />);
     }
     return lines;
-  };
+  }, [editorState?.showGrid, isRuntimeMode, currentDashboard?.settings, currentDashboard?.canvasSize]);
 
   /* ── Render ── */
   if (!currentDashboard) {
@@ -885,10 +978,10 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
   return (
     <div className={`relative w-full h-full overflow-hidden ${isRuntimeMode ? '' : 'bg-gray-200'}`}
          style={isRuntimeMode ? { backgroundColor: bg } : undefined}>
-      <Stage ref={stageRef} width={width} height={height} draggable={!isRuntimeMode} onClick={handleStageClick} onDragEnd={() => {}} scale={{ x: zoom, y: zoom }} x={-vp.x * zoom} y={-vp.y * zoom}>
-        <Layer>
-          <Rect x={0} y={0} width={dashW} height={dashH} fill={bg} {...(isRuntimeMode ? {} : { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.08)' })} />
-          {renderGrid()}
+      <Stage ref={stageRef} width={width} height={height} draggable={!isRuntimeMode} onClick={handleStageClick} onMouseDown={handleStageMouseDown} onMouseMove={handleStageMouseMove} onMouseUp={handleStageMouseUp} onDragEnd={() => {}} scale={{ x: zoom, y: zoom }} x={-vp.x * zoom} y={-vp.y * zoom}>
+        <Layer listening={false}>
+          <Rect x={0} y={0} width={dashW} height={dashH} fill={bg} {...(isRuntimeMode ? {} : { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.08)' })} listening={false} />
+          {gridElements}
         </Layer>
         {layers.map((layer: any) => (
           <Layer key={layer.id} visible={layer.visible} opacity={layer.opacity}>
@@ -901,6 +994,22 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
         {!isRuntimeMode && (
           <Layer>
             <Transformer ref={transformerRef} rotateEnabled={true} borderStroke="#2563EB" borderStrokeWidth={2} anchorStroke="#2563EB" anchorFill="#FFFFFF" anchorStrokeWidth={2} anchorSize={8} keepRatio={false} enabledAnchors={['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right']} />
+          </Layer>
+        )}
+        {/* Rubber-band selection rectangle */}
+        {selectionRect && (
+          <Layer>
+            <Rect
+              x={selectionRect.x}
+              y={selectionRect.y}
+              width={selectionRect.width}
+              height={selectionRect.height}
+              fill="rgba(37,99,235,0.08)"
+              stroke="#2563EB"
+              strokeWidth={1}
+              dash={[6, 3]}
+              listening={false}
+            />
           </Layer>
         )}
       </Stage>

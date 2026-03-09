@@ -1,3 +1,7 @@
+﻿/**
+ * @deprecated V1 SCADA — This file belongs to the legacy V1 engine (Konva-based).
+ * Replaced by V2 engine in /engine/ and /core/. Scheduled for removal.
+ */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -134,6 +138,7 @@ interface ScadaActions {
   selectWidgets: (widgetIds: string[]) => void;
   clearSelection: () => void;
   selectAll: () => void;
+  alignWidgets: (direction: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v' | 'distribute-h' | 'distribute-v') => void;
   
   // Clipboard actions
   copyWidgets: (widgetIds: string[]) => void;
@@ -680,6 +685,77 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
                 state.editorState.selection.selectedWidgetIds = 
                   (state.currentDashboard.widgets ?? []).map(w => w.id);
                 state.selectedWidget = null;
+              }
+            });
+          },
+
+          alignWidgets: (direction) => {
+            set((state) => {
+              if (!state.currentDashboard) return;
+              const ids = state.editorState.selection.selectedWidgetIds;
+              if (ids.length < 2) return;
+              const widgets = (state.currentDashboard.widgets ?? []).filter(w => ids.includes(w.id));
+              if (widgets.length < 2) return;
+
+              const now = new Date().toISOString();
+
+              switch (direction) {
+                case 'left': {
+                  const minX = Math.min(...widgets.map(w => w.transform.position.x));
+                  widgets.forEach(w => { w.transform.position.x = minX; w.updatedTime = now; });
+                  break;
+                }
+                case 'right': {
+                  const maxRight = Math.max(...widgets.map(w => w.transform.position.x + w.transform.size.width));
+                  widgets.forEach(w => { w.transform.position.x = maxRight - w.transform.size.width; w.updatedTime = now; });
+                  break;
+                }
+                case 'top': {
+                  const minY = Math.min(...widgets.map(w => w.transform.position.y));
+                  widgets.forEach(w => { w.transform.position.y = minY; w.updatedTime = now; });
+                  break;
+                }
+                case 'bottom': {
+                  const maxBottom = Math.max(...widgets.map(w => w.transform.position.y + w.transform.size.height));
+                  widgets.forEach(w => { w.transform.position.y = maxBottom - w.transform.size.height; w.updatedTime = now; });
+                  break;
+                }
+                case 'center-h': {
+                  const centers = widgets.map(w => w.transform.position.x + w.transform.size.width / 2);
+                  const avgCenter = centers.reduce((a, b) => a + b, 0) / centers.length;
+                  widgets.forEach(w => { w.transform.position.x = avgCenter - w.transform.size.width / 2; w.updatedTime = now; });
+                  break;
+                }
+                case 'center-v': {
+                  const centers = widgets.map(w => w.transform.position.y + w.transform.size.height / 2);
+                  const avgCenter = centers.reduce((a, b) => a + b, 0) / centers.length;
+                  widgets.forEach(w => { w.transform.position.y = avgCenter - w.transform.size.height / 2; w.updatedTime = now; });
+                  break;
+                }
+                case 'distribute-h': {
+                  const sorted = [...widgets].sort((a, b) => a.transform.position.x - b.transform.position.x);
+                  if (sorted.length < 2) break;
+                  const firstH = sorted[0]!;
+                  const lastH = sorted[sorted.length - 1]!;
+                  const totalSpan = (lastH.transform.position.x + lastH.transform.size.width) - firstH.transform.position.x;
+                  const totalWidgetWidth = sorted.reduce((s, w) => s + w.transform.size.width, 0);
+                  const gap = (totalSpan - totalWidgetWidth) / (sorted.length - 1);
+                  let x = firstH.transform.position.x;
+                  sorted.forEach(w => { w.transform.position.x = x; x += w.transform.size.width + gap; w.updatedTime = now; });
+                  break;
+                }
+                case 'distribute-v': {
+                  const sorted = [...widgets].sort((a, b) => a.transform.position.y - b.transform.position.y);
+                  if (sorted.length < 2) break;
+                  const firstV = sorted[0]!;
+                  const lastV = sorted[sorted.length - 1]!;
+                  const totalSpan = (lastV.transform.position.y + lastV.transform.size.height) - firstV.transform.position.y;
+                  const totalWidgetHeight = sorted.reduce((s, w) => s + w.transform.size.height, 0);
+                  const gap = (totalSpan - totalWidgetHeight) / (sorted.length - 1);
+                  let y = firstV.transform.position.y;
+                  sorted.forEach(w => { w.transform.position.y = y; y += w.transform.size.height + gap; w.updatedTime = now; });
+                  break;
+                }
               }
             });
           },

@@ -36,11 +36,14 @@ interface ScadaEditorV2Props {
   screen?: ScreenDefinition;
   /** Callback to save the screen. */
   onSave?: (screen: ScreenDefinition) => void;
+  /** Save status for visual feedback. */
+  saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
 }
 
 export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
   screen: screenProp,
   onSave,
+  saveStatus = 'idle',
 }) => {
   const [rightPanel, setRightPanel] = useState<'properties' | 'bindings' | 'actions'>('properties');
 
@@ -97,10 +100,12 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
     ensureWidgets();
   }, []);
 
-  // Load screen into store
+  // Load screen into store only on initial mount (not after save)
+  const screenLoadedRef = useRef(false);
   useEffect(() => {
-    if (screenProp) {
+    if (screenProp && !screenLoadedRef.current) {
       loadScreen(screenProp);
+      screenLoadedRef.current = true;
     }
   }, [screenProp, loadScreen]);
 
@@ -167,7 +172,11 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
     >
       {/* Toolbar — hidden in fullscreen+runtime */}
       {!(isFullscreen && isRuntime) && (
-        <EditorToolbar {...(onSave ? { onSave: handleSave } : {})} {...(screen?.name ? { screenName: screen.name } : {})} />
+        <EditorToolbar
+          {...(onSave ? { onSave: handleSave } : {})}
+          {...(screen?.name ? { screenName: screen.name } : {})}
+          saveStatus={saveStatus}
+        />
       )}
 
       {/* Main area */}

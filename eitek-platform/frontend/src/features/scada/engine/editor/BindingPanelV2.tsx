@@ -7,10 +7,12 @@
 
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { widgetRegistry } from '../../core/registry';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
 import type { WidgetBinding, BindingSourceType } from '../../core/types';
+import { deviceService } from '../../../devices/services/deviceService';
+import type { Device } from '../../../devices/types';
 import '../../styles/scada.css';
 
 const SOURCE_TYPES: { value: BindingSourceType; label: string }[] = [
@@ -146,6 +148,63 @@ const BindingFieldEditor: React.FC<BindingFieldEditorProps> = ({
   const [expanded, setExpanded] = useState(!!binding);
   const sourceType = binding?.source.type ?? 'telemetry';
 
+  // ── Device list from API ──
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+
+  // ── Telemetry keys for selected device ──
+  const [telemetryKeys, setTelemetryKeys] = useState<string[]>([]);
+  const [keysLoading, setKeysLoading] = useState(false);
+
+  // ── Device search ──
+  const [deviceSearch, setDeviceSearch] = useState('');
+
+  // Fetch devices on expand
+  useEffect(() => {
+    if (!expanded) return;
+    if (sourceType !== 'telemetry' && sourceType !== 'attribute') return;
+    let cancelled = false;
+    setDevicesLoading(true);
+    deviceService.getDevices({ pageSize: 100 }).then((res) => {
+      if (!cancelled) setDevices(res.data);
+    }).catch(() => {
+      // silently fail
+    }).finally(() => {
+      if (!cancelled) setDevicesLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [expanded, sourceType]);
+
+  // Fetch telemetry keys when device is selected
+  useEffect(() => {
+    const entityId = binding?.source.entityId;
+    if (!entityId || !expanded) return;
+    if (sourceType !== 'telemetry' && sourceType !== 'attribute') return;
+    let cancelled = false;
+    setKeysLoading(true);
+
+    const fetchKeys = sourceType === 'attribute'
+      ? deviceService.getDeviceAttributes(entityId, 'CLIENT_SCOPE')
+      : deviceService.getDeviceTelemetry(entityId);
+
+    fetchKeys.then((data: Record<string, unknown>) => {
+      if (!cancelled) {
+        setTelemetryKeys(Object.keys(data));
+      }
+    }).catch(() => {
+      if (!cancelled) setTelemetryKeys([]);
+    }).finally(() => {
+      if (!cancelled) setKeysLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [binding?.source.entityId, expanded, sourceType]);
+
+  const filteredDevices = useMemo(() => {
+    if (!deviceSearch) return devices;
+    const lower = deviceSearch.toLowerCase();
+    return devices.filter((d) => d.name.toLowerCase().includes(lower));
+  }, [devices, deviceSearch]);
+
   return (
     <div style={{ marginBottom: 12, border: '1px solid #e5e7eb', borderRadius: 6, padding: 8 }}>
       <div
@@ -183,40 +242,80 @@ const BindingFieldEditor: React.FC<BindingFieldEditorProps> = ({
             </select>
           </Row>
 
-          {/* Entity ID (for telemetry/attribute) */}
+          {/* Device picker (for telemetry/attribute) */}
           {(sourceType === 'telemetry' || sourceType === 'attribute') && (
             <>
-              <Row label="Device ID">
-                <input
-                  type="text"
-                  value={binding?.source.entityId ?? ''}
-                  placeholder="Device ID..."
-                  onChange={(e) =>
-                    onChange({
-                      source: {
-                        ...(binding?.source ?? { type: 'telemetry' as const, key: '', entityType: 'DEVICE' as const }),
-                        entityId: e.target.value,
-                      },
-                    })
-                  }
-                  style={inputStyle}
-                />
+              <Row label="Device">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <input
+                    type="text"
+                    value={deviceSearch}
+                    placeholder="Search device..."
+                    onChange={(e) => setDeviceSearch(e.target.value)}
+                    style={{ ...inputStyle, marginBottom: 2 }}
+                  />
+                  <select
+                    value={binding?.source.entityId ?? ''}
+                    onChange={(e) => {
+                      setTelemetryKeys([]);
+                      onChange({
+                        source: {
+                          ...(binding?.source ?? { type: 'telemetry' as const, key: '', entityType: 'DEVICE' as const }),
+                          entityId: e.target.value,
+                        },
+                      });
+                    }}
+                    style={inputStyle}
+                  >
+                    <option value="">
+                      {devicesLoading ? 'Loading...' : '-- Select device --'}
+                    </option>
+                    {filteredDevices.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}{d.serialNumber ? ` (${d.serialNumber})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </Row>
+
               <Row label="Key">
-                <input
-                  type="text"
-                  value={binding?.source.key ?? ''}
-                  placeholder={suggestedKey ?? 'telemetry key...'}
-                  onChange={(e) =>
-                    onChange({
-                      source: {
-                        ...(binding?.source ?? { type: 'telemetry' as const, entityId: '', entityType: 'DEVICE' as const }),
-                        key: e.target.value,
-                      },
-                    })
-                  }
-                  style={inputStyle}
-                />
+                {telemetryKeys.length > 0 ? (
+                  <select
+                    value={binding?.source.key ?? ''}
+                    onChange={(e) =>
+                      onChange({
+                        source: {
+                          ...(binding?.source ?? { type: 'telemetry' as const, entityId: '', entityType: 'DEVICE' as const }),
+                          key: e.target.value,
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  >
+                    <option value="">
+                      {keysLoading ? 'Loading...' : '-- Select key --'}
+                    </option>
+                    {telemetryKeys.map((k) => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={binding?.source.key ?? ''}
+                    placeholder={keysLoading ? 'Loading keys...' : (suggestedKey ?? 'telemetry key...')}
+                    onChange={(e) =>
+                      onChange({
+                        source: {
+                          ...(binding?.source ?? { type: 'telemetry' as const, entityId: '', entityType: 'DEVICE' as const }),
+                          key: e.target.value,
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                )}
               </Row>
             </>
           )}

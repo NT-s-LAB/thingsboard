@@ -11,9 +11,10 @@ import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
 interface EditorToolbarProps {
   onSave?: () => void;
   screenName?: string;
+  saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
 }
 
-export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName }) => {
+export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName, saveStatus = 'idle' }) => {
   const isRuntime = useScadaRuntimeStore((s) => s.isRuntime);
   const isFullscreen = useScadaRuntimeStore((s) => s.isFullscreen);
   const zoom = useScadaRuntimeStore((s) => s.zoom);
@@ -26,6 +27,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName
   const setZoom = useScadaRuntimeStore((s) => s.setZoom);
   const toggleGrid = useScadaRuntimeStore((s) => s.toggleGrid);
   const toggleSnap = useScadaRuntimeStore((s) => s.toggleSnap);
+  const undo = useScadaRuntimeStore((s) => s.undo);
+  const redo = useScadaRuntimeStore((s) => s.redo);
 
   const handleFullscreen = useCallback(() => {
     const containerEl = document.getElementById('scada-v2-fullscreen-root');
@@ -89,10 +92,20 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName
 
       <Separator />
 
+      {/* Undo / Redo */}
+      <ToolBtn onClick={undo} title="Undo (Ctrl+Z)" active={false}>
+        ↩ Undo
+      </ToolBtn>
+      <ToolBtn onClick={redo} title="Redo (Ctrl+Shift+Z)" active={false}>
+        ↪ Redo
+      </ToolBtn>
+
+      <Separator />
+
       {/* Save */}
       {onSave && (
-        <ToolBtn onClick={onSave} title="Save (Ctrl+S)">
-          💾 Save
+        <ToolBtn onClick={onSave} title="Save (Ctrl+S)" active={saveStatus === 'saved'}>
+          {saveStatus === 'saving' ? '⏳ Saving...' : saveStatus === 'saved' ? '✅ Saved' : saveStatus === 'error' ? '❌ Error' : '💾 Save'}
         </ToolBtn>
       )}
 

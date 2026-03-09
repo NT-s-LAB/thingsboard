@@ -14,6 +14,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { widgetRegistry } from '../../core/registry';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
+import type { AlignAction } from '../../stores/scadaRuntimeStore';
 import type { WidgetInstance } from '../../core/types';
 import '../../styles/scada.css';
 
@@ -35,6 +36,11 @@ export const CanvasEditor: React.FC = () => {
   const copySelected = useScadaRuntimeStore((s) => s.copySelected);
   const pasteClipboard = useScadaRuntimeStore((s) => s.pasteClipboard);
   const selectAll = useScadaRuntimeStore((s) => s.selectAll);
+  const setZoom = useScadaRuntimeStore((s) => s.setZoom);
+  const setPanOffset = useScadaRuntimeStore((s) => s.setPanOffset);
+  const undo = useScadaRuntimeStore((s) => s.undo);
+  const redo = useScadaRuntimeStore((s) => s.redo);
+  const alignWidgets = useScadaRuntimeStore((s) => s.alignWidgets);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<{
@@ -44,6 +50,23 @@ export const CanvasEditor: React.FC = () => {
     origX: number;
     origY: number;
   } | null>(null);
+
+  // ── Rubber-band (marquee) selection state ──
+  const [marquee, setMarquee] = useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
+
+  // ── Pan drag state (middle mouse / space + drag) ──
+  const [panDrag, setPanDrag] = useState<{
+    startX: number;
+    startY: number;
+    origPanX: number;
+    origPanY: number;
+  } | null>(null);
+  const [spaceHeld, setSpaceHeld] = useState(false);
 
   // ── Snap helper ──
   const snap = useCallback(
@@ -62,8 +85,8 @@ export const CanvasEditor: React.FC = () => {
       if (!def) return;
 
       const rect = canvasRef.current.getBoundingClientRect();
-      const x = snap((e.clientX - rect.left) / zoom - panOffset.x);
-      const y = snap((e.clientY - rect.top) / zoom - panOffset.y);
+      const x = snap((e.clientX - rect.left - 40) / zoom - panOffset.x);
+      const y = snap((e.clientY - rect.top - 40) / zoom - panOffset.y);
 
       const newWidget: WidgetInstance = {
         id: `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -92,17 +115,68 @@ export const CanvasEditor: React.FC = () => {
   // ── Canvas click — deselect ──
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
-      if (e.target === canvasRef.current || (e.target as HTMLElement).classList.contains('scada-canvas-grid')) {
+      // Don't deselect if we just finished a pan drag
+      if (panDrag) return;
+      const target = e.target as HTMLElement;
+      if (target === canvasRef.current || target.classList.contains('scada-canvas-grid') || target.classList.contains('scada-canvas-frame')) {
         clearSelection();
       }
     },
-    [clearSelection],
+    [clearSelection, panDrag],
+  );
+
+  // ── Canvas mouse down — start rubber-band or pan drag ──
+  const handleCanvasMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const isCanvasBg = target === canvasRef.current
+        || target.classList.contains('scada-canvas-grid')
+        || target.classList.contains('scada-canvas-frame');
+      if (!isCanvasBg) return;
+
+      // Middle mouse button → pan
+      if (e.button === 1) {
+        e.preventDefault();
+        setPanDrag({
+          startX: e.clientX,
+          startY: e.clientY,
+          origPanX: panOffset.x,
+          origPanY: panOffset.y,
+        });
+        return;
+      }
+
+      // Space held + left click → pan
+      if (spaceHeld && e.button === 0) {
+        e.preventDefault();
+        setPanDrag({
+          startX: e.clientX,
+          startY: e.clientY,
+          origPanX: panOffset.x,
+          origPanY: panOffset.y,
+        });
+        return;
+      }
+
+      if (e.button !== 0) return; // left click only for selection
+
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const x = (e.clientX - rect.left - 40) / zoom - panOffset.x;
+      const y = (e.clientY - rect.top - 40) / zoom - panOffset.y;
+
+      setMarquee({ startX: x, startY: y, currentX: x, currentY: y });
+      if (!e.shiftKey && !e.ctrlKey) {
+        clearSelection();
+      }
+    },
+    [zoom, panOffset, clearSelection, spaceHeld],
   );
 
   // ── Widget mouse down — start drag ──
   const handleWidgetMouseDown = useCallback(
     (e: React.MouseEvent, widgetId: string) => {
       e.stopPropagation();
+      if (spaceHeld) return; // don't pick up widgets while space-panning
       const widget = screen?.widgets.find((w) => w.id === widgetId);
       if (!widget || widget.locked) return;
 
@@ -116,35 +190,112 @@ export const CanvasEditor: React.FC = () => {
         origY: widget.transform.position.y,
       });
     },
-    [screen, selectWidget],
+    [screen, selectWidget, spaceHeld],
   );
 
-  // ── Mouse move — drag widget ──
+  // ── Mouse move — drag widget, update marquee, or pan ──
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dragState) return;
+      if (panDrag) {
+        const dx = (e.clientX - panDrag.startX) / zoom;
+        const dy = (e.clientY - panDrag.startY) / zoom;
+        setPanOffset({ x: panDrag.origPanX + dx, y: panDrag.origPanY + dy });
+        return;
+      }
+      if (dragState) {
+        const dx = (e.clientX - dragState.startX) / zoom;
+        const dy = (e.clientY - dragState.startY) / zoom;
 
-      const dx = (e.clientX - dragState.startX) / zoom;
-      const dy = (e.clientY - dragState.startY) / zoom;
-
-      updateWidgetTransform(dragState.widgetId, {
-        position: {
-          x: snap(dragState.origX + dx),
-          y: snap(dragState.origY + dy),
-        },
-      });
+        updateWidgetTransform(dragState.widgetId, {
+          position: {
+            x: snap(dragState.origX + dx),
+            y: snap(dragState.origY + dy),
+          },
+        });
+      } else if (marquee && canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = (e.clientX - rect.left - 40) / zoom - panOffset.x;
+        const y = (e.clientY - rect.top - 40) / zoom - panOffset.y;
+        setMarquee((prev) => prev ? { ...prev, currentX: x, currentY: y } : null);
+      }
     },
-    [dragState, zoom, snap, updateWidgetTransform],
+    [dragState, marquee, panDrag, zoom, panOffset, snap, updateWidgetTransform, setPanOffset],
   );
 
-  // ── Mouse up — end drag ──
-  const handleMouseUp = useCallback(() => {
+  // ── Mouse up — end drag, marquee, or pan ──
+  const handleMouseUp = useCallback((e?: React.MouseEvent) => {
+    void e; // used for type signature only
+    if (panDrag) {
+      setPanDrag(null);
+      return;
+    }
+    if (marquee && screen) {
+      const x1 = Math.min(marquee.startX, marquee.currentX);
+      const y1 = Math.min(marquee.startY, marquee.currentY);
+      const x2 = Math.max(marquee.startX, marquee.currentX);
+      const y2 = Math.max(marquee.startY, marquee.currentY);
+
+      if (Math.abs(x2 - x1) > 5 || Math.abs(y2 - y1) > 5) {
+        for (const w of screen.widgets) {
+          if (w.locked || w.visible === false) continue;
+          const wx = w.transform.position.x;
+          const wy = w.transform.position.y;
+          const wr = wx + w.transform.size.width;
+          const wb = wy + w.transform.size.height;
+
+          if (wx < x2 && wr > x1 && wy < y2 && wb > y1) {
+            selectWidget(w.id, true);
+          }
+        }
+      }
+      setMarquee(null);
+    }
     setDragState(null);
-  }, []);
+  }, [marquee, panDrag, screen, selectWidget]);
+
+  // ── Wheel — zoom towards cursor (Ctrl+Wheel) or pan (Wheel) ──
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        // Mouse position relative to canvas container (minus padding)
+        const mx = e.clientX - rect.left - 40;
+        const my = e.clientY - rect.top - 40;
+        // Mouse pos in world coords before zoom
+        const wxBefore = mx / zoom - panOffset.x;
+        const wyBefore = my / zoom - panOffset.y;
+
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        const newZoom = Math.max(0.1, Math.min(5, zoom + delta));
+
+        // Adjust pan so the world point under cursor stays put
+        const newPanX = mx / newZoom - wxBefore;
+        const newPanY = my / newZoom - wyBefore;
+
+        setZoom(newZoom);
+        setPanOffset({ x: newPanX, y: newPanY });
+      } else {
+        // Scroll to pan
+        setPanOffset({
+          x: panOffset.x - e.deltaX / zoom,
+          y: panOffset.y - e.deltaY / zoom,
+        });
+      }
+    },
+    [zoom, panOffset, setZoom, setPanOffset],
+  );
 
   // ── Keyboard shortcuts ──
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // Space for pan mode
+      if (e.key === ' ' && !e.repeat) {
+        e.preventDefault();
+        setSpaceHeld(true);
+        return;
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedWidgetIds.length > 0) {
           removeWidgets(selectedWidgetIds);
@@ -164,9 +315,35 @@ export const CanvasEditor: React.FC = () => {
         e.preventDefault();
         duplicateWidgets(selectedWidgetIds);
       }
+      if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      if ((e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) || (e.key === 'y' && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
+        redo();
+      }
+      // Zoom shortcuts: +/- keys
+      if (e.key === '=' || e.key === '+') {
+        if (e.ctrlKey || e.metaKey) { e.preventDefault(); setZoom(zoom + 0.1); }
+      }
+      if (e.key === '-') {
+        if (e.ctrlKey || e.metaKey) { e.preventDefault(); setZoom(zoom - 0.1); }
+      }
+      if (e.key === '0' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setZoom(1);
+        setPanOffset({ x: 0, y: 0 });
+      }
     },
-    [selectedWidgetIds, removeWidgets, selectAll, copySelected, pasteClipboard, duplicateWidgets],
+    [selectedWidgetIds, removeWidgets, selectAll, copySelected, pasteClipboard, duplicateWidgets, undo, redo, zoom, setZoom, setPanOffset],
   );
+
+  const handleKeyUp = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === ' ') {
+      setSpaceHeld(false);
+    }
+  }, []);
 
   if (!screen) {
     return (
@@ -196,26 +373,37 @@ export const CanvasEditor: React.FC = () => {
     .sort((a, b) => a.transform.zIndex - b.transform.zIndex);
 
   return (
-    <div
-      ref={canvasRef}
-      tabIndex={0}
-      style={{
-        flex: 1,
-        overflow: 'auto',
-        position: 'relative',
-        outline: 'none',
-        cursor: dragState ? 'grabbing' : 'default',
-      }}
-      onClick={handleCanvasClick}
-      onDrop={handleDrop}
-      onDragOver={(e) => e.preventDefault()}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onKeyDown={handleKeyDown}
-    >
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Alignment toolbar — shown when 2+ widgets selected */}
+      {selectedWidgetIds.length >= 2 && (
+        <AlignmentToolbar onAlign={alignWidgets} />
+      )}
+
       <div
-        className={showGrid ? 'scada-canvas-grid' : undefined}
+        ref={canvasRef}
+        tabIndex={0}
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          position: 'relative',
+          outline: 'none',
+          background: '#e5e7eb',
+          padding: 40,
+          cursor: panDrag ? 'grabbing' : spaceHeld ? 'grab' : dragState ? 'grabbing' : marquee ? 'crosshair' : 'default',
+        }}
+        onClick={handleCanvasClick}
+        onMouseDown={handleCanvasMouseDown}
+        onDrop={handleDrop}
+        onDragOver={(e) => e.preventDefault()}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
+        onWheel={handleWheel}
+      >
+      <div
+        className={`scada-canvas-frame${showGrid ? ' scada-canvas-grid' : ''}`}
         style={{
           ...bgStyle,
           transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
@@ -225,6 +413,7 @@ export const CanvasEditor: React.FC = () => {
         {sortedWidgets.map((widget) => {
           const def = widgetRegistry.get(widget.type);
           const isSelected = selectedWidgetIds.includes(widget.id);
+          const wp = widget.properties;
 
           return (
             <div
@@ -237,6 +426,13 @@ export const CanvasEditor: React.FC = () => {
                 height: widget.transform.size.height,
                 transform: widget.transform.rotation ? `rotate(${widget.transform.rotation}deg)` : undefined,
                 zIndex: widget.transform.zIndex,
+                opacity: wp._opacity != null ? Number(wp._opacity) : undefined,
+                border: wp._borderWidth ? `${wp._borderWidth}px solid ${wp._borderColor ?? '#000'}` : undefined,
+                borderRadius: wp._borderRadius ? `${wp._borderRadius}px` : undefined,
+                backgroundColor: wp._bgColor ? String(wp._bgColor) : undefined,
+                backgroundImage: wp._bgImage ? `url(${wp._bgImage})` : undefined,
+                backgroundSize: wp._bgImage ? 'cover' : undefined,
+                backgroundPosition: wp._bgImage ? 'center' : undefined,
               }}
               onMouseDown={(e) => handleWidgetMouseDown(e, widget.id)}
             >
@@ -258,6 +454,24 @@ export const CanvasEditor: React.FC = () => {
             </div>
           );
         })}
+
+        {/* Rubber-band / marquee selection overlay */}
+        {marquee && (
+          <div
+            style={{
+              position: 'absolute',
+              left: Math.min(marquee.startX, marquee.currentX),
+              top: Math.min(marquee.startY, marquee.currentY),
+              width: Math.abs(marquee.currentX - marquee.startX),
+              height: Math.abs(marquee.currentY - marquee.startY),
+              border: '1px dashed #3B82F6',
+              background: 'rgba(59, 130, 246, 0.08)',
+              pointerEvents: 'none',
+              zIndex: 9999,
+            }}
+          />
+        )}
+      </div>
       </div>
     </div>
   );
@@ -358,3 +572,51 @@ function buildDefaultProperties(def: import('../../core/types').WidgetDefinition
   }
   return props;
 }
+
+// ─── Alignment Toolbar ────────────────────────────────────────────────────────
+
+const ALIGN_BUTTONS: { action: AlignAction; label: string; title: string }[] = [
+  { action: 'left', label: '⫷', title: 'Align Left' },
+  { action: 'centerH', label: '⫿', title: 'Center Horizontal' },
+  { action: 'right', label: '⫸', title: 'Align Right' },
+  { action: 'top', label: '⊤', title: 'Align Top' },
+  { action: 'centerV', label: '⊡', title: 'Center Vertical' },
+  { action: 'bottom', label: '⊥', title: 'Align Bottom' },
+  { action: 'distributeH', label: '⋯', title: 'Distribute Horizontally' },
+  { action: 'distributeV', label: '⋮', title: 'Distribute Vertically' },
+];
+
+const AlignmentToolbar: React.FC<{ onAlign: (action: AlignAction) => void }> = ({ onAlign }) => (
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4,
+      padding: '4px 8px',
+      borderBottom: '1px solid #e5e7eb',
+      background: '#f0f9ff',
+      fontSize: 11,
+      flexShrink: 0,
+    }}
+  >
+    <span style={{ color: '#6B7280', marginRight: 4, fontSize: 10 }}>Align:</span>
+    {ALIGN_BUTTONS.map((btn) => (
+      <button
+        key={btn.action}
+        onClick={() => onAlign(btn.action)}
+        title={btn.title}
+        style={{
+          padding: '2px 6px',
+          border: '1px solid #d1d5db',
+          borderRadius: 3,
+          background: '#fff',
+          cursor: 'pointer',
+          fontSize: 12,
+          lineHeight: 1,
+        }}
+      >
+        {btn.label}
+      </button>
+    ))}
+  </div>
+);

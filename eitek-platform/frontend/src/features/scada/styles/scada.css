@@ -117,10 +117,24 @@
 
 /* ── Editor canvas grid ─────────────────────────────────────────────────── */
 .scada-canvas-grid {
+  position: relative;
+}
+
+.scada-canvas-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
   background-image:
-    linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px);
+    linear-gradient(rgba(0,0,0,0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.15) 1px, transparent 1px);
   background-size: 20px 20px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Canvas frame — visible border around the drawing area ──────────────── */
+.scada-canvas-frame {
+  box-shadow: 0 0 0 1px #d1d5db, 0 2px 8px rgba(0,0,0,0.10);
 }
 
 /* ── Editor panels ──────────────────────────────────────────────────────── */

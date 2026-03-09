@@ -27,6 +27,9 @@ import { ButtonRenderer } from './renderers/ButtonRenderer';
 import { PipeRenderer } from './renderers/PipeRenderer';
 import { SvgSymbolRenderer } from './renderers/SvgSymbolRenderer';
 import { IndicatorRenderer } from './renderers/IndicatorRenderer';
+import { ProgressBarRenderer } from './renderers/ProgressBarRenderer';
+import { ImageWidgetRenderer } from './renderers/ImageWidgetRenderer';
+import { NumberInputRenderer } from './renderers/NumberInputRenderer';
 
 // ─── VALUE DISPLAY ───────────────────────────────────────────────────────────
 
@@ -44,15 +47,19 @@ const valueDisplay: WidgetDefinition = {
     { key: 'prefix', label: 'Prefix', type: 'string', defaultValue: '' },
     { key: 'suffix', label: 'Suffix', type: 'string', defaultValue: '' },
     { key: 'decimals', label: 'Decimals', type: 'number', defaultValue: 1, min: 0, max: 6 },
-    { key: 'icon', label: 'Icon', type: 'string', defaultValue: '', group: 'Appearance' },
+    { key: 'icon', label: 'Icon', type: 'image', defaultValue: '', group: 'Appearance' },
     { key: 'showTrend', label: 'Show Trend', type: 'boolean', defaultValue: false, group: 'Appearance' },
     { key: 'thresholds', label: 'Thresholds', type: 'json', defaultValue: [], group: 'Thresholds', description: '[{ value: 80, color: "#EF4444" }]' },
     { key: 'bgColor', label: 'Background', type: 'color', defaultValue: '#FFFFFF', group: 'Appearance' },
     { key: 'textColor', label: 'Text Color', type: 'color', defaultValue: '#1F2937', group: 'Appearance' },
+    { key: 'borderRadius', label: 'Border Radius', type: 'number', defaultValue: 6, min: 0, max: 30, group: 'Appearance' },
+    { key: 'borderColor', label: 'Border Color', type: 'color', defaultValue: '#E5E7EB', group: 'Appearance' },
+    { key: 'borderWidth', label: 'Border Width', type: 'number', defaultValue: 1, min: 0, max: 6, group: 'Appearance' },
   ],
   bindingSchema: [
     { key: 'value', label: 'Value', valueType: 'number', suggestedKey: 'temperature' },
     { key: 'icon', label: 'Icon', valueType: 'string' },
+    { key: 'bgColor', label: 'Background', valueType: 'string' },
   ],
   actionSchema: [
     { trigger: 'click', label: 'On Click' },
@@ -75,9 +82,11 @@ const gauge: WidgetDefinition = {
     { key: 'value', label: 'Value', type: 'number', defaultValue: 0 },
     { key: 'unit', label: 'Unit', type: 'string', defaultValue: '' },
     { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
+    { key: 'decimals', label: 'Decimals', type: 'number', defaultValue: 0, min: 0, max: 4, group: 'Display' },
     { key: 'showValue', label: 'Show Value', type: 'boolean', defaultValue: true },
     { key: 'showMinMax', label: 'Show Min/Max', type: 'boolean', defaultValue: true },
     { key: 'gaugeType', label: 'Gauge Type', type: 'select', defaultValue: 'circular', options: [{ value: 'circular', label: 'Circular' }, { value: 'linear', label: 'Linear' }] },
+    { key: 'needleColor', label: 'Needle Color', type: 'color', defaultValue: '#1F2937', group: 'Appearance' },
     { key: 'ranges', label: 'Ranges', type: 'json', defaultValue: [{ from: 0, to: 50, color: '#22C55E' }, { from: 50, to: 80, color: '#F59E0B' }, { from: 80, to: 100, color: '#EF4444' }], description: '[{ from, to, color }]' },
   ],
   bindingSchema: [
@@ -110,6 +119,10 @@ const tank: WidgetDefinition = {
     { key: 'fillColor', label: 'Fill Color', type: 'color', defaultValue: '#3B82F6' },
     { key: 'outlineColor', label: 'Outline Color', type: 'color', defaultValue: '#64748B' },
     { key: 'tankShape', label: 'Shape', type: 'select', defaultValue: 'rectangular', options: [{ value: 'rectangular', label: 'Rectangular' }, { value: 'cylindrical', label: 'Cylindrical' }] },
+    { key: 'warningLevel', label: 'Warning Level', type: 'number', defaultValue: 80, min: 0, max: 100, group: 'Thresholds' },
+    { key: 'criticalLevel', label: 'Critical Level', type: 'number', defaultValue: 95, min: 0, max: 100, group: 'Thresholds' },
+    { key: 'warningColor', label: 'Warning Color', type: 'color', defaultValue: '#F59E0B', group: 'Thresholds' },
+    { key: 'criticalColor', label: 'Critical Color', type: 'color', defaultValue: '#EF4444', group: 'Thresholds' },
   ],
   bindingSchema: [
     { key: 'level', label: 'Level', valueType: 'number', suggestedKey: 'level' },
@@ -132,9 +145,14 @@ const pump: WidgetDefinition = {
   propSchema: [
     { key: 'state', label: 'State', type: 'select', defaultValue: 'stopped', options: [{ value: 'running', label: 'Running' }, { value: 'stopped', label: 'Stopped' }, { value: 'fault', label: 'Fault' }] },
     { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
-    { key: 'runningColor', label: 'Running Color', type: 'color', defaultValue: '#22C55E' },
-    { key: 'stoppedColor', label: 'Stopped Color', type: 'color', defaultValue: '#6B7280' },
-    { key: 'faultColor', label: 'Fault Color', type: 'color', defaultValue: '#EF4444' },
+    { key: 'showLabel', label: 'Show Label', type: 'boolean', defaultValue: true, group: 'Layout' },
+    { key: 'labelColor', label: 'Label Color', type: 'color', defaultValue: '#6B7280', group: 'Layout' },
+    { key: 'runningColor', label: 'Running Color', type: 'color', defaultValue: '#22C55E', group: 'Appearance' },
+    { key: 'stoppedColor', label: 'Stopped Color', type: 'color', defaultValue: '#6B7280', group: 'Appearance' },
+    { key: 'faultColor', label: 'Fault Color', type: 'color', defaultValue: '#EF4444', group: 'Appearance' },
+    { key: 'runningImage', label: 'Running Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for running state' },
+    { key: 'stoppedImage', label: 'Stopped Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for stopped state' },
+    { key: 'faultImage', label: 'Fault Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for fault state' },
   ],
   bindingSchema: [
     { key: 'state', label: 'State', valueType: 'string', suggestedKey: 'pumpState' },
@@ -160,9 +178,13 @@ const valve: WidgetDefinition = {
     { key: 'state', label: 'State', type: 'select', defaultValue: 'closed', options: [{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'partial', label: 'Partial' }, { value: 'fault', label: 'Fault' }] },
     { key: 'openPercent', label: 'Open %', type: 'number', defaultValue: 0, min: 0, max: 100 },
     { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
+    { key: 'showLabel', label: 'Show Label', type: 'boolean', defaultValue: true, group: 'Layout' },
+    { key: 'labelColor', label: 'Label Color', type: 'color', defaultValue: '#6B7280', group: 'Layout' },
     { key: 'valveType', label: 'Valve Type', type: 'select', defaultValue: 'gate', options: [{ value: 'gate', label: 'Gate' }, { value: 'ball', label: 'Ball' }, { value: 'butterfly', label: 'Butterfly' }] },
-    { key: 'openColor', label: 'Open Color', type: 'color', defaultValue: '#22C55E' },
-    { key: 'closedColor', label: 'Closed Color', type: 'color', defaultValue: '#EF4444' },
+    { key: 'openColor', label: 'Open Color', type: 'color', defaultValue: '#22C55E', group: 'Appearance' },
+    { key: 'closedColor', label: 'Closed Color', type: 'color', defaultValue: '#EF4444', group: 'Appearance' },
+    { key: 'openImage', label: 'Open Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for open state' },
+    { key: 'closedImage', label: 'Closed Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for closed state' },
   ],
   bindingSchema: [
     { key: 'state', label: 'State', valueType: 'string', suggestedKey: 'valveState' },
@@ -189,14 +211,23 @@ const motor: WidgetDefinition = {
     { key: 'state', label: 'State', type: 'select', defaultValue: 'stopped', options: [{ value: 'running', label: 'Running' }, { value: 'stopped', label: 'Stopped' }, { value: 'fault', label: 'Fault' }] },
     { key: 'rpm', label: 'RPM', type: 'number', defaultValue: 0, min: 0, max: 10000 },
     { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
+    { key: 'showLabel', label: 'Show Label', type: 'boolean', defaultValue: true, group: 'Layout' },
+    { key: 'labelColor', label: 'Label Color', type: 'color', defaultValue: '#6B7280', group: 'Layout' },
     { key: 'showRPM', label: 'Show RPM', type: 'boolean', defaultValue: true },
-    { key: 'runningColor', label: 'Running Color', type: 'color', defaultValue: '#22C55E' },
-    { key: 'stoppedColor', label: 'Stopped Color', type: 'color', defaultValue: '#6B7280' },
-    { key: 'faultColor', label: 'Fault Color', type: 'color', defaultValue: '#EF4444' },
+    { key: 'showPower', label: 'Show Power', type: 'boolean', defaultValue: false, group: 'Display' },
+    { key: 'power', label: 'Power', type: 'number', defaultValue: 0, group: 'Display' },
+    { key: 'powerUnit', label: 'Power Unit', type: 'string', defaultValue: 'kW', group: 'Display' },
+    { key: 'runningColor', label: 'Running Color', type: 'color', defaultValue: '#22C55E', group: 'Appearance' },
+    { key: 'stoppedColor', label: 'Stopped Color', type: 'color', defaultValue: '#6B7280', group: 'Appearance' },
+    { key: 'faultColor', label: 'Fault Color', type: 'color', defaultValue: '#EF4444', group: 'Appearance' },
+    { key: 'runningImage', label: 'Running Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for running state' },
+    { key: 'stoppedImage', label: 'Stopped Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for stopped state' },
+    { key: 'faultImage', label: 'Fault Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for fault state' },
   ],
   bindingSchema: [
     { key: 'state', label: 'State', valueType: 'string', suggestedKey: 'motorState' },
     { key: 'rpm', label: 'RPM', valueType: 'number', suggestedKey: 'rpm' },
+    { key: 'power', label: 'Power', valueType: 'number', suggestedKey: 'power' },
   ],
   actionSchema: [
     { trigger: 'click', label: 'On Click' },
@@ -218,10 +249,14 @@ const led: WidgetDefinition = {
   propSchema: [
     { key: 'state', label: 'State', type: 'boolean', defaultValue: false },
     { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
-    { key: 'onColor', label: 'On Color', type: 'color', defaultValue: '#22C55E' },
-    { key: 'offColor', label: 'Off Color', type: 'color', defaultValue: '#6B7280' },
+    { key: 'showLabel', label: 'Show Label', type: 'boolean', defaultValue: true, group: 'Layout' },
+    { key: 'labelColor', label: 'Label Color', type: 'color', defaultValue: '#6B7280', group: 'Layout' },
+    { key: 'onColor', label: 'On Color', type: 'color', defaultValue: '#22C55E', group: 'Appearance' },
+    { key: 'offColor', label: 'Off Color', type: 'color', defaultValue: '#6B7280', group: 'Appearance' },
     { key: 'shape', label: 'Shape', type: 'select', defaultValue: 'circle', options: [{ value: 'circle', label: 'Circle' }, { value: 'square', label: 'Square' }] },
-    { key: 'blinkWhenOn', label: 'Blink When On', type: 'boolean', defaultValue: false },
+    { key: 'blinkWhenOn', label: 'Blink When On', type: 'boolean', defaultValue: false, group: 'Behavior' },
+    { key: 'onImage', label: 'On Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for ON state' },
+    { key: 'offImage', label: 'Off Image', type: 'image', defaultValue: '', group: 'Image', description: 'Custom image for OFF state' },
   ],
   bindingSchema: [
     { key: 'state', label: 'State', valueType: 'boolean', suggestedKey: 'active' },
@@ -237,18 +272,31 @@ const switchWidget: WidgetDefinition = {
   name: 'Toggle Switch',
   icon: '🔘',
   category: 'control',
-  defaultSize: { width: 80, height: 60 },
+  defaultSize: { width: 80, height: 80 },
   supportsSvg: false,
   propSchema: [
     { key: 'state', label: 'State', type: 'boolean', defaultValue: false },
     { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
-    { key: 'onColor', label: 'On Color', type: 'color', defaultValue: '#22C55E' },
-    { key: 'offColor', label: 'Off Color', type: 'color', defaultValue: '#9CA3AF' },
-    { key: 'showLabel', label: 'Show Label', type: 'boolean', defaultValue: true },
-    { key: 'disabled', label: 'Disabled', type: 'boolean', defaultValue: false },
+    // Image mode (auto-activates when on/off images are set)
+    { key: 'onImage', label: 'On Image', type: 'image', defaultValue: '', group: 'Image', description: 'Image shown when state is ON (PNG/SVG)' },
+    { key: 'offImage', label: 'Off Image', type: 'image', defaultValue: '', group: 'Image', description: 'Image shown when state is OFF (PNG/SVG)' },
+    // Classic toggle colors (used when no images set)
+    { key: 'onColor', label: 'On Color', type: 'color', defaultValue: '#22C55E', group: 'Appearance' },
+    { key: 'offColor', label: 'Off Color', type: 'color', defaultValue: '#9CA3AF', group: 'Appearance' },
+    // Layout & style
+    { key: 'showLabel', label: 'Show Label', type: 'boolean', defaultValue: true, group: 'Layout' },
+    { key: 'labelPosition', label: 'Label Pos', type: 'select', defaultValue: 'bottom', options: [{ value: 'top', label: 'Top' }, { value: 'bottom', label: 'Bottom' }, { value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }], group: 'Layout' },
+    { key: 'labelColor', label: 'Label Color', type: 'color', defaultValue: '#6B7280', group: 'Layout' },
+    { key: 'labelSize', label: 'Label Size', type: 'number', defaultValue: 11, min: 8, max: 24, group: 'Layout' },
+    // Behavior
+    { key: 'disabled', label: 'Disabled', type: 'boolean', defaultValue: false, group: 'Behavior' },
+    { key: 'confirmRequired', label: 'Require Confirm', type: 'boolean', defaultValue: false, group: 'Behavior', description: 'Show confirmation before toggling' },
+    { key: 'confirmMessage', label: 'Confirm Msg', type: 'string', defaultValue: 'Are you sure?', group: 'Behavior' },
   ],
   bindingSchema: [
     { key: 'state', label: 'State', valueType: 'boolean', suggestedKey: 'active' },
+    { key: 'disabled', label: 'Disabled', valueType: 'boolean', suggestedKey: 'disabled' },
+    { key: 'label', label: 'Label', valueType: 'string' },
   ],
   actionSchema: [
     { trigger: 'toggle', label: 'On Toggle', description: 'Fired when user toggles the switch' },
@@ -271,16 +319,19 @@ const slider: WidgetDefinition = {
     { key: 'value', label: 'Value', type: 'number', defaultValue: 50 },
     { key: 'min', label: 'Min', type: 'number', defaultValue: 0 },
     { key: 'max', label: 'Max', type: 'number', defaultValue: 100 },
+    { key: 'step', label: 'Step', type: 'number', defaultValue: 1, min: 0.01, max: 100 },
     { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
     { key: 'unit', label: 'Unit', type: 'string', defaultValue: '' },
     { key: 'showValue', label: 'Show Value', type: 'boolean', defaultValue: true },
+    { key: 'showMinMax', label: 'Show Min/Max', type: 'boolean', defaultValue: false, group: 'Display' },
     { key: 'orientation', label: 'Orientation', type: 'select', defaultValue: 'horizontal', options: [{ value: 'horizontal', label: 'Horizontal' }, { value: 'vertical', label: 'Vertical' }] },
-    { key: 'trackColor', label: 'Track Color', type: 'color', defaultValue: '#E5E7EB' },
-    { key: 'fillColor', label: 'Fill Color', type: 'color', defaultValue: '#3B82F6' },
-    { key: 'disabled', label: 'Disabled', type: 'boolean', defaultValue: false },
+    { key: 'trackColor', label: 'Track Color', type: 'color', defaultValue: '#E5E7EB', group: 'Appearance' },
+    { key: 'fillColor', label: 'Fill Color', type: 'color', defaultValue: '#3B82F6', group: 'Appearance' },
+    { key: 'disabled', label: 'Disabled', type: 'boolean', defaultValue: false, group: 'Behavior' },
   ],
   bindingSchema: [
     { key: 'value', label: 'Value', valueType: 'number', suggestedKey: 'setpoint' },
+    { key: 'disabled', label: 'Disabled', valueType: 'boolean' },
   ],
   actionSchema: [
     { trigger: 'change', label: 'On Change', description: 'Fired when slider value changes' },
@@ -304,6 +355,7 @@ const text: WidgetDefinition = {
     { key: 'fontFamily', label: 'Font Family', type: 'string', defaultValue: 'Arial, sans-serif' },
     { key: 'textColor', label: 'Text Color', type: 'color', defaultValue: '#1F2937' },
     { key: 'align', label: 'Align', type: 'select', defaultValue: 'center', options: [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }] },
+    { key: 'verticalAlign', label: 'V-Align', type: 'select', defaultValue: 'center', options: [{ value: 'flex-start', label: 'Top' }, { value: 'center', label: 'Middle' }, { value: 'flex-end', label: 'Bottom' }], group: 'Layout' },
     { key: 'bgColor', label: 'Background', type: 'color', defaultValue: 'transparent', group: 'Appearance' },
     { key: 'borderColor', label: 'Border Color', type: 'color', defaultValue: 'transparent', group: 'Appearance' },
     { key: 'borderWidth', label: 'Border Width', type: 'number', defaultValue: 0, min: 0, max: 10, group: 'Appearance' },
@@ -312,6 +364,7 @@ const text: WidgetDefinition = {
   bindingSchema: [
     { key: 'text', label: 'Text', valueType: 'string' },
     { key: 'textColor', label: 'Text Color', valueType: 'string' },
+    { key: 'bgColor', label: 'Background', valueType: 'string' },
   ],
   actionSchema: [
     { trigger: 'click', label: 'On Click' },
@@ -330,12 +383,14 @@ const button: WidgetDefinition = {
   supportsSvg: false,
   propSchema: [
     { key: 'label', label: 'Label', type: 'string', defaultValue: 'Button' },
-    { key: 'bgColor', label: 'Background', type: 'color', defaultValue: '#3B82F6' },
-    { key: 'textColor', label: 'Text Color', type: 'color', defaultValue: '#FFFFFF' },
+    { key: 'icon', label: 'Icon', type: 'image', defaultValue: '', group: 'Appearance', description: 'Button icon (PNG/SVG)' },
+    { key: 'bgColor', label: 'Background', type: 'color', defaultValue: '#3B82F6', group: 'Appearance' },
+    { key: 'hoverColor', label: 'Hover Color', type: 'color', defaultValue: '#2563EB', group: 'Appearance' },
+    { key: 'textColor', label: 'Text Color', type: 'color', defaultValue: '#FFFFFF', group: 'Appearance' },
     { key: 'fontSize', label: 'Font Size', type: 'number', defaultValue: 12, min: 8, max: 24 },
     { key: 'borderRadius', label: 'Border Radius', type: 'number', defaultValue: 6, min: 0, max: 20 },
-    { key: 'disabled', label: 'Disabled', type: 'boolean', defaultValue: false },
-    { key: 'confirmRequired', label: 'Require Confirm', type: 'boolean', defaultValue: false, description: 'Show confirmation dialog before action' },
+    { key: 'disabled', label: 'Disabled', type: 'boolean', defaultValue: false, group: 'Behavior' },
+    { key: 'confirmRequired', label: 'Require Confirm', type: 'boolean', defaultValue: false, group: 'Behavior', description: 'Show confirmation dialog before action' },
   ],
   bindingSchema: [
     { key: 'disabled', label: 'Disabled', valueType: 'boolean' },
@@ -359,9 +414,10 @@ const pipe: WidgetDefinition = {
   propSchema: [
     { key: 'orientation', label: 'Orientation', type: 'select', defaultValue: 'horizontal', options: [{ value: 'horizontal', label: 'Horizontal' }, { value: 'vertical', label: 'Vertical' }] },
     { key: 'flowActive', label: 'Flow Active', type: 'boolean', defaultValue: false },
-    { key: 'pipeColor', label: 'Pipe Color', type: 'color', defaultValue: '#94A3B8' },
-    { key: 'flowColor', label: 'Flow Color', type: 'color', defaultValue: '#3B82F6' },
+    { key: 'pipeColor', label: 'Pipe Color', type: 'color', defaultValue: '#94A3B8', group: 'Appearance' },
+    { key: 'flowColor', label: 'Flow Color', type: 'color', defaultValue: '#3B82F6', group: 'Appearance' },
     { key: 'pipeWidth', label: 'Pipe Width', type: 'number', defaultValue: 12, min: 4, max: 30 },
+    { key: 'flowSpeed', label: 'Flow Speed', type: 'number', defaultValue: 1, min: 0.1, max: 5, group: 'Behavior', description: 'Animation speed multiplier' },
     { key: 'endCaps', label: 'End Caps', type: 'boolean', defaultValue: true },
     { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
   ],
@@ -411,6 +467,7 @@ const indicator: WidgetDefinition = {
     { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
     { key: 'shape', label: 'Shape', type: 'select', defaultValue: 'circle', options: [{ value: 'circle', label: 'Circle' }, { value: 'rectangle', label: 'Rectangle' }, { value: 'diamond', label: 'Diamond' }] },
     { key: 'showValue', label: 'Show Value', type: 'boolean', defaultValue: true },
+    { key: 'blinkWhenActive', label: 'Blink Active', type: 'boolean', defaultValue: false, group: 'Behavior', description: 'Blink when state matches running/active' },
     { key: 'states', label: 'States', type: 'json', defaultValue: [{ value: 'running', color: '#22C55E', label: 'Running' }, { value: 'stopped', color: '#6B7280', label: 'Stopped' }, { value: 'fault', color: '#EF4444', label: 'Fault' }], description: '[{ value, color, label }]' },
   ],
   bindingSchema: [
@@ -420,6 +477,109 @@ const indicator: WidgetDefinition = {
     { trigger: 'click', label: 'On Click' },
   ],
   renderer: IndicatorRenderer,
+};
+
+// ─── PROGRESS BAR ────────────────────────────────────────────────────────────
+
+const progressBar: WidgetDefinition = {
+  type: 'progressBar',
+  name: 'Progress Bar',
+  icon: '📶',
+  category: 'display',
+  defaultSize: { width: 200, height: 40 },
+  supportsSvg: false,
+  propSchema: [
+    { key: 'value', label: 'Value', type: 'number', defaultValue: 50 },
+    { key: 'min', label: 'Min', type: 'number', defaultValue: 0 },
+    { key: 'max', label: 'Max', type: 'number', defaultValue: 100 },
+    { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
+    { key: 'unit', label: 'Unit', type: 'string', defaultValue: '%' },
+    { key: 'decimals', label: 'Decimals', type: 'number', defaultValue: 0, min: 0, max: 4 },
+    { key: 'showValue', label: 'Show Value', type: 'boolean', defaultValue: true },
+    { key: 'showMinMax', label: 'Show Min/Max', type: 'boolean', defaultValue: false },
+    { key: 'orientation', label: 'Orientation', type: 'select', defaultValue: 'horizontal', options: [{ value: 'horizontal', label: 'Horizontal' }, { value: 'vertical', label: 'Vertical' }] },
+    { key: 'barColor', label: 'Bar Color', type: 'color', defaultValue: '#3B82F6', group: 'Appearance' },
+    { key: 'trackColor', label: 'Track Color', type: 'color', defaultValue: '#E5E7EB', group: 'Appearance' },
+    { key: 'barRadius', label: 'Bar Radius', type: 'number', defaultValue: 4, min: 0, max: 20, group: 'Appearance' },
+    { key: 'barHeight', label: 'Bar Height', type: 'number', defaultValue: 12, min: 4, max: 40, group: 'Appearance' },
+    { key: 'thresholds', label: 'Thresholds', type: 'json', defaultValue: [], group: 'Thresholds', description: '[{ value: 80, color: "#F59E0B" }, { value: 95, color: "#EF4444" }]' },
+  ],
+  bindingSchema: [
+    { key: 'value', label: 'Value', valueType: 'number', suggestedKey: 'progress' },
+    { key: 'min', label: 'Min', valueType: 'number' },
+    { key: 'max', label: 'Max', valueType: 'number' },
+  ],
+  actionSchema: [
+    { trigger: 'click', label: 'On Click' },
+  ],
+  renderer: ProgressBarRenderer,
+};
+
+// ─── IMAGE WIDGET ────────────────────────────────────────────────────────────
+
+const imageWidget: WidgetDefinition = {
+  type: 'imageWidget',
+  name: 'Image',
+  icon: '🏞️',
+  category: 'display',
+  defaultSize: { width: 120, height: 120 },
+  supportsSvg: false,
+  propSchema: [
+    { key: 'imageUrl', label: 'Image URL', type: 'image', defaultValue: '', description: 'Select or enter image URL' },
+    { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
+    { key: 'objectFit', label: 'Fit', type: 'select', defaultValue: 'contain', options: [{ value: 'contain', label: 'Contain' }, { value: 'cover', label: 'Cover' }, { value: 'fill', label: 'Fill' }, { value: 'none', label: 'None' }] },
+    { key: 'borderRadius', label: 'Border Radius', type: 'number', defaultValue: 0, min: 0, max: 50, group: 'Appearance' },
+    { key: 'borderWidth', label: 'Border Width', type: 'number', defaultValue: 0, min: 0, max: 10, group: 'Appearance' },
+    { key: 'borderColor', label: 'Border Color', type: 'color', defaultValue: '#E5E7EB', group: 'Appearance' },
+    { key: 'opacity', label: 'Opacity', type: 'number', defaultValue: 1, min: 0, max: 1, group: 'Appearance' },
+    { key: 'bgColor', label: 'Background', type: 'color', defaultValue: 'transparent', group: 'Appearance' },
+    { key: 'labelSize', label: 'Label Size', type: 'number', defaultValue: 10, min: 8, max: 20, group: 'Layout' },
+    { key: 'labelColor', label: 'Label Color', type: 'color', defaultValue: '#6B7280', group: 'Layout' },
+  ],
+  bindingSchema: [
+    { key: 'imageUrl', label: 'Image URL', valueType: 'string', suggestedKey: 'imageUrl' },
+    { key: 'opacity', label: 'Opacity', valueType: 'number' },
+  ],
+  actionSchema: [
+    { trigger: 'click', label: 'On Click' },
+  ],
+  renderer: ImageWidgetRenderer,
+};
+
+// ─── NUMBER INPUT ────────────────────────────────────────────────────────────
+
+const numberInput: WidgetDefinition = {
+  type: 'numberInput',
+  name: 'Number Input',
+  icon: '🔢',
+  category: 'control',
+  defaultSize: { width: 140, height: 50 },
+  supportsSvg: false,
+  propSchema: [
+    { key: 'value', label: 'Value', type: 'number', defaultValue: 0 },
+    { key: 'min', label: 'Min', type: 'number', defaultValue: 0 },
+    { key: 'max', label: 'Max', type: 'number', defaultValue: 100 },
+    { key: 'step', label: 'Step', type: 'number', defaultValue: 1, min: 0.01, max: 100 },
+    { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
+    { key: 'unit', label: 'Unit', type: 'string', defaultValue: '' },
+    { key: 'decimals', label: 'Decimals', type: 'number', defaultValue: 0, min: 0, max: 4 },
+    { key: 'disabled', label: 'Disabled', type: 'boolean', defaultValue: false, group: 'Behavior' },
+    { key: 'bgColor', label: 'Background', type: 'color', defaultValue: '#FFFFFF', group: 'Appearance' },
+    { key: 'textColor', label: 'Text Color', type: 'color', defaultValue: '#1F2937', group: 'Appearance' },
+    { key: 'accentColor', label: 'Accent Color', type: 'color', defaultValue: '#3B82F6', group: 'Appearance' },
+  ],
+  bindingSchema: [
+    { key: 'value', label: 'Value', valueType: 'number', suggestedKey: 'setpoint' },
+    { key: 'min', label: 'Min', valueType: 'number' },
+    { key: 'max', label: 'Max', valueType: 'number' },
+    { key: 'disabled', label: 'Disabled', valueType: 'boolean' },
+  ],
+  actionSchema: [
+    { trigger: 'change', label: 'On Change', description: 'Fired when value changes' },
+    { trigger: 'increment', label: 'On Increment' },
+    { trigger: 'decrement', label: 'On Decrement' },
+  ],
+  renderer: NumberInputRenderer,
 };
 
 // ─── All definitions ─────────────────────────────────────────────────────────
@@ -439,6 +599,9 @@ const builtinWidgets: WidgetDefinition[] = [
   pipe,
   svgSymbol,
   indicator,
+  progressBar,
+  imageWidget,
+  numberInput,
 ];
 
 /**

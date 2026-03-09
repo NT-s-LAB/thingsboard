@@ -1,3 +1,7 @@
+﻿/**
+ * @deprecated V1 SCADA — This file belongs to the legacy V1 engine (Konva-based).
+ * Replaced by V2 engine in /engine/ and /core/. Scheduled for removal.
+ */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CustomWidgetDefinition } from '../types';

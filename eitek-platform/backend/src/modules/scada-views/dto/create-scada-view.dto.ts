@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsUUID, IsObject, ValidateIf } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsUUID, IsObject, IsArray, ValidateIf } from 'class-validator';
 
 export class CreateScadaViewDto {
   @ApiProperty({ description: 'SCADA view name', example: 'Production Line Overview' })
@@ -17,10 +17,9 @@ export class CreateScadaViewDto {
   @IsObject()
   layout?: Record<string, any>;
 
-  @ApiPropertyOptional({ description: 'Background image URL' })
+  @ApiPropertyOptional({ description: 'Background config (string URL or JSON object)', example: { type: 'color', color: '#f8fafc' } })
   @IsOptional()
-  @IsString()
-  background?: string;
+  background?: string | Record<string, any>;
 
   @ApiPropertyOptional({ description: 'Canvas size (JSON)', example: { width: 1920, height: 1080 } })
   @IsOptional()
@@ -46,4 +45,14 @@ export class CreateScadaViewDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Widgets array (for full save)', type: [Object] })
+  @IsOptional()
+  @IsArray()
+  widgets?: any[];
+
+  @ApiPropertyOptional({ description: 'Tags for categorization', type: [String] })
+  @IsOptional()
+  @IsArray()
+  tags?: string[];
 }

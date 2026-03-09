@@ -3,21 +3,35 @@
  *
  * For each PropField in the selected widget's definition, renders
  * the appropriate input control (string, number, boolean, color, select, etc.).
+ * Also provides widget identity, style, and appearance controls.
  */
 
 'use client';
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { widgetRegistry } from '../../core/registry';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
+import { imageLibraryService } from '../../services/imageLibraryService';
+import type { ImageItem, ImageCategoryItem } from '../../services/imageLibraryService';
 import type { PropField } from '../../core/types';
+import type { ScreenBackground, BackgroundType } from '../../core/types';
 import '../../styles/scada.css';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const resolveImgUrl = (url: string | null | undefined): string => {
+  if (!url) return '';
+  return url.startsWith('http') ? url : `${API_BASE}${url}`;
+};
 
 export const PropertyPanelV2: React.FC = () => {
   const screen = useScadaRuntimeStore((s) => s.screen);
   const selectedWidgetIds = useScadaRuntimeStore((s) => s.selectedWidgetIds);
   const updateWidget = useScadaRuntimeStore((s) => s.updateWidget);
   const updateWidgetTransform = useScadaRuntimeStore((s) => s.updateWidgetTransform);
+  const updateScreenBackground = useScadaRuntimeStore((s) => s.updateScreenBackground);
+  const updateScreenCanvasSize = useScadaRuntimeStore((s) => s.updateScreenCanvasSize);
+  const updateScreenName = useScadaRuntimeStore((s) => s.updateScreenName);
+  const updateScreenDescription = useScadaRuntimeStore((s) => s.updateScreenDescription);
 
   const selectedWidget = useMemo(() => {
     if (!screen || selectedWidgetIds.length !== 1) return null;
@@ -64,13 +78,37 @@ export const PropertyPanelV2: React.FC = () => {
     [selectedWidget, updateWidgetTransform],
   );
 
+  const handleNameChange = useCallback(
+    (name: string) => {
+      if (!selectedWidget) return;
+      updateWidget(selectedWidget.id, { name });
+    },
+    [selectedWidget, updateWidget],
+  );
+
   if (!selectedWidget || !definition) {
     return (
       <div className="scada-panel" style={{ width: 260, flexShrink: 0 }}>
-        <div className="scada-panel__header">Properties</div>
-        <div className="scada-panel__body" style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', padding: 16 }}>
-          {selectedWidgetIds.length > 1 ? 'Multiple widgets selected' : 'Select a widget'}
+        <div className="scada-panel__header">
+          {selectedWidgetIds.length > 1 ? 'Multiple Selection' : '🖥️ Screen Properties'}
         </div>
+        {selectedWidgetIds.length > 1 ? (
+          <div className="scada-panel__body" style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', padding: 16 }}>
+            Multiple widgets selected
+          </div>
+        ) : screen ? (
+          <ScreenPropertiesPanel
+            screen={screen}
+            onBackgroundChange={updateScreenBackground}
+            onCanvasSizeChange={updateScreenCanvasSize}
+            onNameChange={updateScreenName}
+            onDescriptionChange={updateScreenDescription}
+          />
+        ) : (
+          <div className="scada-panel__body" style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', padding: 16 }}>
+            No screen loaded
+          </div>
+        )}
       </div>
     );
   }
@@ -90,14 +128,117 @@ export const PropertyPanelV2: React.FC = () => {
         {definition.icon} {selectedWidget.name || definition.name}
       </div>
       <div className="scada-panel__body" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+        {/* Identity section */}
+        <FieldGroup label="Identity">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Name</label>
+            <input
+              type="text"
+              value={selectedWidget.name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder={definition.name}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Type</label>
+            <span style={{ fontSize: 11, color: '#9CA3AF' }}>{definition.name}</span>
+          </div>
+        </FieldGroup>
+
         {/* Transform section */}
         <FieldGroup label="Transform">
-          <NumberInput label="X" value={selectedWidget.transform.position.x} onChange={(v) => handleTransformChange('x', v)} />
-          <NumberInput label="Y" value={selectedWidget.transform.position.y} onChange={(v) => handleTransformChange('y', v)} />
-          <NumberInput label="W" value={selectedWidget.transform.size.width} onChange={(v) => handleTransformChange('width', v)} min={10} />
-          <NumberInput label="H" value={selectedWidget.transform.size.height} onChange={(v) => handleTransformChange('height', v)} min={10} />
-          <NumberInput label="Rot" value={selectedWidget.transform.rotation} onChange={(v) => handleTransformChange('rotation', v)} step={15} />
-          <NumberInput label="Z" value={selectedWidget.transform.zIndex} onChange={(v) => handleTransformChange('zIndex', v)} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+            <NumberInput label="X" value={selectedWidget.transform.position.x} onChange={(v) => handleTransformChange('x', v)} />
+            <NumberInput label="Y" value={selectedWidget.transform.position.y} onChange={(v) => handleTransformChange('y', v)} />
+            <NumberInput label="W" value={selectedWidget.transform.size.width} onChange={(v) => handleTransformChange('width', v)} min={10} />
+            <NumberInput label="H" value={selectedWidget.transform.size.height} onChange={(v) => handleTransformChange('height', v)} min={10} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+            <NumberInput label="Rot" value={selectedWidget.transform.rotation} onChange={(v) => handleTransformChange('rotation', v)} step={15} />
+            <NumberInput label="Z" value={selectedWidget.transform.zIndex} onChange={(v) => handleTransformChange('zIndex', v)} />
+          </div>
+        </FieldGroup>
+
+        {/* Appearance section */}
+        <FieldGroup label="Appearance">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Opacity</label>
+            <input
+              type="range"
+              value={Number(selectedWidget.properties._opacity ?? 1)}
+              min={0} max={1} step={0.05}
+              onChange={(e) => handlePropertyChange('_opacity', Number(e.target.value))}
+              style={{ flex: 1 }}
+            />
+            <span style={{ fontSize: 10, color: '#9CA3AF', width: 28, textAlign: 'right' }}>
+              {Math.round(Number(selectedWidget.properties._opacity ?? 1) * 100)}%
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Border W</label>
+            <input
+              type="number"
+              value={Number(selectedWidget.properties._borderWidth ?? 0)}
+              min={0} max={20} step={1}
+              onChange={(e) => handlePropertyChange('_borderWidth', Number(e.target.value))}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Border C</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+              <input
+                type="color"
+                value={String(selectedWidget.properties._borderColor ?? '#000000')}
+                onChange={(e) => handlePropertyChange('_borderColor', e.target.value)}
+                style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
+              />
+              <input
+                type="text"
+                value={String(selectedWidget.properties._borderColor ?? '')}
+                onChange={(e) => handlePropertyChange('_borderColor', e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Radius</label>
+            <input
+              type="number"
+              value={Number(selectedWidget.properties._borderRadius ?? 0)}
+              min={0} max={999} step={1}
+              onChange={(e) => handlePropertyChange('_borderRadius', Number(e.target.value))}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Bg Color</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+              <input
+                type="color"
+                value={String(selectedWidget.properties._bgColor ?? '#ffffff')}
+                onChange={(e) => handlePropertyChange('_bgColor', e.target.value)}
+                style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
+              />
+              <input
+                type="text"
+                value={String(selectedWidget.properties._bgColor ?? '')}
+                onChange={(e) => handlePropertyChange('_bgColor', e.target.value)}
+                placeholder="transparent"
+                style={{ ...inputStyle, flex: 1 }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Bg Image</label>
+            <div style={{ flex: 1 }}>
+              <ImagePicker
+                value={String(selectedWidget.properties._bgImage ?? '')}
+                onChange={(url) => handlePropertyChange('_bgImage', url)}
+              />
+            </div>
+          </div>
         </FieldGroup>
 
         {/* Property fields by group */}
@@ -233,7 +374,378 @@ const PropFieldInput: React.FC<PropFieldInputProps> = ({ field, value, onChange 
             style={inputStyle}
           />
         )}
+        {field.type === 'image' && (
+          <ImagePicker
+            value={String(effectiveValue ?? '')}
+            onChange={(url) => onChange(url)}
+          />
+        )}
       </div>
+    </div>
+  );
+};
+
+// ─── Image Picker (popup version with image library) ─────────────────────────
+
+const ImagePicker: React.FC<{ value: string; onChange: (url: string) => void }> = ({ value, onChange }) => {
+  const [showPopup, setShowPopup] = useState(false);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Image URL..."
+          style={{ ...inputStyle, flex: 1 }}
+        />
+        <button
+          onClick={() => setShowPopup(true)}
+          style={{
+            padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: 4,
+            background: '#fff', cursor: 'pointer', fontSize: 11,
+          }}
+          title="Browse image library"
+        >
+          📁
+        </button>
+      </div>
+      {value && (
+        <div style={{ marginTop: 4, border: '1px solid #e5e7eb', borderRadius: 4, overflow: 'hidden', maxHeight: 60, position: 'relative' }}>
+          <img src={resolveImgUrl(value)} alt="" style={{ width: '100%', height: 60, objectFit: 'contain', display: 'block' }} />
+          <button
+            onClick={() => onChange('')}
+            style={{
+              position: 'absolute', top: 2, right: 2, width: 18, height: 18,
+              background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none',
+              borderRadius: '50%', cursor: 'pointer', fontSize: 10, lineHeight: '18px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            title="Remove image"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {showPopup && (
+        <ImagePickerPopup
+          value={value}
+          onSelect={(url) => { onChange(url); setShowPopup(false); }}
+          onClose={() => setShowPopup(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+// ─── Image Picker Popup (full overlay dialog) ────────────────────────────────
+
+const ImagePickerPopup: React.FC<{
+  value: string;
+  onSelect: (url: string) => void;
+  onClose: () => void;
+}> = ({ value, onSelect, onClose }) => {
+  const [categories, setCategories] = useState<ImageCategoryItem[]>([]);
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [selectedCat, setSelectedCat] = useState<string | undefined>(undefined);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    imageLibraryService.getCategories().then(setCategories).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    const params: { categoryId?: string; search?: string; limit: number } = { limit: 100 };
+    if (selectedCat) params.categoryId = selectedCat;
+    if (search) params.search = search;
+    imageLibraryService
+      .getImages(params)
+      .then((r) => setImages(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [selectedCat, search]);
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 10000,
+        background: 'rgba(0,0,0,0.4)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div style={{
+        background: '#fff', borderRadius: 10, width: 560, maxHeight: '80vh',
+        display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '12px 16px', borderBottom: '1px solid #e5e7eb',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>📁 Select Image</span>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#6B7280',
+          }}>✕</button>
+        </div>
+
+        {/* Search */}
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid #e5e7eb' }}>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search images..."
+            style={{ ...inputStyle, width: '100%', padding: '6px 10px', fontSize: 12 }}
+            autoFocus
+          />
+        </div>
+
+        {/* Category filter */}
+        <div style={{ display: 'flex', gap: 4, padding: '8px 16px', flexWrap: 'wrap', borderBottom: '1px solid #f3f4f6' }}>
+          <CatButton active={!selectedCat} onClick={() => setSelectedCat(undefined)}>All</CatButton>
+          {categories.map((c) => (
+            <CatButton key={c.id} active={selectedCat === c.id} onClick={() => setSelectedCat(c.id)}>
+              {c.name}
+            </CatButton>
+          ))}
+        </div>
+
+        {/* Image grid */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', color: '#9CA3AF', padding: 24, fontSize: 12 }}>Loading...</div>
+          ) : images.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#9CA3AF', padding: 24, fontSize: 12 }}>No images found</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+              {images.map((img) => (
+                <div
+                  key={img.id}
+                  onClick={() => onSelect(resolveImgUrl(img.url))}
+                  style={{
+                    border: resolveImgUrl(img.url) === value ? '2px solid #3B82F6' : '1px solid #e5e7eb',
+                    borderRadius: 6, cursor: 'pointer', overflow: 'hidden',
+                    aspectRatio: '1', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    background: resolveImgUrl(img.url) === value ? '#eff6ff' : '#f9fafb',
+                    transition: 'border-color 0.15s, transform 0.1s',
+                  }}
+                  title={img.originalName}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#93c5fd'; }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = resolveImgUrl(img.url) === value ? '#3B82F6' : '#e5e7eb';
+                  }}
+                >
+                  <img src={resolveImgUrl(img.url)} alt={img.originalName} style={{ maxWidth: '85%', maxHeight: '70%', objectFit: 'contain' }} />
+                  <span style={{ fontSize: 9, color: '#6B7280', marginTop: 2, maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                    {img.originalName?.replace(/\.[^.]+$/, '') ?? ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CatButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: '3px 10px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
+      border: '1px solid', fontWeight: active ? 600 : 400,
+      borderColor: active ? '#3B82F6' : '#d1d5db',
+      background: active ? '#3B82F6' : '#f9fafb',
+      color: active ? '#fff' : '#374151',
+    }}
+  >
+    {children}
+  </button>
+);
+
+// ─── Screen Properties Panel (shown when no widget selected) ─────────────────
+
+interface ScreenPropertiesPanelProps {
+  screen: import('../../core/types').ScreenDefinition;
+  onBackgroundChange: (bg: Partial<ScreenBackground>) => void;
+  onCanvasSizeChange: (size: Partial<{ width: number; height: number }>) => void;
+  onNameChange: (name: string) => void;
+  onDescriptionChange: (description: string) => void;
+}
+
+const ScreenPropertiesPanel: React.FC<ScreenPropertiesPanelProps> = ({
+  screen,
+  onBackgroundChange,
+  onCanvasSizeChange,
+  onNameChange,
+  onDescriptionChange,
+}) => {
+  const bg = screen.background ?? { type: 'color' as BackgroundType, color: '#f8fafc' };
+
+  return (
+    <div className="scada-panel__body" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+      {/* Screen Identity */}
+      <FieldGroup label="Screen">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Name</label>
+          <input
+            type="text"
+            value={screen.name}
+            onChange={(e) => onNameChange(e.target.value)}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Desc</label>
+          <input
+            type="text"
+            value={screen.description ?? ''}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            placeholder="Description..."
+            style={{ ...inputStyle, flex: 1 }}
+          />
+        </div>
+      </FieldGroup>
+
+      {/* Canvas Size */}
+      <FieldGroup label="Canvas Size">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+          <NumberInput label="W" value={screen.canvasSize.width} onChange={(v) => onCanvasSizeChange({ width: v })} min={100} />
+          <NumberInput label="H" value={screen.canvasSize.height} onChange={(v) => onCanvasSizeChange({ height: v })} min={100} />
+        </div>
+        {/* Quick presets */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {[
+            { label: '1920×1080', w: 1920, h: 1080 },
+            { label: '1280×720', w: 1280, h: 720 },
+            { label: '1024×768', w: 1024, h: 768 },
+            { label: '800×600', w: 800, h: 600 },
+          ].map((p) => (
+            <button
+              key={p.label}
+              onClick={() => onCanvasSizeChange({ width: p.w, height: p.h })}
+              style={{
+                padding: '2px 6px', borderRadius: 3, fontSize: 9, cursor: 'pointer',
+                border: '1px solid #d1d5db',
+                background: screen.canvasSize.width === p.w && screen.canvasSize.height === p.h ? '#3B82F6' : '#f9fafb',
+                color: screen.canvasSize.width === p.w && screen.canvasSize.height === p.h ? '#fff' : '#6B7280',
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </FieldGroup>
+
+      {/* Background */}
+      <FieldGroup label="Background">
+        {/* Type selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Type</label>
+          <select
+            value={bg.type}
+            onChange={(e) => onBackgroundChange({ type: e.target.value as BackgroundType })}
+            style={{ ...inputStyle, flex: 1 }}
+          >
+            <option value="color">Solid Color</option>
+            <option value="image">Image</option>
+          </select>
+        </div>
+
+        {/* Color picker (always shown for base color) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Color</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+            <input
+              type="color"
+              value={bg.color ?? '#f8fafc'}
+              onChange={(e) => onBackgroundChange({ color: e.target.value })}
+              style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
+            />
+            <input
+              type="text"
+              value={bg.color ?? ''}
+              onChange={(e) => onBackgroundChange({ color: e.target.value })}
+              placeholder="#f8fafc"
+              style={{ ...inputStyle, flex: 1 }}
+            />
+          </div>
+        </div>
+
+        {/* Image URL + picker (for image type) */}
+        {bg.type === 'image' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Image</label>
+              <div style={{ flex: 1 }}>
+                <ImagePicker
+                  value={bg.imageUrl ?? ''}
+                  onChange={(url) => onBackgroundChange({ imageUrl: url })}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Fit</label>
+              <select
+                value={bg.fit ?? 'cover'}
+                onChange={(e) => onBackgroundChange({ fit: e.target.value as 'cover' | 'contain' | 'fill' | 'none' })}
+                style={{ ...inputStyle, flex: 1 }}
+              >
+                <option value="cover">Cover</option>
+                <option value="contain">Contain</option>
+                <option value="fill">Fill (stretch)</option>
+                <option value="none">None (original)</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        {/* Opacity */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Opacity</label>
+          <input
+            type="range"
+            value={bg.opacity ?? 1}
+            min={0} max={1} step={0.05}
+            onChange={(e) => onBackgroundChange({ opacity: Number(e.target.value) })}
+            style={{ flex: 1 }}
+          />
+          <span style={{ fontSize: 10, color: '#9CA3AF', width: 28, textAlign: 'right' }}>
+            {Math.round((bg.opacity ?? 1) * 100)}%
+          </span>
+        </div>
+      </FieldGroup>
+
+      {/* Preview */}
+      <FieldGroup label="Preview">
+        <div style={{
+          width: '100%', height: 80, borderRadius: 6, border: '1px solid #e5e7eb', overflow: 'hidden',
+          ...(bg.type === 'color' ? { background: bg.color ?? '#f8fafc' } : {}),
+          ...(bg.type === 'image' && bg.imageUrl ? {
+            backgroundImage: `url(${bg.imageUrl})`,
+            backgroundSize: bg.fit ?? 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            backgroundColor: bg.color ?? '#f8fafc',
+          } : {}),
+          opacity: bg.opacity ?? 1,
+        }}>
+          {bg.type === 'image' && !bg.imageUrl && (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 11 }}>
+              No image selected
+            </div>
+          )}
+        </div>
+      </FieldGroup>
     </div>
   );
 };

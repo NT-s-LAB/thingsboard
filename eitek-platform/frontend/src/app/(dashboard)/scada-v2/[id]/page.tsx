@@ -63,7 +63,7 @@ const ScadaV2Page: React.FC<ScadaV2PageProps> = ({ params }) => {
         const created = await screenService.create({ ...updated, name: updated.name || 'Untitled' });
         setScreen(created);
         // Update URL without full reload
-        window.history.replaceState(null, '', `/scada-v2/${created.id}`);
+        window.history.replaceState(null, '', `/scada/${created.id}`);
       } else {
         const saved = await screenService.saveScreen(updated);
         setScreen(saved);

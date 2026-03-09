@@ -8,13 +8,23 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { current } from 'immer';
 import type {
   ScreenDefinition,
+  ScreenBackground,
   WidgetInstance,
   ScreenLayer,
   Transform,
   AlarmState,
+  Size,
 } from '../core/types';
+
+const MAX_UNDO = 50;
+
+export type AlignAction =
+  | 'left' | 'right' | 'top' | 'bottom'
+  | 'centerH' | 'centerV'
+  | 'distributeH' | 'distributeV';
 
 // ─── State Shape ─────────────────────────────────────────────────────────────
 
@@ -45,6 +55,10 @@ interface ScadaRuntimeState {
   // ── Resolved properties (output of binding resolver) ──
   resolvedProperties: Record<string, Record<string, unknown>>;
 
+  // ── Undo / Redo history ──
+  past: ScreenDefinition[];
+  future: ScreenDefinition[];
+
   // ── Actions ──
   loadScreen: (screen: ScreenDefinition) => void;
   setDirty: (dirty: boolean) => void;
@@ -52,6 +66,12 @@ interface ScadaRuntimeState {
   toggleRuntime: () => void;
   setRuntime: (value: boolean) => void;
   setFullscreen: (value: boolean) => void;
+
+  // Screen-level properties
+  updateScreenBackground: (background: Partial<ScreenBackground>) => void;
+  updateScreenCanvasSize: (size: Partial<Size>) => void;
+  updateScreenName: (name: string) => void;
+  updateScreenDescription: (description: string) => void;
 
   // Widget CRUD
   addWidget: (widget: WidgetInstance) => void;
@@ -91,6 +111,15 @@ interface ScadaRuntimeState {
   // Resolved properties
   setResolvedProperties: (widgetId: string, props: Record<string, unknown>) => void;
   batchSetResolvedProperties: (updates: Record<string, Record<string, unknown>>) => void;
+
+  // Undo / Redo
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+
+  // Alignment
+  alignWidgets: (action: AlignAction) => void;
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -103,7 +132,7 @@ function genId(): string {
 export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
   devtools(
     subscribeWithSelector(
-      immer((set) => ({
+      immer((set, get) => ({
         // ── Initial state ──
         screen: null,
         isDirty: false,
@@ -119,6 +148,8 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
         gridSize: 20,
         alarmStates: {},
         resolvedProperties: {},
+        past: [] as ScreenDefinition[],
+        future: [] as ScreenDefinition[],
 
         // ── Actions ──
         loadScreen: (screen) =>
@@ -128,6 +159,8 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
             s.selectedWidgetIds = [];
             s.alarmStates = {};
             s.resolvedProperties = {};
+            s.past = [];
+            s.future = [];
           }),
 
         setDirty: (dirty) =>
@@ -154,9 +187,47 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
             s.isFullscreen = value;
           }),
 
+        // ── Screen-level property updates ──
+        updateScreenBackground: (bg) =>
+          set((s) => {
+            if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            s.screen.background = { ...s.screen.background, ...bg };
+            s.isDirty = true;
+          }),
+
+        updateScreenCanvasSize: (size) =>
+          set((s) => {
+            if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            s.screen.canvasSize = { ...s.screen.canvasSize, ...size };
+            s.isDirty = true;
+          }),
+
+        updateScreenName: (name) =>
+          set((s) => {
+            if (!s.screen) return;
+            s.screen.name = name;
+            s.isDirty = true;
+          }),
+
+        updateScreenDescription: (description) =>
+          set((s) => {
+            if (!s.screen) return;
+            s.screen.description = description;
+            s.isDirty = true;
+          }),
+
         addWidget: (widget) =>
           set((s) => {
             if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
             s.screen.widgets.push(widget);
             s.isDirty = true;
           }),
@@ -166,6 +237,9 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
             if (!s.screen) return;
             const idx = s.screen.widgets.findIndex((w) => w.id === id);
             if (idx === -1) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
             const widget = s.screen.widgets[idx];
             for (const key of Object.keys(patch) as Array<keyof WidgetInstance>) {
               (widget as any)[key] = (patch as any)[key];
@@ -185,6 +259,9 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
         removeWidgets: (ids) =>
           set((s) => {
             if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
             const idSet = new Set(ids);
             s.screen.widgets = s.screen.widgets.filter((w) => !idSet.has(w.id));
             s.selectedWidgetIds = s.selectedWidgetIds.filter((id) => !idSet.has(id));
@@ -194,6 +271,9 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
         duplicateWidgets: (ids) =>
           set((s) => {
             if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
             const newIds: string[] = [];
             for (const id of ids) {
               const orig = s.screen.widgets.find((w) => w.id === id);
@@ -253,6 +333,9 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
         pasteClipboard: (offset = { x: 20, y: 20 }) =>
           set((s) => {
             if (!s.screen || s.clipboardWidgets.length === 0) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
             const newIds: string[] = [];
             for (const orig of s.clipboardWidgets) {
               const newId = genId();
@@ -345,6 +428,108 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
             for (const [widgetId, props] of Object.entries(updates)) {
               s.resolvedProperties[widgetId] = props;
             }
+          }),
+
+        // ── Undo / Redo ──
+        undo: () =>
+          set((s) => {
+            if (s.past.length === 0 || !s.screen) return;
+            s.future.push(current(s.screen));
+            s.screen = s.past.pop()!;
+            s.isDirty = true;
+            s.selectedWidgetIds = [];
+          }),
+
+        redo: () =>
+          set((s) => {
+            if (s.future.length === 0 || !s.screen) return;
+            s.past.push(current(s.screen));
+            s.screen = s.future.pop()!;
+            s.isDirty = true;
+            s.selectedWidgetIds = [];
+          }),
+
+        canUndo: () => get().past.length > 0,
+        canRedo: () => get().future.length > 0,
+
+        // ── Alignment ──
+        alignWidgets: (action) =>
+          set((s) => {
+            if (!s.screen || s.selectedWidgetIds.length < 2) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+
+            const widgets = s.screen.widgets.filter((w) => s.selectedWidgetIds.includes(w.id));
+            if (widgets.length < 2) return;
+
+            switch (action) {
+              case 'left': {
+                const minX = Math.min(...widgets.map((w) => w.transform.position.x));
+                widgets.forEach((w) => { w.transform.position.x = minX; });
+                break;
+              }
+              case 'right': {
+                const maxR = Math.max(...widgets.map((w) => w.transform.position.x + w.transform.size.width));
+                widgets.forEach((w) => { w.transform.position.x = maxR - w.transform.size.width; });
+                break;
+              }
+              case 'top': {
+                const minY = Math.min(...widgets.map((w) => w.transform.position.y));
+                widgets.forEach((w) => { w.transform.position.y = minY; });
+                break;
+              }
+              case 'bottom': {
+                const maxB = Math.max(...widgets.map((w) => w.transform.position.y + w.transform.size.height));
+                widgets.forEach((w) => { w.transform.position.y = maxB - w.transform.size.height; });
+                break;
+              }
+              case 'centerH': {
+                const minX = Math.min(...widgets.map((w) => w.transform.position.x));
+                const maxR = Math.max(...widgets.map((w) => w.transform.position.x + w.transform.size.width));
+                const cx = (minX + maxR) / 2;
+                widgets.forEach((w) => { w.transform.position.x = cx - w.transform.size.width / 2; });
+                break;
+              }
+              case 'centerV': {
+                const minY = Math.min(...widgets.map((w) => w.transform.position.y));
+                const maxB = Math.max(...widgets.map((w) => w.transform.position.y + w.transform.size.height));
+                const cy = (minY + maxB) / 2;
+                widgets.forEach((w) => { w.transform.position.y = cy - w.transform.size.height / 2; });
+                break;
+              }
+              case 'distributeH': {
+                if (widgets.length < 3) return;
+                const sorted = [...widgets].sort((a, b) => a.transform.position.x - b.transform.position.x);
+                const first = sorted[0]!;
+                const last = sorted[sorted.length - 1]!;
+                const totalSpan = last.transform.position.x + last.transform.size.width - first.transform.position.x;
+                const widgetWidths = sorted.reduce((sum, w) => sum + w.transform.size.width, 0);
+                const gap = (totalSpan - widgetWidths) / (sorted.length - 1);
+                let cx = first.transform.position.x;
+                sorted.forEach((w) => {
+                  w.transform.position.x = cx;
+                  cx += w.transform.size.width + gap;
+                });
+                break;
+              }
+              case 'distributeV': {
+                if (widgets.length < 3) return;
+                const sorted = [...widgets].sort((a, b) => a.transform.position.y - b.transform.position.y);
+                const first = sorted[0]!;
+                const last = sorted[sorted.length - 1]!;
+                const totalSpan = last.transform.position.y + last.transform.size.height - first.transform.position.y;
+                const widgetHeights = sorted.reduce((sum, w) => sum + w.transform.size.height, 0);
+                const gap = (totalSpan - widgetHeights) / (sorted.length - 1);
+                let cy = first.transform.position.y;
+                sorted.forEach((w) => {
+                  w.transform.position.y = cy;
+                  cy += w.transform.size.height + gap;
+                });
+                break;
+              }
+            }
+            s.isDirty = true;
           }),
       })),
     ),

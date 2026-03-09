@@ -162,14 +162,14 @@ const WidgetLibraryPage: React.FC = () => {
       for (const catName of categoryEntries) {
         try {
           const cat = await widgetCategoryService.create({
-            name: `SCADA V2 — ${catName}`,
-            description: `Built-in ${catName.toLowerCase()} widgets from SCADA V2`,
+            name: `SCADA — ${catName}`,
+            description: `Built-in ${catName.toLowerCase()} widgets from SCADA`,
             icon: catName === 'Control' ? '🎛️' : catName === 'Display' ? '📊' : catName === 'Process' ? '⚙️' : '💡',
           });
           categoryIdMap.set(catName, cat.id);
         } catch {
           // Category may already exist — try to find it
-          const existing = await widgetCategoryService.list({ search: `SCADA V2 — ${catName}`, pageSize: 1 });
+          const existing = await widgetCategoryService.list({ search: `SCADA — ${catName}`, pageSize: 1 });
           const data = Array.isArray(existing) ? existing : existing.data ?? [];
           if (data.length > 0) {
             categoryIdMap.set(catName, data[0].id);
@@ -196,7 +196,7 @@ const WidgetLibraryPage: React.FC = () => {
         }
       }
 
-      alert(`Imported ${created} widget(s) from SCADA V2 successfully!`);
+      alert(`Imported ${created} widget(s) from SCADA successfully!`);
       loadCategories();
       loadWidgets();
     } catch (err) {

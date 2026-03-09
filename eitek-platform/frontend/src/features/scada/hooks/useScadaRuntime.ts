@@ -1,3 +1,7 @@
+﻿/**
+ * @deprecated V1 SCADA — This file belongs to the legacy V1 engine (Konva-based).
+ * Replaced by V2 engine in /engine/ and /core/. Scheduled for removal.
+ */
 'use client';
 
 import { useEffect, useRef, useCallback, useMemo } from 'react';

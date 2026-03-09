@@ -15,7 +15,6 @@ import {
   Search,
   Menu,
   X,
-  MonitorDot,
   Puzzle,
   Library,
   ImageIcon,
@@ -81,11 +80,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       href: '/projects',
       icon: <FolderTree className="w-5 h-5" />,
       label: 'Projects'
-    },
-    {
-      href: '/scada-v2/new',
-      icon: <MonitorDot className="w-5 h-5" />,
-      label: 'SCADA V2'
     },
     {
       href: '/templates',
