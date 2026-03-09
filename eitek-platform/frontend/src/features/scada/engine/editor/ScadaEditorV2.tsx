@@ -39,6 +39,29 @@ function ensureWidgets() {
   }
 }
 
+/**
+ * Generate a unique widget name with auto-incrementing number.
+ * E.g., "Button 1", "Button 2", or "Custom Widget 1", "Custom Widget 2"
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function generateUniqueWidgetName(baseName: string, existingWidgets: { name: string }[]): string {
+  const regex = new RegExp(`^${escapeRegex(baseName)}(?:\\s+(\\d+))?$`, 'i');
+  let maxNum = 0;
+  
+  for (const w of existingWidgets) {
+    const match = w.name.match(regex);
+    if (match) {
+      const num = match[1] ? parseInt(match[1], 10) : 0;
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  
+  return `${baseName} ${maxNum + 1}`;
+}
+
 interface ScadaEditorV2Props {
   /** Screen definition to load (e.g. from API). */
   screen?: ScreenDefinition;
@@ -140,7 +163,7 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
       const newWidget = {
         id: `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         type,
-        name: def.name,
+        name: generateUniqueWidgetName(def.name, screen.widgets),
         layerId: screen.layers[0]?.id ?? 'default',
         transform: {
           position: { x: 100, y: 100 },
@@ -197,7 +220,7 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
       const newWidget = {
         id: `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         type: 'customWidget',
-        name: widget.name || 'Custom Widget',
+        name: generateUniqueWidgetName(widget.name || 'Custom Widget', screen.widgets),
         layerId: screen.layers[0]?.id ?? 'default',
         transform: {
           position: { x: 100, y: 100 },

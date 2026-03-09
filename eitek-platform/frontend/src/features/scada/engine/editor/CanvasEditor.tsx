@@ -18,6 +18,29 @@ import type { AlignAction } from '../../stores/scadaRuntimeStore';
 import type { WidgetInstance } from '../../core/types';
 import '../../styles/scada.css';
 
+/**
+ * Generate a unique widget name with auto-incrementing number.
+ * E.g., "Button 1", "Button 2", or "Custom Widget 1", "Custom Widget 2"
+ */
+function generateUniqueWidgetName(baseName: string, existingWidgets: { name: string }[]): string {
+  const regex = new RegExp(`^${escapeRegex(baseName)}(?:\\s+(\\d+))?$`, 'i');
+  let maxNum = 0;
+  
+  for (const w of existingWidgets) {
+    const match = w.name.match(regex);
+    if (match) {
+      const num = match[1] ? parseInt(match[1], 10) : 0;
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  
+  return `${baseName} ${maxNum + 1}`;
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export const CanvasEditor: React.FC = () => {
   const screen = useScadaRuntimeStore((s) => s.screen);
   const selectedWidgetIds = useScadaRuntimeStore((s) => s.selectedWidgetIds);
@@ -127,7 +150,7 @@ export const CanvasEditor: React.FC = () => {
           const newWidget: WidgetInstance = {
             id: `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             type: 'customWidget',
-            name: libWidget.name || 'Custom Widget',
+            name: generateUniqueWidgetName(libWidget.name || 'Custom Widget', screen?.widgets ?? []),
             layerId: screen?.layers[0]?.id ?? 'default',
             transform: {
               position: { x, y },
@@ -160,7 +183,7 @@ export const CanvasEditor: React.FC = () => {
       const newWidget: WidgetInstance = {
         id: `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         type,
-        name: def.name,
+        name: generateUniqueWidgetName(def.name, screen?.widgets ?? []),
         layerId: screen?.layers[0]?.id ?? 'default',
         transform: {
           position: { x, y },
