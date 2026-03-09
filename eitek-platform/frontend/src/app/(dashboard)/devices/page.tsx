@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { DeviceFilters } from '@/features/devices/components/DeviceFilters';
 import { DeviceToolbar } from '@/features/devices/components/DeviceToolbar';
 import { DeviceCard } from '@/features/devices/components/DeviceCard';
@@ -11,6 +11,7 @@ import { DeleteDeviceModal } from '@/features/devices/components/DeleteDeviceMod
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { Button } from '@/shared/components/ui/Button';
 import { useDeviceStore } from '@/features/devices/stores/deviceStore';
+import { useProfileStore } from '@/features/profiles/stores/profileStore';
 import { useDevicesListRealtime } from '@/features/devices/hooks/useDeviceRealtime';
 
 const DevicesPage: React.FC = () => {
@@ -48,9 +49,23 @@ const DevicesPage: React.FC = () => {
 
   const updateDeviceRealtimeStatus = useDeviceStore(s => s.updateDeviceRealtimeStatus);
 
+  const { deviceProfiles, fetchDeviceProfiles } = useProfileStore();
+
+  // Build a lookup from TB device profile ID → profile image
+  const profileImageMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const profile of deviceProfiles) {
+      if (profile.id?.id && profile.image) {
+        map.set(profile.id.id, profile.image);
+      }
+    }
+    return map;
+  }, [deviceProfiles]);
+
   useEffect(() => {
     fetchDevices();
-  }, [fetchDevices]);
+    fetchDeviceProfiles({ pageSize: 100 });
+  }, [fetchDevices, fetchDeviceProfiles]);
 
   // Real-time device status updates via WebSocket
   const { connected: wsConnected } = useDevicesListRealtime({
@@ -182,6 +197,7 @@ const DevicesPage: React.FC = () => {
                     <DeviceCard
                       key={device.id}
                       device={device}
+                      profileImage={profileImageMap.get(device.metadata?.deviceProfileId as string)}
                       isSelected={selection.selectedIds.includes(device.id)}
                       isSelectable={true}
                       onToggleSelect={() => toggleDeviceSelection(device.id)}
@@ -260,6 +276,7 @@ const DevicesPage: React.FC = () => {
                       <DeviceListItem
                         key={device.id}
                         device={device}
+                        profileImage={profileImageMap.get(device.metadata?.deviceProfileId as string)}
                         isSelected={selection.selectedIds.includes(device.id)}
                         isSelectable={true}
                         onToggleSelect={() => toggleDeviceSelection(device.id)}

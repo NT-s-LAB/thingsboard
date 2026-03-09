@@ -115,6 +115,22 @@ export class ScadaViewsController {
     };
   }
 
+  @ApiOperation({ summary: 'Bulk update widgets on a SCADA view' })
+  @Put(':id/widgets/bulk')
+  async bulkUpdateWidgets(
+    @Param('id') viewId: string,
+    @Body() body: { widgets: any[] },
+    @CurrentUser() user: RequestUser,
+  ) {
+    const widgets = await this.scadaViewsService.bulkUpdateScadaWidgets(viewId, body.widgets ?? [], user);
+    return {
+      success: true,
+      message: 'Widgets updated successfully',
+      data: widgets,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   @ApiOperation({ summary: 'Update a widget on a SCADA view' })
   @Put(':id/widgets/:widgetId')
   async updateWidget(

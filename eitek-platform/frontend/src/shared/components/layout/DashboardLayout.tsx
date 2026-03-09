@@ -16,7 +16,11 @@ import {
   Menu,
   X,
   MonitorDot,
-  Puzzle
+  Puzzle,
+  Library,
+  ImageIcon,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
@@ -35,11 +39,29 @@ interface NavItem {
   badge?: string | number;
 }
 
+interface NavGroup {
+  icon: React.ReactNode;
+  label: string;
+  children: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+function isNavGroup(entry: NavEntry): entry is NavGroup {
+  return 'children' in entry;
+}
+
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
 
-  const navigation: NavItem[] = [
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({ Library: true });
+
+  const toggleGroup = (label: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const navigation: NavEntry[] = [
     {
       href: '/',
       icon: <Home className="w-5 h-5" />,
@@ -71,9 +93,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       label: 'Templates'
     },
     {
-      href: '/widget-library',
-      icon: <Puzzle className="w-5 h-5" />,
-      label: 'Widget Library'
+      icon: <Library className="w-5 h-5" />,
+      label: 'Library',
+      children: [
+        {
+          href: '/library/widgets',
+          icon: <Puzzle className="w-4 h-4" />,
+          label: 'Widget Library'
+        },
+        {
+          href: '/library/images',
+          icon: <ImageIcon className="w-4 h-4" />,
+          label: 'Image Library'
+        },
+      ],
     },
     {
       href: '/settings',
@@ -131,31 +164,75 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
 
       {/* Navigation */}
       <nav className="flex-1 p-4">
-        <ul className="space-y-2">
-          {navigation.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive(item.href)
-                    ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                    : 'text-gray-700 hover:bg-gray-100'
-                } ${isCollapsed ? 'justify-center' : 'justify-start'}`}
-              >
-                <span className={isCollapsed ? '' : 'mr-3'}>{item.icon}</span>
-                {!isCollapsed && (
-                  <>
-                    <span className="flex-1">{item.label}</span>
-                    {item.badge && (
-                      <span className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-600 rounded-full">
-                        {item.badge}
-                      </span>
+        <ul className="space-y-1">
+          {navigation.map((entry) => {
+            if (isNavGroup(entry)) {
+              const groupExpanded = expandedGroups[entry.label] ?? false;
+              const childActive = entry.children.some((c) => isActive(c.href));
+              return (
+                <li key={entry.label}>
+                  <button
+                    onClick={() => toggleGroup(entry.label)}
+                    className={`w-full flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      childActive ? 'text-primary-700' : 'text-gray-700 hover:bg-gray-100'
+                    } ${isCollapsed ? 'justify-center' : 'justify-start'}`}
+                  >
+                    <span className={isCollapsed ? '' : 'mr-3'}>{entry.icon}</span>
+                    {!isCollapsed && (
+                      <>
+                        <span className="flex-1 text-left">{entry.label}</span>
+                        {groupExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </>
                     )}
-                  </>
-                )}
-              </Link>
-            </li>
-          ))}
+                  </button>
+                  {!isCollapsed && groupExpanded && (
+                    <ul className="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-2">
+                      {entry.children.map((child) => (
+                        <li key={child.href}>
+                          <Link
+                            href={child.href}
+                            className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-colors ${
+                              isActive(child.href)
+                                ? 'bg-primary-50 text-primary-700 font-medium'
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            <span className="mr-2">{child.icon}</span>
+                            <span>{child.label}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            }
+            const item = entry;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive(item.href)
+                      ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  } ${isCollapsed ? 'justify-center' : 'justify-start'}`}
+                >
+                  <span className={isCollapsed ? '' : 'mr-3'}>{item.icon}</span>
+                  {!isCollapsed && (
+                    <>
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge && (
+                        <span className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-600 rounded-full">
+                          {item.badge}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </nav>
 

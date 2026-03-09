@@ -192,8 +192,8 @@ const initialEditorState: EditorState = {
   showRulers: true,
   showGuides: true,
   leftPanelWidth: 300,
-  rightPanelWidth: 300,
-  bottomPanelHeight: 200,
+  rightPanelWidth: 0,
+  bottomPanelHeight: 0,
   activeTool: 'select',
 };
 
@@ -286,11 +286,14 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
                 state.error = null;
               });
 
-              const dashboard = await scadaService.createDashboard(data);
+              const rawDashboard = await scadaService.createDashboard(data);
+              const dashboard = normalizeDashboard(rawDashboard);
 
               set((state) => {
-                state.dashboards.unshift(dashboard);
-                state.currentDashboard = dashboard;
+                if (dashboard) {
+                  state.dashboards.unshift(dashboard);
+                  state.currentDashboard = dashboard;
+                }
                 state.saving = false;
                 state.isCreateModalOpen = false;
               });
@@ -309,15 +312,21 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
                 state.error = null;
               });
 
-              const updatedDashboard = await scadaService.updateDashboard(data);
+              const rawDashboard = await scadaService.updateDashboard(data);
+              const updatedDashboard = normalizeDashboard(rawDashboard);
 
               set((state) => {
-                const index = state.dashboards.findIndex(d => d.id === data.id);
-                if (index !== -1) {
-                  state.dashboards[index] = updatedDashboard;
-                }
-                if (state.currentDashboard?.id === data.id) {
-                  state.currentDashboard = updatedDashboard;
+                if (updatedDashboard) {
+                  const index = state.dashboards.findIndex(d => d.id === data.id);
+                  if (index !== -1) {
+                    state.dashboards[index] = updatedDashboard;
+                  }
+                  if (state.currentDashboard?.id === data.id) {
+                    // Preserve the current widgets — the metadata save doesn't
+                    // return updated widget data, so keep in-memory widgets.
+                    updatedDashboard.widgets = state.currentDashboard?.widgets ?? [];
+                    state.currentDashboard = updatedDashboard;
+                  }
                 }
                 state.saving = false;
               });
@@ -326,6 +335,7 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
                 state.saving = false;
                 state.error = error instanceof Error ? error.message : 'Failed to update dashboard';
               });
+              throw error;
             }
           },
 
@@ -1146,22 +1156,19 @@ export const useScadaStore = create<ScadaState & ScadaActions>()(
       ),
       {
         name: 'scada-store',
+        version: 2,
         partialize: (state) => ({
           editorState: {
             showGrid: state.editorState.showGrid,
             snapToGrid: state.editorState.snapToGrid,
             showRulers: state.editorState.showRulers,
             showGuides: state.editorState.showGuides,
-            leftPanelWidth: state.editorState.leftPanelWidth,
-            rightPanelWidth: state.editorState.rightPanelWidth,
-            bottomPanelHeight: state.editorState.bottomPanelHeight,
           },
         }),
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<ScadaState>;
           return {
             ...currentState,
-            ...persisted,
             editorState: {
               ...currentState.editorState,
               ...(persisted.editorState ?? {}),

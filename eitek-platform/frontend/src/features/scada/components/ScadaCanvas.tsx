@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Stage, Layer, Rect, Circle, Line, Text, Group, Transformer, Arc, Arrow, Ellipse } from 'react-konva';
+import { Stage, Layer, Rect, Circle, Line, Text, Group, Transformer, Arc, Arrow, Ellipse, Image as KImage } from 'react-konva';
 import Konva from 'konva';
 import { useScadaStore } from '../stores/scadaStore';
 import type { Widget } from '../types';
@@ -96,6 +96,41 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
   } = useScadaStore();
 
   const [selectedShapes, setSelectedShapes] = useState<string[]>([]);
+
+  /* ── Image cache for widgets with onImageUrl / offImageUrl ── */
+  const [loadedImages, setLoadedImages] = useState<Record<string, HTMLImageElement>>({});
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+
+  /** Resolve image URL: handles full URLs, /uploads/ paths, and bare filenames */
+  const resolveImageUrl = (raw: string): string => {
+    if (!raw) return raw;
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
+    if (raw.startsWith('/')) return `${API_BASE}${raw}`;
+    // Bare filename (e.g. "abc.png") — assume /uploads/ prefix
+    return `${API_BASE}/uploads/${raw}`;
+  };
+
+  useEffect(() => {
+    const widgets: Widget[] = (currentDashboard as any)?.widgets ?? (currentDashboard as any)?.scadaWidgets ?? [];
+    const urls = new Set<string>();
+    for (const w of widgets) {
+      const p = w.properties as Record<string, any>;
+      if (p?.onImageUrl) urls.add(p.onImageUrl as string);
+      if (p?.offImageUrl) urls.add(p.offImageUrl as string);
+    }
+    // Load any new URLs not already cached
+    for (const url of Array.from(urls)) {
+      if (loadedImages[url]) continue;
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        setLoadedImages((prev) => ({ ...prev, [url]: img }));
+      };
+      img.onerror = () => { /* silently skip failed images */ };
+      img.src = resolveImageUrl(url);
+    }
+  }, [currentDashboard]);
+
 
   /* ── Keyboard shortcuts ── */
   useEffect(() => {
@@ -210,6 +245,12 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
     const stage = stageRef.current;
     if (!stage) return;
 
+    // In runtime mode: no zoom, no pan — fixed viewport only
+    if (isRuntimeMode) {
+      stage.on('wheel', (e) => { e.evt.preventDefault(); });
+      return () => { stage.off('wheel'); };
+    }
+
     const updateViewport = () => {
       const pos = stage.position();
       const scale = stage.scaleX();
@@ -234,7 +275,7 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
     });
 
     return () => { stage.off('dragend'); stage.off('wheel'); };
-  }, [width, height, setViewport]);
+  }, [width, height, setViewport, isRuntimeMode]);
 
   /* ── Transformer sync ── */
   useEffect(() => {
@@ -418,14 +459,38 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
       case 'switch': {
         const rtVal = isRuntimeMode ? resolveBindingValue(w, realtimeData) : undefined;
         const isOn = rtVal !== undefined ? Boolean(rtVal) && rtVal !== '0' && rtVal !== 'false' : true;
+        const onImg = p.onImageUrl as string | undefined;
+        const offImg = p.offImageUrl as string | undefined;
+        const imgUrl = isOn ? onImg : offImg;
+
+        // If a PNG image is set for the current state, render it
+        if (imgUrl && loadedImages[imgUrl]) {
+          return (
+            <Group key={w.id} {...cp}>
+              <KImage image={loadedImages[imgUrl]} x={0} y={0} width={W} height={H} />
+            </Group>
+          );
+        }
+
+        // Default switch graphics (track + knob + label)
         const trackW = W, trackH = H;
         const knobR = Math.min(trackH / 2 - 2, trackW / 4);
         const bg = isOn ? (p.onColor || '#22C55E') : (p.offColor || '#9CA3AF');
         return (
           <Group key={w.id} {...cp}>
-            <Rect width={trackW} height={trackH} fill={bg} cornerRadius={trackH / 2} />
-            <Circle x={isOn ? trackW - knobR - 3 : knobR + 3} y={trackH / 2} radius={knobR} fill="#FFFFFF" shadowBlur={2} shadowColor="rgba(0,0,0,0.2)" />
-            <Text text={isOn ? (p.onLabel || 'ON') : (p.offLabel || 'OFF')} fontSize={Math.max(8, trackH * 0.3)} fontFamily="Arial" fill="#FFFFFF" align="center" verticalAlign="middle" x={isOn ? 0 : trackW / 2} y={0} width={trackW / 2} height={trackH} />
+            {imgUrl && !loadedImages[imgUrl] && (
+              <>
+                <Rect width={trackW} height={trackH} fill="#F3F4F6" stroke="#D1D5DB" strokeWidth={1} dash={[4, 4]} cornerRadius={4} />
+                <Text text="Loading..." width={trackW} height={trackH} align="center" verticalAlign="middle" fontSize={10} fill="#9CA3AF" />
+              </>
+            )}
+            {!imgUrl && (
+              <>
+                <Rect width={trackW} height={trackH} fill={bg} cornerRadius={trackH / 2} />
+                <Circle x={isOn ? trackW - knobR - 3 : knobR + 3} y={trackH / 2} radius={knobR} fill="#FFFFFF" shadowBlur={2} shadowColor="rgba(0,0,0,0.2)" />
+                <Text text={isOn ? (p.onLabel || 'ON') : (p.offLabel || 'OFF')} fontSize={Math.max(8, trackH * 0.3)} fontFamily="Arial" fill="#FFFFFF" align="center" verticalAlign="middle" x={isOn ? 0 : trackW / 2} y={0} width={trackW / 2} height={trackH} />
+              </>
+            )}
           </Group>
         );
       }
@@ -818,10 +883,11 @@ export const ScadaCanvas: React.FC<ScadaCanvasProps> = ({ width, height }) => {
   const bg: string = (currentDashboard as any)?.backgroundColor || '#FFFFFF';
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-gray-200">
+    <div className={`relative w-full h-full overflow-hidden ${isRuntimeMode ? '' : 'bg-gray-200'}`}
+         style={isRuntimeMode ? { backgroundColor: bg } : undefined}>
       <Stage ref={stageRef} width={width} height={height} draggable={!isRuntimeMode} onClick={handleStageClick} onDragEnd={() => {}} scale={{ x: zoom, y: zoom }} x={-vp.x * zoom} y={-vp.y * zoom}>
         <Layer>
-          <Rect x={0} y={0} width={dashW} height={dashH} fill={bg} shadowBlur={8} shadowColor="rgba(0,0,0,0.08)" />
+          <Rect x={0} y={0} width={dashW} height={dashH} fill={bg} {...(isRuntimeMode ? {} : { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.08)' })} />
           {renderGrid()}
         </Layer>
         {layers.map((layer: any) => (

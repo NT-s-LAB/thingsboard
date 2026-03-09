@@ -41,7 +41,16 @@ class ScadaService {
   }
 
   async updateDashboard(data: DashboardUpdateRequest): Promise<ScadaDashboard> {
-    const response = await apiClient.put<ScadaDashboard>(`/scada-views/${data.id}`, data);
+    // Only send fields the backend UpdateScadaViewDto accepts, strip id and extra props
+    const { id, ...rest } = data;
+    const payload: Record<string, unknown> = {};
+    const allowedKeys = ['name', 'description', 'layout', 'background', 'canvasSize', 'settings', 'isActive'];
+    for (const key of allowedKeys) {
+      if ((rest as any)[key] !== undefined) {
+        payload[key] = (rest as any)[key];
+      }
+    }
+    const response = await apiClient.put<ScadaDashboard>(`/scada-views/${id}`, payload);
     return response;
   }
 
@@ -116,7 +125,27 @@ class ScadaService {
   }
 
   async bulkUpdateWidgets(dashboardId: string, widgets: Widget[]): Promise<Widget[]> {
-    const response = await apiClient.put<Widget[]>(`/scada-views/${dashboardId}/widgets/bulk`, { widgets });
+    // Transform FE widget shapes to BE DTO shape
+    const payloadWidgets = widgets.map((widget) => {
+      const w = widget as any;
+      const item: Record<string, any> = { id: w.id };
+      if (w.transform) {
+        item.position = {
+          x: w.transform.position?.x ?? 0,
+          y: w.transform.position?.y ?? 0,
+          width: w.transform.size?.width ?? 100,
+          height: w.transform.size?.height ?? 50,
+          rotation: w.transform.rotation ?? 0,
+          zIndex: w.transform.zIndex ?? 0,
+        };
+      }
+      if (w.properties) item.properties = w.properties;
+      if (w.style) item.styles = w.style;
+      if (w.dataBindings) item.bindings = { items: w.dataBindings };
+      if (w.visible !== undefined) item.isVisible = w.visible;
+      return item;
+    });
+    const response = await apiClient.put<Widget[]>(`/scada-views/${dashboardId}/widgets/bulk`, { widgets: payloadWidgets });
     return response;
   }
 

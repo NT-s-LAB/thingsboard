@@ -7,6 +7,7 @@ import { PropertyPanel } from '@/features/scada/components/PropertyPanel';
 import { Button } from '@/shared/components/ui/Button';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { useScadaStore } from '@/features/scada/stores/scadaStore';
+import { scadaService } from '@/features/scada/services/scadaService';
 import { useScadaRuntime } from '@/features/scada/hooks/useScadaRuntime';
 
 interface ScadaEditorPageProps {
@@ -25,6 +26,7 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
     
     // Actions
     fetchDashboard,
+    updateDashboard,
     setEditorMode,
     startRuntime,
     stopRuntime,
@@ -37,11 +39,12 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Store pre-fullscreen state so we can restore on exit
-  const preFullscreenState = useRef<{
-    viewport: { position: { x: number; y: number }; zoom: number };
-    wasRuntime: boolean;
+  // Store pre-runtime/fullscreen viewport so we can restore on exit
+  const preRuntimeViewport = useRef<{
+    position: { x: number; y: number };
+    zoom: number;
   } | null>(null);
+  const wasRuntimeBeforeFullscreen = useRef(false);
 
   // Activate runtime telemetry subscriptions
   useScadaRuntime();
@@ -70,62 +73,91 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [updateCanvasSize]);
+  }, [updateCanvasSize, loading]);
 
   const handleToggleRuntime = () => {
     if (isRuntimeMode) {
       stopRuntime();
+      // Restore pre-runtime viewport
+      if (preRuntimeViewport.current) {
+        setViewport({
+          position: preRuntimeViewport.current.position,
+          zoom: preRuntimeViewport.current.zoom,
+        });
+        preRuntimeViewport.current = null;
+      }
     } else {
+      // Save current viewport before switching to runtime
+      preRuntimeViewport.current = {
+        position: { ...(editorState?.viewport?.position ?? { x: 0, y: 0 }) },
+        zoom: editorState?.viewport?.zoom ?? 1,
+      };
       startRuntime();
     }
   };
 
-  const handleSave = () => {
-    // TODO: Implement save functionality
-    console.log('Save dashboard');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  const handleSave = async () => {
+    if (!currentDashboard) return;
+    setSaveStatus('saving');
+    try {
+      // 1. Save dashboard metadata – only send fields the backend DTO accepts
+      const { id, name, description, layout, background, canvasSize, settings, isActive } = currentDashboard as any;
+      await updateDashboard({ id, name, description, layout, background, canvasSize, settings, isActive });
+
+      // 2. Save all widget changes (properties, position, style, bindings)
+      const widgets = (currentDashboard as any)?.widgets ?? [];
+      if (widgets.length > 0) {
+        await scadaService.bulkUpdateWidgets(currentDashboard.id, widgets);
+      }
+
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error('Save failed:', err);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
   };
 
-  // Auto-fit the dashboard canvas into the viewport
-  const fitDashboardToViewport = useCallback(() => {
-    const cs = currentDashboard?.canvasSize as { width?: number; height?: number } | undefined;
+  // Reactively center & fit the dashboard whenever runtime is active and container size changes.
+  // This replaces fragile setTimeout+rAF: the ResizeObserver updates canvasSize,
+  // which triggers this effect, guaranteeing the container has its final dimensions.
+  useEffect(() => {
+    if (!isRuntimeMode || !currentDashboard) return;
+
+    const cs = currentDashboard.canvasSize as { width?: number; height?: number } | undefined;
     const dashW = cs?.width || 1920;
     const dashH = cs?.height || 1080;
+    const viewW = canvasSize.width;
+    const viewH = canvasSize.height;
+    if (viewW <= 0 || viewH <= 0) return;
 
-    // Use a small delay to let the ResizeObserver measure the new fullscreen container size
-    requestAnimationFrame(() => {
-      const el = canvasContainerRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const viewW = rect.width;
-      const viewH = rect.height;
-      if (viewW <= 0 || viewH <= 0) return;
+    // Scale to fit the viewport — scale up or down as needed
+    const zoom = Math.min(viewW / dashW, viewH / dashH);
 
-      const scaleX = viewW / dashW;
-      const scaleY = viewH / dashH;
-      const zoom = Math.min(scaleX, scaleY);
+    // Center the dashboard in the viewport
+    const offsetX = (viewW / zoom - dashW) / 2;
+    const offsetY = (viewH / zoom - dashH) / 2;
 
-      // Center the dashboard in the viewport
-      const offsetX = (viewW / zoom - dashW) / 2;
-      const offsetY = (viewH / zoom - dashH) / 2;
-
-      setViewport({
-        position: { x: -offsetX, y: -offsetY },
-        zoom,
-        size: { width: viewW, height: viewH },
-      });
+    setViewport({
+      position: { x: -offsetX, y: -offsetY },
+      zoom,
+      size: { width: viewW, height: viewH },
     });
-  }, [currentDashboard, setViewport]);
+  }, [isRuntimeMode, canvasSize.width, canvasSize.height, currentDashboard, setViewport]);
 
   const handleToggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      // Save pre-fullscreen state
-      preFullscreenState.current = {
-        viewport: {
+      // Save viewport + runtime state before fullscreen
+      wasRuntimeBeforeFullscreen.current = isRuntimeMode;
+      if (!preRuntimeViewport.current) {
+        preRuntimeViewport.current = {
           position: { ...(editorState?.viewport?.position ?? { x: 0, y: 0 }) },
           zoom: editorState?.viewport?.zoom ?? 1,
-        },
-        wasRuntime: isRuntimeMode,
-      };
+        };
+      }
 
       // Enter runtime mode for clean dashboard view
       if (!isRuntimeMode) {
@@ -134,27 +166,23 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
 
       fullscreenContainerRef.current?.requestFullscreen().catch(() => {});
       setIsFullscreen(true);
-
-      // Fit the dashboard after fullscreen settles
-      setTimeout(fitDashboardToViewport, 150);
     } else {
       document.exitFullscreen().catch(() => {});
       setIsFullscreen(false);
 
       // Restore pre-fullscreen state
-      if (preFullscreenState.current) {
-        const prev = preFullscreenState.current;
+      if (preRuntimeViewport.current) {
         setViewport({
-          position: prev.viewport.position,
-          zoom: prev.viewport.zoom,
+          position: preRuntimeViewport.current.position,
+          zoom: preRuntimeViewport.current.zoom,
         });
-        if (!prev.wasRuntime && isRuntimeMode) {
-          stopRuntime();
-        }
-        preFullscreenState.current = null;
+        preRuntimeViewport.current = null;
+      }
+      if (!wasRuntimeBeforeFullscreen.current && isRuntimeMode) {
+        stopRuntime();
       }
     }
-  }, [editorState?.viewport, isRuntimeMode, startRuntime, stopRuntime, setViewport, fitDashboardToViewport]);
+  }, [editorState?.viewport, isRuntimeMode, startRuntime, stopRuntime, setViewport]);
 
   // Sync fullscreen state when user presses Escape to exit
   useEffect(() => {
@@ -162,27 +190,50 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
       const fs = !!document.fullscreenElement;
       setIsFullscreen(fs);
 
-      if (!fs && preFullscreenState.current) {
-        // Restore viewport + runtime state when exiting via Escape or browser controls
-        const prev = preFullscreenState.current;
-        setViewport({
-          position: prev.viewport.position,
-          zoom: prev.viewport.zoom,
-        });
-        if (!prev.wasRuntime) {
+      if (!fs) {
+        // Restore viewport + runtime state when exiting fullscreen
+        if (preRuntimeViewport.current) {
+          setViewport({
+            position: preRuntimeViewport.current.position,
+            zoom: preRuntimeViewport.current.zoom,
+          });
+          preRuntimeViewport.current = null;
+        }
+        if (!wasRuntimeBeforeFullscreen.current) {
           stopRuntime();
         }
-        preFullscreenState.current = null;
-      }
-
-      if (fs) {
-        // Re-fit when fullscreen is activated
-        setTimeout(fitDashboardToViewport, 150);
       }
     };
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
-  }, [setViewport, stopRuntime, fitDashboardToViewport]);
+  }, [setViewport, stopRuntime]);
+
+  // Prevent browser-level zoom (Ctrl+wheel, pinch, gesture) on canvas during runtime
+  useEffect(() => {
+    if (!isRuntimeMode) return;
+    const el = canvasContainerRef.current;
+    if (!el) return;
+
+    const preventZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
+    };
+    const preventGesture = (e: Event) => { e.preventDefault(); };
+    const preventTouchZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
+
+    el.addEventListener('wheel', preventZoom, { passive: false });
+    el.addEventListener('gesturestart', preventGesture, { passive: false } as any);
+    el.addEventListener('gesturechange', preventGesture, { passive: false } as any);
+    el.addEventListener('touchmove', preventTouchZoom, { passive: false });
+
+    return () => {
+      el.removeEventListener('wheel', preventZoom);
+      el.removeEventListener('gesturestart', preventGesture);
+      el.removeEventListener('gesturechange', preventGesture);
+      el.removeEventListener('touchmove', preventTouchZoom);
+    };
+  }, [isRuntimeMode]);
 
   if (loading) {
     return (
@@ -249,8 +300,8 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
         </div>
 
         <div className="flex items-center space-x-2">
-          <Button size="sm" variant="outline" onClick={handleSave}>
-            💾 Save
+          <Button size="sm" variant={saveStatus === 'error' ? 'destructive' : saveStatus === 'saved' ? 'default' : 'outline'} onClick={handleSave} disabled={saveStatus === 'saving'}>
+            {saveStatus === 'saving' ? '⏳ Saving…' : saveStatus === 'saved' ? '✅ Saved!' : saveStatus === 'error' ? '❌ Failed' : '💾 Save'}
           </Button>
           <Button size="sm" variant="outline" onClick={handleToggleFullscreen} title="Fullscreen (F11)">
             {isFullscreen ? '⊡ Exit Fullscreen' : '⛶ Fullscreen'}
@@ -290,16 +341,18 @@ const ScadaEditorPage: React.FC<ScadaEditorPageProps> = ({ params }) => {
         {/* Left Panel - Widget Palette */}
         {(editorState?.leftPanelWidth ?? 0) > 0 && !(isFullscreen && isRuntimeMode) && (
           <div 
-            className="bg-white border-r border-gray-200 flex-shrink-0"
+            className="bg-white border-r border-gray-200 flex-shrink-0 flex flex-col"
             style={{ width: editorState?.leftPanelWidth ?? 300 }}
           >
-            <WidgetPalette />
+            <div className="flex-1 overflow-hidden">
+              <WidgetPalette />
+            </div>
           </div>
         )}
 
         {/* Canvas Area */}
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 relative" ref={canvasContainerRef}>
+          <div className="flex-1 relative overflow-hidden" ref={canvasContainerRef}>
             <ScadaCanvasWrapper
               width={canvasSize.width}
               height={canvasSize.height}

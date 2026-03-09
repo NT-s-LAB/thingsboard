@@ -15,6 +15,13 @@ import { CreateWidgetDto } from './dto/create-widget.dto';
 import { UpdateWidgetDto } from './dto/update-widget.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { IsOptional, IsString } from 'class-validator';
+
+class FindAllWidgetsQueryDto extends PaginationDto {
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+}
 
 @ApiTags('Widgets')
 @ApiBearerAuth()
@@ -38,10 +45,9 @@ export class WidgetsController {
   @ApiOperation({ summary: 'Get all widgets with pagination' })
   @Get()
   async findAll(
-    @Query() pagination: PaginationDto,
-    @Query('categoryId') categoryId?: string,
+    @Query() query: FindAllWidgetsQueryDto,
   ) {
-    const result = await this.widgetsService.findAll(pagination, categoryId);
+    const result = await this.widgetsService.findAll(query, query.categoryId);
     return {
       success: true,
       message: 'Widgets retrieved successfully',

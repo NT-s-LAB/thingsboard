@@ -289,7 +289,7 @@ export interface ContainerWidget extends BaseWidget {
 
 export interface SwitchWidget extends BaseWidget {
   type: 'switch';
-  properties: { onLabel: string; offLabel: string; onValue: any; offValue: any; onColor: string; offColor: string; rpcMethod?: string; telemetryKey?: string; attributeKey?: string; };
+  properties: { onLabel: string; offLabel: string; onValue: any; offValue: any; onColor: string; offColor: string; rpcMethod?: string; telemetryKey?: string; attributeKey?: string; onImageUrl?: string; offImageUrl?: string; };
 }
 
 export interface SliderWidget extends BaseWidget {

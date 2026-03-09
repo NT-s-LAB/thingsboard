@@ -2,26 +2,36 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   
   const configService = app.get(ConfigService);
   
+  // CORS (before static assets so headers apply to file responses too)
+  const frontendUrl = configService.get('FRONTEND_URL') || 'http://localhost:3000';
+  const corsOrigins = configService.get('CORS_ORIGINS');
+  const origins = corsOrigins
+    ? corsOrigins.split(',').map((o: string) => o.trim())
+    : [frontendUrl, 'http://192.168.1.68'];
+  app.enableCors({
+    origin: origins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
+  // Serve uploaded files statically
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
+
   // Global pipes
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,
     transform: true,
   }));
-
-  // CORS
-  app.enableCors({
-    origin: configService.get('FRONTEND_URL') || 'http://localhost:3000',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  });
 
   // Swagger documentation
   const config = new DocumentBuilder()

@@ -38,6 +38,11 @@ export class CreateDeviceProfileDto {
     alarms?: any[];
   };
 
+  @ApiPropertyOptional({ description: 'Profile icon/image URL' })
+  @IsOptional()
+  @IsString()
+  image?: string;
+
   @ApiPropertyOptional({ description: 'Is default profile' })
   @IsOptional()
   @IsBoolean()
@@ -79,6 +84,11 @@ export class UpdateDeviceProfileDto {
     provisionConfiguration?: any;
     alarms?: any[];
   };
+
+  @ApiPropertyOptional({ description: 'Profile icon/image URL' })
+  @IsOptional()
+  @IsString()
+  image?: string;
 
   @ApiPropertyOptional({ description: 'Is default profile' })
   @IsOptional()

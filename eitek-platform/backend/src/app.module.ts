@@ -18,6 +18,7 @@ import { SymbolsModule } from './modules/symbols/symbols.module';
 import { ThingsBoardIntegrationModule } from './modules/thingsboard-integration/thingsboard-integration.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { FilesModule } from './modules/files/files.module';
+import { ImageLibraryModule } from './modules/image-library/image-library.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import thingsBoardConfig from './config/thingsboard.config';
@@ -58,6 +59,7 @@ import thingsBoardConfig from './config/thingsboard.config';
     // Infrastructure
     RealtimeModule,
     FilesModule,
+    ImageLibraryModule,
   ],
 })
 export class AppModule {}

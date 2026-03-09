@@ -398,21 +398,41 @@ model WidgetTemplate {
 // FILE MANAGEMENT
 // ================================
 
+model ImageCategory {
+  id          String           @id @default(uuid())
+  name        String
+  description String?
+  icon        String?
+  order       Int              @default(0)
+  isActive    Boolean          @default(true)
+  parentId    String?
+  parent      ImageCategory?   @relation("ImageCategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    ImageCategory[]  @relation("ImageCategoryTree")
+  files       File[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([name, parentId])
+  @@map("image_categories")
+}
+
 model File {
-  id           String   @id @default(uuid())
-  filename     String
-  originalName String
-  mimetype     String
-  size         Int
-  type         FileType
-  path         String
-  url          String?
-  metadata     Json?
-  isPublic     Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  uploadedBy   String
-  uploader     User     @relation("FileUploader", fields: [uploadedBy], references: [id])
+  id              String          @id @default(uuid())
+  filename        String
+  originalName    String
+  mimetype        String
+  size            Int
+  type            FileType
+  path            String
+  url             String?
+  metadata        Json?
+  isPublic        Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  uploadedBy      String
+  uploader        User            @relation("FileUploader", fields: [uploadedBy], references: [id])
+  imageCategoryId String?
+  imageCategory   ImageCategory?  @relation(fields: [imageCategoryId], references: [id], onDelete: SetNull)
 
   @@map("files")
 }

@@ -52,6 +52,7 @@ export class ProfilesService {
       const profile: Partial<TbDeviceProfile> = {
         name: dto.name,
         description: dto.description,
+        image: dto.image,
         type: 'DEFAULT',
         transportType: dto.transportType || 'DEFAULT',
         provisionType: dto.provisionType || 'DISABLED',
@@ -76,6 +77,7 @@ export class ProfilesService {
         ...existing,
         name: dto.name ?? existing.name,
         description: dto.description ?? existing.description,
+        image: dto.image !== undefined ? dto.image : existing.image,
         transportType: dto.transportType ?? existing.transportType,
         provisionType: dto.provisionType ?? existing.provisionType,
         profileData: dto.profileData ?? existing.profileData,

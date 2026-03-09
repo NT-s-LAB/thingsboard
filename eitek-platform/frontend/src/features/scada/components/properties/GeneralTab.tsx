@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Section, Field, inputCls, selectCls, numCls, checkCls, colorCls } from '../PropertyPanel';
+import { ImageUploadField } from './ImageUploadField';
 import type { Widget, WidgetType } from '../../types';
 
 interface GeneralTabProps {
@@ -176,6 +177,13 @@ const WidgetTypeProperties: React.FC<{
             <Field label="ON Color"><input type="color" className={colorCls} value={properties.onColor || '#22C55E'} onChange={(e) => onChange('onColor', e.target.value)} /></Field>
             <Field label="OFF Color"><input type="color" className={colorCls} value={properties.offColor || '#9CA3AF'} onChange={(e) => onChange('offColor', e.target.value)} /></Field>
           </div>
+          <Section title="State Images (PNG)" defaultOpen={false}>
+            <div className="grid grid-cols-2 gap-2">
+              <ImageUploadField label="ON Image" value={properties.onImageUrl} onChange={(url) => onChange('onImageUrl', url)} />
+              <ImageUploadField label="OFF Image" value={properties.offImageUrl} onChange={(url) => onChange('offImageUrl', url)} />
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">When images are set, they replace the default switch graphics.</p>
+          </Section>
           <Field label="RPC Method"><input className={inputCls} value={properties.rpcMethod || ''} placeholder="setSwitch" onChange={(e) => onChange('rpcMethod', e.target.value)} /></Field>
           <Field label="Telemetry Key"><input className={inputCls} value={properties.telemetryKey || ''} placeholder="switchState" onChange={(e) => onChange('telemetryKey', e.target.value)} /></Field>
           <Field label="Attribute Key"><input className={inputCls} value={properties.attributeKey || ''} placeholder="switchConfig" onChange={(e) => onChange('attributeKey', e.target.value)} /></Field>

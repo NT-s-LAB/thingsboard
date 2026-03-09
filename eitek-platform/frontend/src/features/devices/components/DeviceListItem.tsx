@@ -8,6 +8,7 @@ import { getDeviceStatus, getDeviceTypeName } from '../types';
 
 interface DeviceListItemProps {
   device: Device;
+  profileImage?: string | undefined;
   onSelect?: (device: Device) => void;
   onEdit?: (device: Device) => void;
   onDelete?: (device: Device) => void;
@@ -21,6 +22,7 @@ interface DeviceListItemProps {
 
 export const DeviceListItem: React.FC<DeviceListItemProps> = ({
   device,
+  profileImage,
   onSelect: _onSelect,
   onEdit,
   onDelete,
@@ -82,15 +84,20 @@ export const DeviceListItem: React.FC<DeviceListItemProps> = ({
 
       {/* Device Name */}
       <td className="px-6 py-4">
-        <div>
-          <div className="font-semibold text-gray-900">
-            {device.name}
-          </div>
-          {device.description && (
-            <div className="text-sm text-gray-600">
-              {device.description}
-            </div>
+        <div className="flex items-center space-x-3">
+          {profileImage && (
+            <img src={profileImage} alt={device.name} className="w-7 h-7 rounded object-cover flex-shrink-0" />
           )}
+          <div>
+            <div className="font-semibold text-gray-900">
+              {device.name}
+            </div>
+            {device.description && (
+              <div className="text-sm text-gray-600">
+                {device.description}
+              </div>
+            )}
+          </div>
         </div>
       </td>
 

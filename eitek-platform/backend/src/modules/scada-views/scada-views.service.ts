@@ -370,6 +370,33 @@ export class ScadaViewsService {
     await this.prisma.scadaWidget.delete({ where: { id: scadaWidgetId } });
   }
 
+  async bulkUpdateScadaWidgets(viewId: string, widgets: any[], user: RequestUser) {
+    await this.findOne(viewId, user);
+
+    const results = [];
+    for (const w of widgets) {
+      if (!w.id) continue;
+      const existing = await this.prisma.scadaWidget.findFirst({
+        where: { id: w.id, scadaViewId: viewId },
+      });
+      if (!existing) continue;
+
+      const updated = await this.prisma.scadaWidget.update({
+        where: { id: w.id },
+        data: {
+          position: w.position ?? undefined,
+          properties: w.properties ?? undefined,
+          bindings: w.bindings ?? undefined,
+          styles: w.styles ?? undefined,
+          isVisible: w.isVisible ?? undefined,
+        },
+        include: { widget: true },
+      });
+      results.push(this.transformScadaWidgetToFE(updated));
+    }
+    return results;
+  }
+
   async duplicateScadaWidget(viewId: string, scadaWidgetId: string, user: RequestUser) {
     await this.findOne(viewId, user);
 

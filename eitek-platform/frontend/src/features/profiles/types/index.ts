@@ -38,6 +38,7 @@ export interface DeviceProfileData {
 export interface DeviceProfileCreateRequest {
   name: string;
   description?: string | undefined;
+  image?: string | undefined;
   transportType?: string | undefined;
   provisionType?: string | undefined;
   profileData?: DeviceProfileData | undefined;
@@ -46,6 +47,7 @@ export interface DeviceProfileCreateRequest {
 export interface DeviceProfileUpdateRequest {
   name?: string | undefined;
   description?: string | undefined;
+  image?: string | undefined;
   transportType?: string | undefined;
   provisionType?: string | undefined;
   profileData?: DeviceProfileData | undefined;

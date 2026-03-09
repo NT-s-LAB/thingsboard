@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
+import { ImagePickerDialog } from '@/shared/components/ImagePickerDialog';
 import { useProfileStore } from '../stores/profileStore';
 import type { DeviceProfileCreateRequest } from '../types';
 import { TRANSPORT_TYPES, PROVISION_TYPES } from '../types';
@@ -15,9 +16,11 @@ export const CreateDeviceProfileModal: React.FC = () => {
     description: '',
     transportType: 'DEFAULT',
     provisionType: 'DISABLED',
+    image: '',
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [showImagePicker, setShowImagePicker] = useState(false);
 
   useEffect(() => {
     if (isCreateDeviceProfileModalOpen) {
@@ -26,6 +29,7 @@ export const CreateDeviceProfileModal: React.FC = () => {
         description: '',
         transportType: 'DEFAULT',
         provisionType: 'DISABLED',
+        image: '',
       });
       setFormErrors({});
     }
@@ -48,6 +52,7 @@ export const CreateDeviceProfileModal: React.FC = () => {
       provisionType: formData.provisionType || 'DISABLED',
     };
     if (formData.description?.trim()) submitData.description = formData.description.trim();
+    if (formData.image) submitData.image = formData.image;
 
     await createDeviceProfile(submitData);
   };
@@ -84,6 +89,38 @@ export const CreateDeviceProfileModal: React.FC = () => {
               placeholder="Enter profile name"
             />
             {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
+          </div>
+
+          {/* Profile Icon */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Profile Icon
+            </label>
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden flex-shrink-0">
+                {formData.image ? (
+                  <img src={formData.image} alt="Profile icon" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowImagePicker(true)}>
+                  📂 Select from Library
+                </Button>
+                {formData.image && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, image: '' })}
+                    className="text-xs text-red-500 hover:text-red-700 text-left"
+                  >
+                    ✕ Remove icon
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div>
@@ -139,6 +176,12 @@ export const CreateDeviceProfileModal: React.FC = () => {
           </div>
         </form>
       </div>
+
+      <ImagePickerDialog
+        open={showImagePicker}
+        onClose={() => setShowImagePicker(false)}
+        onPick={(url) => { setFormData({ ...formData, image: url }); setShowImagePicker(false); }}
+      />
     </div>
   );
 };

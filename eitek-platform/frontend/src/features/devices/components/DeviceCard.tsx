@@ -8,6 +8,7 @@ import { getDeviceStatus, getDeviceTypeName } from '../types';
 
 interface DeviceCardProps {
   device: Device;
+  profileImage?: string | undefined;
   onSelect?: (device: Device) => void;
   onEdit?: (device: Device) => void;
   onDelete?: (device: Device) => void;
@@ -39,6 +40,7 @@ const categoryIcons: Record<string, string> = {
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({
   device,
+  profileImage,
   onSelect: _onSelect,
   onEdit,
   onDelete,
@@ -94,7 +96,11 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             />
           )}
           <div className="flex items-center space-x-2">
-            <span className="text-2xl">{typeIcon}</span>
+            {profileImage ? (
+              <img src={profileImage} alt={device.name} className="w-8 h-8 rounded object-cover" />
+            ) : (
+              <span className="text-2xl">{typeIcon}</span>
+            )}
             <div>
               <h3 className="font-semibold text-gray-900 truncate">
                 {device.name}
