@@ -18,6 +18,9 @@ class AuthService {
     if (loginResponse.token) {
       apiClient.setToken(loginResponse.token);
     }
+    if (loginResponse.refreshToken) {
+      apiClient.setRefreshToken(loginResponse.refreshToken);
+    }
     
     return loginResponse;
   }

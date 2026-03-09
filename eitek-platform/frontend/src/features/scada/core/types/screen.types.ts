@@ -70,6 +70,9 @@ export interface ScreenDefinition {
   /** Screen-level variables (e.g. selectedDevice) */
   variables: ScreenVariable[];
 
+  /** Multi-window / sub-screen definitions */
+  windows?: ScadaWindow[];
+
   /** Metadata — timestamps, creator, tags */
   metadata: ScreenMetadata;
 }
@@ -102,6 +105,32 @@ export interface ScreenMetadata {
   areaId?: string;
 }
 
+// ─── Windows (Sub-Screens) ───────────────────────────────────────────────────
+
+/**
+ * A ScadaWindow is a sub-screen / overlay that can be shown via navigation
+ * actions on widgets (e.g. click button → open pop-up window).
+ *
+ * Each window has its own set of widgets, layers, background, and canvas size.
+ * One window is designated as `isMain` — the primary visible screen on load.
+ */
+export interface ScadaWindow {
+  /** Unique within the ScreenDefinition */
+  id: string;
+  /** User-visible name */
+  name: string;
+  /** Only one window can be "main" — the default screen shown on load */
+  isMain: boolean;
+  /** Canvas size for this window */
+  canvasSize: Size;
+  /** Background for this window */
+  background: ScreenBackground;
+  /** Layers within this window */
+  layers: ScreenLayer[];
+  /** Widgets placed in this window */
+  widgets: WidgetInstance[];
+}
+
 // ─── Widget Instance ─────────────────────────────────────────────────────────
 
 /**
@@ -130,6 +159,9 @@ export interface WidgetInstance {
 
   /** Interactive actions (onClick → rpcCall, navigate, etc.) */
   actions: WidgetActionInstance[];
+
+  /** Event-action bindings for the new multi-page event system */
+  events?: import('./project.types').WidgetEvent[];
 
   /** If the widget renders a user-uploaded SVG */
   svgAssetId?: string;
@@ -244,6 +276,8 @@ export interface WidgetActionInstance {
 export interface ActionConfig {
   // navigate
   targetScreenId?: string;
+  /** Navigate to a window within the same screen */
+  targetWindowId?: string;
   url?: string;
   openInNewTab?: boolean;
 

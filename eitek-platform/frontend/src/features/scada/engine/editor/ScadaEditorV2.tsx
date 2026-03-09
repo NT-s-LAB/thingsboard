@@ -9,16 +9,22 @@
 
 import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
+import { useScadaProjectStore } from '../../stores/scadaProjectStore';
 import { widgetRegistry } from '../../core/registry';
 import { registerBuiltinWidgets } from '../../widgets/definitions';
+import { useSyncProjectToRuntime } from '../../hooks/useSyncProjectToRuntime';
 import { CanvasEditor } from './CanvasEditor';
 import { WidgetPaletteV2 } from './WidgetPaletteV2';
 import { PropertyPanelV2 } from './PropertyPanelV2';
 import { BindingPanelV2 } from './BindingPanelV2';
 import { ActionPanelV2 } from './ActionPanelV2';
 import { LayerPanel } from './LayerPanel';
+import { PageManagerPanel } from './PageManagerPanel';
+import { PageTabs } from './PageTabs';
+import { EventActionEditor } from './EventActionEditor';
 import { EditorToolbar } from './EditorToolbar';
 import { RuntimeRenderer } from '../runtime/RuntimeRenderer';
+import { MultiPageRuntime } from '../runtime/MultiPageRuntime';
 import { WidgetEditorDialog } from './WidgetEditorDialog';
 import type { ScreenDefinition } from '../../core/types';
 import type { WidgetItem } from '../../services/widgetLibraryService';
@@ -50,15 +56,19 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
   saveStatus = 'idle',
   onExitEdit,
 }) => {
-  const [rightPanel, setRightPanel] = useState<'properties' | 'bindings' | 'actions'>('properties');
+  const [rightPanel, setRightPanel] = useState<'properties' | 'bindings' | 'actions' | 'events'>('properties');
   const [widgetEditorOpen, setWidgetEditorOpen] = useState(false);
   const [editingWidget, setEditingWidget] = useState<WidgetItem | null>(null);
 
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
 
+  // Bridge: sync active page ↔ runtime store
+  useSyncProjectToRuntime();
+
   const store = useScadaRuntimeStore;
   const screen = store((s) => s.screen);
   const isRuntime = store((s) => s.isRuntime);
+  const project = useScadaProjectStore((s) => s.project);
   const isFullscreen = store((s) => s.isFullscreen);
   const setFullscreen = store((s) => s.setFullscreen);
   const setRuntime = store((s) => s.setRuntime);
@@ -262,13 +272,19 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
         )}
 
         {/* Center — Canvas or Runtime */}
-        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+          {/* Page tabs (editor mode only) */}
+          {!isRuntime && <PageTabs />}
           {isRuntime ? (
-            <RuntimeRenderer
-              screenId={screen?.id ?? ''}
-              {...(screen ? { screen } : {})}
-              autoFit={isFullscreen}
-            />
+            project ? (
+              <MultiPageRuntime project={project} autoFit={isFullscreen} />
+            ) : (
+              <RuntimeRenderer
+                screenId={screen?.id ?? ''}
+                {...(screen ? { screen } : {})}
+                autoFit={isFullscreen}
+              />
+            )
           ) : (
             <CanvasEditor />
           )}
@@ -278,7 +294,7 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
         {!isRuntime && (
           <div style={{ width: 270, display: 'flex', flexDirection: 'column', gap: 4, padding: 4, overflow: 'auto' }}>
             {/* Tab switcher */}
-            <div style={{ display: 'flex', gap: 2 }}>
+            <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <TabBtn active={rightPanel === 'properties'} onClick={() => setRightPanel('properties')}>
                 Properties
               </TabBtn>
@@ -288,11 +304,16 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
               <TabBtn active={rightPanel === 'actions'} onClick={() => setRightPanel('actions')}>
                 Actions
               </TabBtn>
+              <TabBtn active={rightPanel === 'events'} onClick={() => setRightPanel('events')}>
+                Events
+              </TabBtn>
             </div>
 
             {rightPanel === 'properties' && <PropertyPanelV2 />}
             {rightPanel === 'bindings' && <BindingPanelV2 />}
             {rightPanel === 'actions' && <ActionPanelV2 />}
+            {rightPanel === 'events' && <EventActionEditor />}
+            <PageManagerPanel />
             <LayerPanel />
           </div>
         )}

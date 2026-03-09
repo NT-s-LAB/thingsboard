@@ -6,6 +6,8 @@
 
 import { apiClient } from '@/shared/services/api';
 import type { ScreenDefinition } from '../core/types/screen.types';
+import type { ScadaProject } from '../core/types/project.types';
+import { projectToScreenDefinition, screenDefinitionToProject } from '../core/migrations/projectMigration';
 
 class ScreenService {
   private basePath = '/scada-views';
@@ -68,6 +70,28 @@ class ScreenService {
     const raw = await apiClient.put(`${this.basePath}/${encodeURIComponent(screen.id)}`, payload);
     return mapBackendToScreen(raw);
   }
+
+  // ── Project-level helpers (multi-page) ──
+
+  /** Load a screen and convert it to a ScadaProject (with migration). */
+  async loadProject(id: string): Promise<ScadaProject> {
+    const screen = await this.getById(id);
+    return screenDefinitionToProject(screen);
+  }
+
+  /** Save a ScadaProject by serializing it to a ScreenDefinition. */
+  async saveProject(project: ScadaProject): Promise<ScreenDefinition> {
+    const screen = projectToScreenDefinition(project);
+    return this.saveScreen(screen);
+  }
+
+  /** Create a new screen from a ScadaProject. */
+  async createProject(project: ScadaProject): Promise<ScreenDefinition> {
+    const screen = projectToScreenDefinition(project);
+    const payload = mapScreenToBackend(screen);
+    const raw = await apiClient.post(this.basePath, payload);
+    return mapBackendToScreen(raw);
+  }
 }
 
 // ─── Mapping helpers ─────────────────────────────────────────────────────────
@@ -84,16 +108,30 @@ function parseJsonField<T>(val: unknown, fallback: T): T {
 
 /** Map backend ScadaView model to ScreenDefinition. */
 function mapBackendToScreen(raw: any): ScreenDefinition {
-  return {
+  // Parse layout if it's a JSON string (some backends store JSON columns as strings)
+  const layout = parseJsonField<Record<string, unknown>>(raw.layout, {});
+  
+  // Extract _projectData from layout if present (multi-page project)
+  // Also parse it in case it's a nested JSON string
+  let projectData = layout?._projectData as unknown;
+  if (typeof projectData === 'string') {
+    try {
+      projectData = JSON.parse(projectData);
+    } catch {
+      // Keep as-is if parsing fails
+    }
+  }
+
+  const screen: ScreenDefinition = {
     id: raw.id,
     version: raw.version ?? 1,
     name: raw.name ?? '',
     description: raw.description ?? '',
     canvasSize: parseJsonField(raw.canvasSize, null) ?? parseJsonField(raw.settings?.canvasSize, null) ?? { width: 1920, height: 1080 },
     background: parseJsonField(raw.background, null) ?? parseJsonField(raw.settings?.background, null) ?? { type: 'color', color: '#f8fafc' },
-    layers: raw.layers ?? raw.layout?.layers ?? [{ id: 'default', name: 'Default', visible: true, locked: false, opacity: 1, order: 0 }],
+    layers: raw.layers ?? (layout?.layers as unknown[]) ?? [{ id: 'default', name: 'Default', visible: true, locked: false, opacity: 1, order: 0 }],
     widgets: (raw.widgets ?? raw.scadaWidgets ?? []).map(mapBackendWidget),
-    variables: raw.variables ?? raw.layout?.variables ?? [],
+    variables: raw.variables ?? (layout?.variables as unknown[]) ?? [],
     metadata: {
       createdAt: raw.createdAt ?? '',
       updatedAt: raw.updatedAt ?? '',
@@ -103,6 +141,13 @@ function mapBackendToScreen(raw: any): ScreenDefinition {
       areaId: raw.areaId,
     },
   };
+
+  // Attach _projectData for round-trip if present
+  if (projectData) {
+    (screen as ScreenDefinition & { _projectData?: unknown })._projectData = projectData;
+  }
+
+  return screen;
 }
 
 /** Map a backend widget to WidgetInstance. */
@@ -122,6 +167,7 @@ function mapBackendWidget(raw: any): import('../core/types/screen.types').Widget
     properties: raw.properties ?? {},
     bindings: raw.bindings ?? [],
     actions: raw.actions ?? [],
+    events: raw.events ?? [],
     svgAssetId: raw.svgAssetId ?? raw.symbolId,
     locked: raw.locked ?? false,
     visible: raw.visible ?? raw.isVisible ?? true,
@@ -139,6 +185,7 @@ function mapWidgetToBackend(w: import('../core/types/screen.types').WidgetInstan
     properties: w.properties,
     bindings: w.bindings,
     actions: w.actions,
+    events: (w as any).events ?? [],
     svgAssetId: w.svgAssetId,
     locked: w.locked ?? false,
     visible: w.visible ?? true,
@@ -147,6 +194,9 @@ function mapWidgetToBackend(w: import('../core/types/screen.types').WidgetInstan
 
 /** Map ScreenDefinition to backend payload. */
 function mapScreenToBackend(screen: ScreenDefinition): Record<string, unknown> {
+  // Include _projectData if present (multi-page project)
+  const projectData = (screen as ScreenDefinition & { _projectData?: unknown })._projectData;
+
   return {
     name: screen.name,
     description: screen.description,
@@ -155,6 +205,8 @@ function mapScreenToBackend(screen: ScreenDefinition): Record<string, unknown> {
     layout: {
       layers: screen.layers,
       variables: screen.variables,
+      // Store the full project structure for round-trip persistence
+      ...(projectData ? { _projectData: projectData } : {}),
     },
     widgets: (screen.widgets ?? []).map(mapWidgetToBackend),
     settings: {

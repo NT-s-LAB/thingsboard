@@ -1,6 +1,8 @@
 class ApiService {
   private baseUrl: string;
   private token: string | null = null;
+  private refreshToken: string | null = null;
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
@@ -10,8 +12,13 @@ class ApiService {
     this.token = token;
   }
 
+  setRefreshToken(token: string) {
+    this.refreshToken = token;
+  }
+
   clearToken() {
     this.token = null;
+    this.refreshToken = null;
   }
 
   private getHeaders() {
@@ -37,9 +44,56 @@ class ApiService {
     return headers;
   }
 
+  /**
+   * Try to refresh the access token using the refresh token
+   */
+  private async tryRefreshToken(): Promise<boolean> {
+    // Avoid multiple refresh attempts at once
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    if (!this.refreshToken) {
+      return false;
+    }
+
+    this.refreshPromise = (async () => {
+      try {
+        const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: this.refreshToken }),
+        });
+
+        if (!response.ok) {
+          return false;
+        }
+
+        const json = await response.json();
+        const data = json.data ?? json;
+
+        if (data.accessToken) {
+          this.token = data.accessToken;
+          if (data.refreshToken) {
+            this.refreshToken = data.refreshToken;
+          }
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
+
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retry = true
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const config: RequestInit = {
@@ -52,6 +106,20 @@ class ApiService {
 
     try {
       const response = await fetch(url, config);
+
+      // Handle 401 (Unauthorized) - try to refresh token
+      if (response.status === 401 && retry && !endpoint.includes('/auth/')) {
+        const refreshed = await this.tryRefreshToken();
+        if (refreshed) {
+          // Retry the request with the new token
+          return this.request<T>(endpoint, options, false);
+        }
+        // Refresh failed - redirect to login
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+        throw new Error('Session expired. Please log in again.');
+      }
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);

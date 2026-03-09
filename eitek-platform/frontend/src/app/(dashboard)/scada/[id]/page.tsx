@@ -13,11 +13,17 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ScadaEditorV2 } from '@/features/scada/engine/editor/ScadaEditorV2';
 import { RuntimeRenderer } from '@/features/scada/engine/runtime/RuntimeRenderer';
+import { MultiPageRuntime } from '@/features/scada/engine/runtime/MultiPageRuntime';
 import { screenService } from '@/features/scada/services/screenService';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { useScadaRuntimeStore } from '@/features/scada/stores/scadaRuntimeStore';
+import { useScadaProjectStore } from '@/features/scada/stores/scadaProjectStore';
 import { registerBuiltinWidgets } from '@/features/scada/widgets/definitions';
+import { screenDefinitionToProject } from '@/features/scada/core/migrations/projectMigration';
+import { projectToScreenDefinition } from '@/features/scada/core/migrations/projectMigration';
+import { createDefaultProject } from '@/features/scada/core/types/project.types';
 import type { ScreenDefinition } from '@/features/scada/core/types';
+import type { ScadaProject } from '@/features/scada/core/types/project.types';
 
 // Ensure widget definitions are registered once
 let widgetsRegistered = false;
@@ -35,6 +41,7 @@ interface ScadaPageProps {
 const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
   const router = useRouter();
   const [screen, setScreen] = useState<ScreenDefinition | null>(null);
+  const [project, setProject] = useState<ScadaProject | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -44,13 +51,14 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
   const realIdRef = useRef<string | null>(null);
   const viewContainerRef = useRef<HTMLDivElement>(null);
 
-  // ── Load screen data ──
+  // ── Load screen data + initialize project store ──
   useEffect(() => {
     if (!params.id) return;
 
     if (params.id === 'new') {
+      const newProject = createDefaultProject();
       const blank: ScreenDefinition = {
-        id: `screen_${Date.now()}`,
+        id: newProject.id,
         version: 1,
         name: 'New SCADA Screen',
         description: '',
@@ -67,6 +75,8 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
         },
       };
       setScreen(blank);
+      setProject(newProject);
+      useScadaProjectStore.getState().loadProject(newProject);
       setLoading(false);
       return;
     }
@@ -78,6 +88,10 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
       .then((data) => {
         setScreen(data);
         realIdRef.current = data.id;
+        // Migrate to project model
+        const proj = screenDefinitionToProject(data);
+        setProject(proj);
+        useScadaProjectStore.getState().loadProject(proj);
       })
       .catch((err) => setError(err?.message ?? 'Failed to load screen'))
       .finally(() => setLoading(false));
@@ -99,19 +113,42 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  // ── Deploy handler (formerly "Save") ──
+  // ── Warn user about unsaved changes on page unload ──
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const isDirty = useScadaProjectStore.getState().isDirty;
+      if (isDirty && mode === 'edit') {
+        e.preventDefault();
+        // Modern browsers ignore custom messages but require returnValue
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [mode]);
+
+  // ── Deploy handler — saves project as ScreenDefinition to backend ──
   const handleDeploy = useCallback(async (updated: ScreenDefinition) => {
     setSaveStatus('saving');
     try {
+      // Get the latest project state and serialize to ScreenDefinition
+      const currentProject = useScadaProjectStore.getState().project;
+      const screenToSave = currentProject
+        ? projectToScreenDefinition(currentProject)
+        : updated;
+
       const isNew = params.id === 'new' && !realIdRef.current;
       if (isNew) {
-        const created = await screenService.create({ ...updated, name: updated.name || 'Untitled' });
+        const created = await screenService.create({ ...screenToSave, name: screenToSave.name || 'Untitled' });
         realIdRef.current = created.id;
         window.history.replaceState(null, '', `/scada/${created.id}`);
       } else {
-        const saveId = realIdRef.current ?? updated.id;
-        await screenService.saveScreen({ ...updated, id: saveId });
+        const saveId = realIdRef.current ?? screenToSave.id;
+        await screenService.saveScreen({ ...screenToSave, id: saveId });
       }
+      useScadaProjectStore.getState().setDirty(false);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err: unknown) {
@@ -128,6 +165,15 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
   }, []);
 
   const switchToView = useCallback(() => {
+    // Warn about unsaved changes
+    const isDirty = useScadaProjectStore.getState().isDirty;
+    if (isDirty) {
+      const confirmed = window.confirm('You have unsaved changes. Switch to View mode anyway? (Your changes will still be kept in memory until you close the page.)');
+      if (!confirmed) return;
+    }
+    // Sync latest project state for the runtime view
+    const currentProject = useScadaProjectStore.getState().project;
+    if (currentProject) setProject(currentProject);
     const currentScreen = useScadaRuntimeStore.getState().screen;
     if (currentScreen) setScreen(currentScreen);
     useScadaRuntimeStore.getState().setRuntime(true);
@@ -143,8 +189,13 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
   }, []);
 
   const handleGoBack = useCallback(() => {
+    const isDirty = useScadaProjectStore.getState().isDirty;
+    if (isDirty && mode === 'edit') {
+      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave without saving?');
+      if (!confirmed) return;
+    }
     router.back();
-  }, [router]);
+  }, [router, mode]);
 
   // ── Loading state ──
   if (loading) {
@@ -194,13 +245,17 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
           />
         )}
 
-        {/* Runtime renderer */}
+        {/* Runtime renderer — multi-page or single-page fallback */}
         <div style={{
           width: '100%',
           height: viewFullscreen ? '100%' : 'calc(100% - 52px)',
           marginTop: viewFullscreen ? 0 : 52,
         }}>
-          <RuntimeRenderer screenId={screen.id} screen={screen} autoFit />
+          {project ? (
+            <MultiPageRuntime project={project} autoFit />
+          ) : (
+            <RuntimeRenderer screenId={screen.id} screen={screen} autoFit />
+          )}
         </div>
 
         {/* Fullscreen exit button */}

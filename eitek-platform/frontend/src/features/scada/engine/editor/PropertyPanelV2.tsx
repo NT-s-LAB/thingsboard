@@ -11,6 +11,7 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { widgetRegistry } from '../../core/registry';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
+import { useScadaProjectStore } from '../../stores/scadaProjectStore';
 import { imageLibraryService } from '../../services/imageLibraryService';
 import type { ImageItem, ImageCategoryItem } from '../../services/imageLibraryService';
 import type { PropField } from '../../core/types';
@@ -40,8 +41,18 @@ export const PropertyPanelV2: React.FC = () => {
   const updateWidgetTransform = useScadaRuntimeStore((s) => s.updateWidgetTransform);
   const updateScreenBackground = useScadaRuntimeStore((s) => s.updateScreenBackground);
   const updateScreenCanvasSize = useScadaRuntimeStore((s) => s.updateScreenCanvasSize);
-  const updateScreenName = useScadaRuntimeStore((s) => s.updateScreenName);
-  const updateScreenDescription = useScadaRuntimeStore((s) => s.updateScreenDescription);
+
+  // Use project store for page-level properties (name/description edits)
+  const project = useScadaProjectStore((s) => s.project);
+  const activePageId = useScadaProjectStore((s) => s.activePageId);
+  const renamePage = useScadaProjectStore((s) => s.renamePage);
+  const updatePageBackground = useScadaProjectStore((s) => s.updatePageBackground);
+  const updatePageCanvasSize = useScadaProjectStore((s) => s.updatePageCanvasSize);
+
+  const activePage = useMemo(() => {
+    if (!project || !activePageId) return null;
+    return project.pages.find((p) => p.id === activePageId) ?? null;
+  }, [project, activePageId]);
 
   const selectedWidget = useMemo(() => {
     if (!screen || selectedWidgetIds.length !== 1) return null;
@@ -100,19 +111,32 @@ export const PropertyPanelV2: React.FC = () => {
     return (
       <div className="scada-panel" style={{ width: 260, flexShrink: 0 }}>
         <div className="scada-panel__header">
-          {selectedWidgetIds.length > 1 ? 'Multiple Selection' : '🖥️ Screen Properties'}
+          {selectedWidgetIds.length > 1 ? 'Multiple Selection' : `📄 Page: ${activePage?.name || 'Properties'}`}
         </div>
         {selectedWidgetIds.length > 1 ? (
           <div className="scada-panel__body" style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', padding: 16 }}>
             Multiple widgets selected
           </div>
+        ) : activePage ? (
+          <PagePropertiesPanel
+            page={activePage}
+            onBackgroundChange={(bg) => {
+              updateScreenBackground(bg);
+              updatePageBackground(activePageId!, bg);
+            }}
+            onCanvasSizeChange={(size) => {
+              updateScreenCanvasSize(size);
+              updatePageCanvasSize(activePageId!, size);
+            }}
+            onNameChange={(name) => renamePage(activePageId!, name)}
+          />
         ) : screen ? (
           <ScreenPropertiesPanel
             screen={screen}
             onBackgroundChange={updateScreenBackground}
             onCanvasSizeChange={updateScreenCanvasSize}
-            onNameChange={updateScreenName}
-            onDescriptionChange={updateScreenDescription}
+            onNameChange={() => {}}
+            onDescriptionChange={() => {}}
           />
         ) : (
           <div className="scada-panel__body" style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', padding: 16 }}>
@@ -672,6 +696,178 @@ const ScreenPropertiesPanel: React.FC<ScreenPropertiesPanelProps> = ({
         </div>
 
         {/* Color picker (always shown for base color) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Color</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+            <input
+              type="color"
+              value={toColorHex(bg.color || '#f8fafc')}
+              onChange={(e) => onBackgroundChange({ color: e.target.value })}
+              style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
+            />
+            <input
+              type="text"
+              value={bg.color ?? ''}
+              onChange={(e) => onBackgroundChange({ color: e.target.value })}
+              placeholder="#f8fafc"
+              style={{ ...inputStyle, flex: 1 }}
+            />
+          </div>
+        </div>
+
+        {/* Image URL + picker (for image type) */}
+        {bg.type === 'image' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Image</label>
+              <div style={{ flex: 1 }}>
+                <ImagePicker
+                  value={bg.imageUrl ?? ''}
+                  onChange={(url) => onBackgroundChange({ imageUrl: url })}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Fit</label>
+              <select
+                value={bg.fit ?? 'cover'}
+                onChange={(e) => onBackgroundChange({ fit: e.target.value as 'cover' | 'contain' | 'fill' | 'none' })}
+                style={{ ...inputStyle, flex: 1 }}
+              >
+                <option value="cover">Cover</option>
+                <option value="contain">Contain</option>
+                <option value="fill">Fill (stretch)</option>
+                <option value="none">None (original)</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        {/* Opacity */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Opacity</label>
+          <input
+            type="range"
+            value={bg.opacity ?? 1}
+            min={0} max={1} step={0.05}
+            onChange={(e) => onBackgroundChange({ opacity: Number(e.target.value) })}
+            style={{ flex: 1 }}
+          />
+          <span style={{ fontSize: 10, color: '#9CA3AF', width: 28, textAlign: 'right' }}>
+            {Math.round((bg.opacity ?? 1) * 100)}%
+          </span>
+        </div>
+      </FieldGroup>
+
+      {/* Preview */}
+      <FieldGroup label="Preview">
+        <div style={{
+          width: '100%', height: 80, borderRadius: 6, border: '1px solid #e5e7eb', overflow: 'hidden',
+          ...(bg.type === 'color' ? { background: bg.color ?? '#f8fafc' } : {}),
+          ...(bg.type === 'image' && bg.imageUrl ? {
+            backgroundImage: `url(${bg.imageUrl})`,
+            backgroundSize: bg.fit ?? 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            backgroundColor: bg.color ?? '#f8fafc',
+          } : {}),
+          opacity: bg.opacity ?? 1,
+        }}>
+          {bg.type === 'image' && !bg.imageUrl && (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 11 }}>
+              No image selected
+            </div>
+          )}
+        </div>
+      </FieldGroup>
+    </div>
+  );
+};
+
+// ─── Page Properties Panel (multi-page: shown when no widget selected) ───────
+
+interface PagePropertiesPanelProps {
+  page: import('../../core/types/project.types').ScadaPage;
+  onBackgroundChange: (bg: Partial<ScreenBackground>) => void;
+  onCanvasSizeChange: (size: Partial<{ width: number; height: number }>) => void;
+  onNameChange: (name: string) => void;
+}
+
+const PagePropertiesPanel: React.FC<PagePropertiesPanelProps> = ({
+  page,
+  onBackgroundChange,
+  onCanvasSizeChange,
+  onNameChange,
+}) => {
+  const bg = page.background ?? { type: 'color' as BackgroundType, color: '#f8fafc' };
+
+  return (
+    <div className="scada-panel__body" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+      {/* Page Identity */}
+      <FieldGroup label="Page">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Name</label>
+          <input
+            type="text"
+            value={page.name}
+            onChange={(e) => onNameChange(e.target.value)}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Type</label>
+          <span style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'capitalize' }}>
+            {page.pageType === 'popup' ? '🪟 Popup' : '📄 Normal'}
+          </span>
+        </div>
+      </FieldGroup>
+
+      {/* Canvas Size */}
+      <FieldGroup label="Canvas Size">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+          <NumberInput label="W" value={page.canvasSize.width} onChange={(v) => onCanvasSizeChange({ width: v })} min={100} />
+          <NumberInput label="H" value={page.canvasSize.height} onChange={(v) => onCanvasSizeChange({ height: v })} min={100} />
+        </div>
+        {/* Quick presets */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {[
+            { label: '1920×1080', w: 1920, h: 1080 },
+            { label: '1280×720', w: 1280, h: 720 },
+            { label: '1024×768', w: 1024, h: 768 },
+            { label: '800×600', w: 800, h: 600 },
+          ].map((p) => (
+            <button
+              key={p.label}
+              onClick={() => onCanvasSizeChange({ width: p.w, height: p.h })}
+              style={{
+                padding: '2px 6px', borderRadius: 3, fontSize: 9, cursor: 'pointer',
+                border: '1px solid #d1d5db',
+                background: page.canvasSize.width === p.w && page.canvasSize.height === p.h ? '#3B82F6' : '#f9fafb',
+                color: page.canvasSize.width === p.w && page.canvasSize.height === p.h ? '#fff' : '#6B7280',
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </FieldGroup>
+
+      {/* Background */}
+      <FieldGroup label="Background">
+        {/* Type selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Type</label>
+          <select
+            value={bg.type}
+            onChange={(e) => onBackgroundChange({ type: e.target.value as BackgroundType })}
+            style={{ ...inputStyle, flex: 1 }}
+          >
+            <option value="color">Solid Color</option>
+            <option value="image">Image</option>
+          </select>
+        </div>
+
+        {/* Color picker */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Color</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>

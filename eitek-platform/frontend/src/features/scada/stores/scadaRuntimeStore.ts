@@ -17,6 +17,7 @@ import type {
   Transform,
   AlarmState,
   Size,
+  ScadaWindow,
 } from '../core/types';
 
 const MAX_UNDO = 50;
@@ -54,6 +55,10 @@ interface ScadaRuntimeState {
 
   // ── Resolved properties (output of binding resolver) ──
   resolvedProperties: Record<string, Record<string, unknown>>;
+
+  // ── Window management ──
+  activeWindowId: string | null;
+  openWindowIds: string[]; // stack of open overlay windows in runtime
 
   // ── Undo / Redo history ──
   past: ScreenDefinition[];
@@ -120,6 +125,16 @@ interface ScadaRuntimeState {
 
   // Alignment
   alignWidgets: (action: AlignAction) => void;
+
+  // Windows
+  addWindow: (window: ScadaWindow) => void;
+  updateWindow: (id: string, patch: Partial<ScadaWindow>) => void;
+  removeWindow: (id: string) => void;
+  setMainWindow: (id: string) => void;
+  setActiveWindowId: (id: string | null) => void;
+  navigateToWindow: (windowId: string) => void;
+  closeOverlayWindow: (windowId: string) => void;
+  closeAllOverlayWindows: () => void;
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -148,6 +163,8 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
         gridSize: 20,
         alarmStates: {},
         resolvedProperties: {},
+        activeWindowId: null,
+        openWindowIds: [],
         past: [] as ScreenDefinition[],
         future: [] as ScreenDefinition[],
 
@@ -161,6 +178,9 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
             s.resolvedProperties = {};
             s.past = [];
             s.future = [];
+            // Set active window to the main window if windows exist
+            s.activeWindowId = screen.windows?.find((w) => w.isMain)?.id ?? null;
+            s.openWindowIds = [];
           }),
 
         setDirty: (dirty) =>
@@ -530,6 +550,90 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
               }
             }
             s.isDirty = true;
+          }),
+
+        // ── Window management ──
+        addWindow: (window) =>
+          set((s) => {
+            if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            if (!s.screen.windows) s.screen.windows = [];
+            // If this is the first window, make it main
+            if (s.screen.windows.length === 0) window.isMain = true;
+            s.screen.windows.push(window);
+            s.isDirty = true;
+          }),
+
+        updateWindow: (id, patch) =>
+          set((s) => {
+            if (!s.screen?.windows) return;
+            const win = s.screen.windows.find((w) => w.id === id);
+            if (!win) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            Object.assign(win, patch);
+            s.isDirty = true;
+          }),
+
+        removeWindow: (id) =>
+          set((s) => {
+            if (!s.screen?.windows) return;
+            const idx = s.screen.windows.findIndex((w) => w.id === id);
+            if (idx === -1) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            const wasMain = s.screen.windows[idx]!.isMain;
+            s.screen.windows.splice(idx, 1);
+            // If we removed the main window, assign the first remaining
+            if (wasMain && s.screen.windows.length > 0) {
+              s.screen.windows[0]!.isMain = true;
+              s.activeWindowId = s.screen.windows[0]!.id;
+            }
+            if (s.activeWindowId === id) {
+              s.activeWindowId = s.screen.windows.find((w) => w.isMain)?.id ?? null;
+            }
+            s.isDirty = true;
+          }),
+
+        setMainWindow: (id) =>
+          set((s) => {
+            if (!s.screen?.windows) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            for (const w of s.screen.windows) {
+              w.isMain = w.id === id;
+            }
+            s.isDirty = true;
+          }),
+
+        setActiveWindowId: (id) =>
+          set((s) => {
+            s.activeWindowId = id;
+            s.selectedWidgetIds = [];
+          }),
+
+        navigateToWindow: (windowId) =>
+          set((s) => {
+            if (!windowId) return;
+            // In runtime: push window onto overlay stack
+            if (!s.openWindowIds.includes(windowId)) {
+              s.openWindowIds.push(windowId);
+            }
+          }),
+
+        closeOverlayWindow: (windowId) =>
+          set((s) => {
+            s.openWindowIds = s.openWindowIds.filter((id) => id !== windowId);
+          }),
+
+        closeAllOverlayWindows: () =>
+          set((s) => {
+            s.openWindowIds = [];
           }),
       })),
     ),

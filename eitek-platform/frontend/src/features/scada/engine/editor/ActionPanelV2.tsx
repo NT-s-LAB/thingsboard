@@ -931,6 +931,7 @@ const GenericActionEditor: React.FC<{
   onUpdate: (patch: Partial<WidgetActionInstance>) => void;
 }> = ({ label, description, action, onUpdate }) => {
   const [expanded, setExpanded] = useState(false);
+  const windows = useScadaRuntimeStore((s) => s.screen?.windows ?? []);
 
   return (
     <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
@@ -1006,6 +1007,22 @@ const GenericActionEditor: React.FC<{
                 />
               </Row>
             </>
+          )}
+          {action?.actionType === 'navigate' && (
+            <Row label="Window">
+              <select
+                value={action?.config.targetWindowId ?? ''}
+                onChange={(e) => onUpdate({ config: { targetWindowId: e.target.value } })}
+                style={inputStyle}
+              >
+                <option value="">-- Select window --</option>
+                {windows.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}{w.isMain ? ' ★' : ''}
+                  </option>
+                ))}
+              </select>
+            </Row>
           )}
         </div>
       )}

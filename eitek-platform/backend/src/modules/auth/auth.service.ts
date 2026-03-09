@@ -170,6 +170,30 @@ export class AuthService {
   }
 
   /**
+   * Parse expiration time from config (supports "1d", "7d", "1h", or seconds as number)
+   */
+  private parseExpiration(value: string | number | undefined, defaultSeconds: number): number {
+    if (!value) return defaultSeconds;
+    if (typeof value === 'number') return value;
+    
+    const str = String(value).trim().toLowerCase();
+    const match = str.match(/^(\d+)(s|m|h|d|w)?$/);
+    if (!match) return defaultSeconds;
+    
+    const num = parseInt(match[1], 10);
+    const unit = match[2] || 's';
+    
+    switch (unit) {
+      case 's': return num;
+      case 'm': return num * 60;
+      case 'h': return num * 3600;
+      case 'd': return num * 86400;
+      case 'w': return num * 604800;
+      default: return defaultSeconds;
+    }
+  }
+
+  /**
    * Generate access and refresh tokens
    */
   private async generateTokens(user: User): Promise<{
@@ -184,8 +208,15 @@ export class AuthService {
       tenantId: user.tenantId,
     };
 
-    const accessTokenExpiration = this.configService.get<number>('JWT_ACCESS_EXPIRATION', 3600);
-    const refreshTokenExpiration = this.configService.get<number>('JWT_REFRESH_EXPIRATION', 86400 * 7);
+    // Support both "1d" format and numeric seconds
+    const accessTokenExpiration = this.parseExpiration(
+      this.configService.get('JWT_ACCESS_EXPIRATION'),
+      86400, // Default: 1 day (increased from 1 hour)
+    );
+    const refreshTokenExpiration = this.parseExpiration(
+      this.configService.get('JWT_REFRESH_EXPIRATION'),
+      604800, // Default: 7 days
+    );
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {

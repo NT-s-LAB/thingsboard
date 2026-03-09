@@ -7,6 +7,7 @@ import { apiClient } from '@/shared/services/api';
 interface AuthState {
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -22,6 +23,7 @@ interface AuthActions {
   hasPermission: (permission: string) => boolean;
   hasAnyPermission: (permissions: string[]) => boolean;
   hasAllPermissions: (permissions: string[]) => boolean;
+  restoreTokens: () => void;
 }
 
 export const useAuthStore = create<AuthState & AuthActions>()(
@@ -31,10 +33,22 @@ export const useAuthStore = create<AuthState & AuthActions>()(
         // Initial State
         user: null,
         token: null,
+        refreshToken: null,
         isAuthenticated: false,
         isLoading: false,
         error: null,
         permissions: [],
+
+        // Restore tokens to apiClient on app load
+        restoreTokens: () => {
+          const { token, refreshToken } = get();
+          if (token) {
+            apiClient.setToken(token);
+          }
+          if (refreshToken) {
+            apiClient.setRefreshToken(refreshToken);
+          }
+        },
 
         // Actions
         login: async (credentials) => {
@@ -49,6 +63,7 @@ export const useAuthStore = create<AuthState & AuthActions>()(
             set({
               user: response.user,
               token: response.token,
+              refreshToken: response.refreshToken ?? null,
               isAuthenticated: true,
               permissions: permissions,
               isLoading: false,
@@ -70,6 +85,7 @@ export const useAuthStore = create<AuthState & AuthActions>()(
             set({
               user: null,
               token: null,
+              refreshToken: null,
               isAuthenticated: false,
               permissions: [],
               error: null,

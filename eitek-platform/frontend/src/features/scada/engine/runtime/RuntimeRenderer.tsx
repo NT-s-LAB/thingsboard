@@ -51,6 +51,7 @@ export const RuntimeRenderer: React.FC<RuntimeRendererProps> = ({
   const loadScreen = useScadaRuntimeStore((s) => s.loadScreen);
   const batchSetResolvedProperties = useScadaRuntimeStore((s) => s.batchSetResolvedProperties);
   const setVariable = useScadaRuntimeStore((s) => s.setVariable);
+  const navigateToWindow = useScadaRuntimeStore((s) => s.navigateToWindow);
 
   const subManagerRef = useRef<SubscriptionManager | null>(null);
 
@@ -201,14 +202,16 @@ export const RuntimeRenderer: React.FC<RuntimeRendererProps> = ({
           break;
         }
         case 'navigate': {
-          // Navigation handled by parent
+          if (config.targetWindowId) {
+            navigateToWindow(config.targetWindowId);
+          }
           break;
         }
         default:
           break;
       }
     },
-    [setVariable],
+    [setVariable, navigateToWindow],
   );
 
   // ── Render ──
