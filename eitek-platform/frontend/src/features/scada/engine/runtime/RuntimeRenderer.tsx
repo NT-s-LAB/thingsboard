@@ -252,7 +252,12 @@ export const RuntimeRenderer: React.FC<RuntimeRendererProps> = ({
       <div
         ref={containerRef}
         className={`scada-runtime ${className ?? ''}`}
-        style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#000' }}
+        style={{
+          position: 'relative', width: '100%', height: '100%', overflow: 'hidden',
+          background: screen.background?.type === 'color' && screen.background.color
+            ? screen.background.color
+            : '#f8fafc',
+        }}
       >
         <div
           style={{

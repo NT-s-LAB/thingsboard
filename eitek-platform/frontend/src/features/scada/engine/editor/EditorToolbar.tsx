@@ -1,6 +1,6 @@
 /**
  * EditorToolbar — Top toolbar for the SCADA editor.
- * Zoom, grid, runtime toggle, save, undo/redo, fullscreen.
+ * Zoom, grid, runtime toggle, deploy, undo/redo, fullscreen.
  */
 
 'use client';
@@ -12,9 +12,10 @@ interface EditorToolbarProps {
   onSave?: () => void;
   screenName?: string;
   saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
+  onExitEdit?: () => void;
 }
 
-export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName, saveStatus = 'idle' }) => {
+export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName, saveStatus = 'idle', onExitEdit }) => {
   const isRuntime = useScadaRuntimeStore((s) => s.isRuntime);
   const isFullscreen = useScadaRuntimeStore((s) => s.isFullscreen);
   const zoom = useScadaRuntimeStore((s) => s.zoom);
@@ -64,6 +65,16 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName
         flexShrink: 0,
       }}
     >
+      {/* Back to View button */}
+      {onExitEdit && (
+        <>
+          <ToolBtn onClick={onExitEdit} title="Back to View">
+            ← View
+          </ToolBtn>
+          <Separator />
+        </>
+      )}
+
       {/* Screen name */}
       <span style={{ fontWeight: 600, color: '#1F2937', marginRight: 8 }}>
         {screenName ?? 'SCADA Editor'}
@@ -102,18 +113,16 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName
 
       <Separator />
 
-      {/* Save */}
+      {/* Deploy (formerly Save) */}
       {onSave && (
-        <ToolBtn onClick={onSave} title="Save (Ctrl+S)" active={saveStatus === 'saved'}>
-          {saveStatus === 'saving' ? '⏳ Saving...' : saveStatus === 'saved' ? '✅ Saved' : saveStatus === 'error' ? '❌ Error' : '💾 Save'}
-        </ToolBtn>
+        <DeployBtn onClick={onSave} status={saveStatus} />
       )}
 
       <div style={{ flex: 1 }} />
 
       {/* Runtime toggle */}
       <ToolBtn onClick={toggleRuntime} active={isRuntime} title={isRuntime ? 'Stop Runtime' : 'Start Runtime'}>
-        {isRuntime ? '⏹ Stop' : '▶ Run'}
+        {isRuntime ? '⏹ Stop' : '▶ Preview'}
       </ToolBtn>
 
       {/* Fullscreen */}
@@ -121,6 +130,61 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ onSave, screenName
         {isFullscreen ? '⊠' : '⊞'}
       </ToolBtn>
     </div>
+  );
+};
+
+// ─── Deploy Button (styled differently from regular ToolBtn) ────────────────
+
+const DeployBtn: React.FC<{
+  onClick: () => void;
+  status: 'idle' | 'saving' | 'saved' | 'error';
+}> = ({ onClick, status }) => {
+  const isActive = status === 'saved';
+  const isError = status === 'error';
+  const isDeploying = status === 'saving';
+
+  let label = '🚀 Deploy';
+  let bg = '#f0fdf4';
+  let border = '#86efac';
+  let color = '#16a34a';
+
+  if (isDeploying) {
+    label = '⏳ Deploying...';
+    bg = '#f9fafb';
+    border = '#e5e7eb';
+    color = '#6B7280';
+  } else if (isActive) {
+    label = '✅ Deployed';
+    bg = '#eff6ff';
+    border = '#3B82F6';
+    color = '#2563EB';
+  } else if (isError) {
+    label = '❌ Error';
+    bg = '#fef2f2';
+    border = '#fca5a5';
+    color = '#dc2626';
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      title="Deploy (Ctrl+S)"
+      disabled={isDeploying}
+      style={{
+        padding: '4px 12px',
+        border: `1px solid ${border}`,
+        borderRadius: 4,
+        background: bg,
+        color,
+        cursor: isDeploying ? 'wait' : 'pointer',
+        fontSize: 11,
+        fontWeight: 600,
+        lineHeight: 1,
+        transition: 'all 0.15s',
+      }}
+    >
+      {label}
+    </button>
   );
 };
 

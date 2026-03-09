@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card } from '@/shared/components/ui/Card';
+import { Card, CardContent } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { useAuthStore } from '@/features/auth/stores/authStore';
@@ -10,21 +10,176 @@ import { useProjectStore } from '@/features/projects/stores/projectStore';
 import { useDeviceStore } from '@/features/devices/stores/deviceStore';
 import { formatDistanceToNow } from '@/shared/utils/date';
 
+// ─── Icons (inline SVG for zero-dependency) ─────────────────────────────────
+
+const Icons = {
+  folder: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+    </svg>
+  ),
+  cpu: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 0 0 2.25-2.25V6.75a2.25 2.25 0 0 0-2.25-2.25H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25Zm.75-12h9v9h-9v-9Z" />
+    </svg>
+  ),
+  signal: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+    </svg>
+  ),
+  bell: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+    </svg>
+  ),
+  plus: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  ),
+  arrowRight: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+    </svg>
+  ),
+  layout: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+    </svg>
+  ),
+  trendUp: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+    </svg>
+  ),
+  clock: (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  ),
+  star: (
+    <svg className="w-3.5 h-3.5 fill-amber-400 text-amber-400" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+    </svg>
+  ),
+};
+
+// ─── Stat Card ───────────────────────────────────────────────────────────────
+
+interface StatCardProps {
+  label: string;
+  value: number | string;
+  icon: React.ReactNode;
+  accent: string; // tailwind color class, e.g. "blue"
+  subtitle?: string;
+  subtitleColor?: string;
+  trend?: number; // percentage change
+}
+
+function StatCard({ label, value, icon, accent, subtitle, subtitleColor, trend }: StatCardProps) {
+  const bgMap: Record<string, string> = {
+    blue: 'bg-blue-50 dark:bg-blue-950/40',
+    green: 'bg-emerald-50 dark:bg-emerald-950/40',
+    cyan: 'bg-cyan-50 dark:bg-cyan-950/40',
+    red: 'bg-red-50 dark:bg-red-950/40',
+    amber: 'bg-amber-50 dark:bg-amber-950/40',
+    gray: 'bg-gray-50 dark:bg-gray-800/40',
+  };
+  const iconBgMap: Record<string, string> = {
+    blue: 'bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400',
+    green: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/60 dark:text-emerald-400',
+    cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/60 dark:text-cyan-400',
+    red: 'bg-red-100 text-red-600 dark:bg-red-900/60 dark:text-red-400',
+    amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/60 dark:text-amber-400',
+    gray: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+  };
+  const borderMap: Record<string, string> = {
+    blue: 'border-blue-200/60 dark:border-blue-800/40',
+    green: 'border-emerald-200/60 dark:border-emerald-800/40',
+    cyan: 'border-cyan-200/60 dark:border-cyan-800/40',
+    red: 'border-red-200/60 dark:border-red-800/40',
+    amber: 'border-amber-200/60 dark:border-amber-800/40',
+    gray: 'border-gray-200/60 dark:border-gray-700/40',
+  };
+  return (
+    <Card className={`relative overflow-hidden border ${borderMap[accent] ?? ''} ${bgMap[accent] ?? ''}`}>
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+            <p className="text-2xl font-bold tracking-tight">{value}</p>
+            {subtitle && (
+              <p className={`text-xs font-medium ${subtitleColor ?? 'text-muted-foreground'}`}>{subtitle}</p>
+            )}
+            {trend !== undefined && (
+              <div className={`flex items-center gap-1 text-xs font-medium ${trend >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                {Icons.trendUp}
+                <span>{trend >= 0 ? '+' : ''}{trend}%</span>
+              </div>
+            )}
+          </div>
+          <div className={`p-2.5 rounded-xl ${iconBgMap[accent] ?? ''}`}>
+            {icon}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Device Health Ring ──────────────────────────────────────────────────────
+
+function HealthRing({ online, total }: { online: number; total: number }) {
+  const pct = total > 0 ? Math.round((online / total) * 100) : 0;
+  const r = 36;
+  const c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+
+  return (
+    <div className="relative flex items-center justify-center">
+      <svg width={88} height={88} className="-rotate-90">
+        <circle cx={44} cy={44} r={r} fill="none" stroke="currentColor" className="text-muted/30" strokeWidth={7} />
+        <circle
+          cx={44} cy={44} r={r} fill="none"
+          stroke="url(#healthGrad)"
+          strokeWidth={7}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          className="transition-all duration-700 ease-out"
+        />
+        <defs>
+          <linearGradient id="healthGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#10b981" />
+            <stop offset="100%" stopColor="#06b6d4" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="absolute text-center">
+        <span className="text-lg font-bold">{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Dashboard ──────────────────────────────────────────────────────────
+
 const DashboardPage: React.FC = () => {
   const router = useRouter();
   const { user, isAuthenticated, token } = useAuthStore();
-  const { 
-    recentProjects, 
-    favoriteProjects, 
-    fetchRecentProjects, 
+  const {
+    recentProjects,
+    favoriteProjects,
+    fetchRecentProjects,
     fetchFavorites,
-    loading: projectLoading 
+    loading: projectLoading,
   } = useProjectStore();
-  const { 
-    devices, 
+  const {
+    devices,
     pagination,
     fetchDevices,
-    loading: deviceLoading 
+    loading: deviceLoading,
   } = useDeviceStore();
 
   useEffect(() => {
@@ -32,221 +187,372 @@ const DashboardPage: React.FC = () => {
       router.replace('/login');
       return;
     }
-    // Fetch dashboard data
     fetchRecentProjects();
     fetchFavorites();
     fetchDevices({ pageSize: 10 });
   }, [isAuthenticated, token, router, fetchRecentProjects, fetchFavorites, fetchDevices]);
 
-  // Calculate statistics
-  const stats = {
-    totalProjects: recentProjects.length + favoriteProjects.length,
-    totalDevices: pagination.totalElements,
-    onlineDevices: devices.filter(d => d.isOnline).length,
-    activeAlarms: 0, // TODO: Get from alarm service
-  };
+  const stats = useMemo(() => {
+    const totalDevices = pagination.totalElements;
+    const onlineDevices = devices.filter((d) => d.isOnline).length;
+    const offlineDevices = devices.filter((d) => !d.isOnline && d.isActive).length;
+    return {
+      totalProjects: recentProjects.length + favoriteProjects.length,
+      totalDevices,
+      onlineDevices,
+      offlineDevices,
+      activeAlarms: 0,
+    };
+  }, [recentProjects, favoriteProjects, devices, pagination]);
+
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
+
+  const navigate = useCallback((path: string) => () => router.push(path), [router]);
 
   const isLoading = projectLoading || deviceLoading;
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" />
+      <div className="flex items-center justify-center h-[calc(100vh-80px)]">
+        <div className="text-center space-y-3">
+          <LoadingSpinner size="lg" />
+          <p className="text-sm text-muted-foreground animate-pulse">Loading dashboard…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Welcome Header */}
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg p-6">
-        <h1 className="text-2xl font-bold mb-2">
-          Welcome back, {user?.firstName || 'User'}!
-        </h1>
-        <p className="text-primary-100">
-          Here's what's happening with your IoT platform today.
-        </p>
-      </div>
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">
 
-      {/* Statistics Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Projects</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalProjects}</p>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
+      {/* ── Hero Header ─────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-6 md:p-8 text-white">
+        {/* Decorative grid pattern */}
+        <div className="absolute inset-0 opacity-[0.07]" style={{
+          backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)`,
+          backgroundSize: '24px 24px',
+        }} />
+        {/* Glow */}
+        <div className="absolute -top-24 -right-24 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl" />
+        <div className="absolute -bottom-16 -left-16 w-56 h-56 bg-cyan-500/15 rounded-full blur-3xl" />
+
+        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-blue-300 text-sm font-medium">{greeting},</p>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+              {user?.firstName || 'User'} {user?.lastName || ''}
+            </h1>
+            <p className="text-slate-400 text-sm max-w-md">
+              Monitor your IoT infrastructure, manage devices, and control SCADA dashboards from one place.
+            </p>
           </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Devices</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalDevices}</p>
-            </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-              </svg>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Online Devices</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.onlineDevices}</p>
-              <p className="text-xs text-green-600">
-                {stats.totalDevices > 0 ? `${Math.round((stats.onlineDevices / stats.totalDevices) * 100)}% uptime` : '0% uptime'}
-              </p>
-            </div>
-            <div className="p-3 bg-emerald-100 rounded-full">
-              <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Active Alarms</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.activeAlarms}</p>
-              {stats.activeAlarms === 0 && (
-                <p className="text-xs text-green-600">All systems normal</p>
-              )}
-            </div>
-            <div className={`p-3 rounded-full ${stats.activeAlarms > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
-              <svg className={`w-6 h-6 ${stats.activeAlarms > 0 ? 'text-red-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Projects */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Projects</h2>
-            <Button variant="outline" size="sm">
-              View All
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              onClick={navigate('/projects')}
+              className="bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm"
+            >
+              {Icons.plus}
+              <span className="ml-1.5">New Project</span>
+            </Button>
+            <Button
+              size="sm"
+              onClick={navigate('/scada/new')}
+              className="bg-blue-500 hover:bg-blue-600 text-white border-0"
+            >
+              {Icons.layout}
+              <span className="ml-1.5">New SCADA</span>
             </Button>
           </div>
-          <div className="space-y-3">
-            {recentProjects.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No recent projects</p>
-            ) : (
-              recentProjects.slice(0, 5).map((project) => (
-                <div key={project.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div>
-                    <p className="font-medium text-gray-900">{project.name}</p>
-                    <p className="text-sm text-gray-600">
-                      {project.deviceCount} devices • {project.dashboardCount} dashboards
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className={`inline-flex px-2 py-1 text-xs rounded-full ${
-                      project.status === 'Active' ? 'bg-green-100 text-green-800' :
-                      project.status === 'Inactive' ? 'bg-gray-100 text-gray-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {project.status}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {formatDistanceToNow(new Date(project.updatedTime))}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-
-        {/* Recent Devices */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Device Status</h2>
-            <Button variant="outline" size="sm">
-              View All
-            </Button>
-          </div>
-          <div className="space-y-3">
-            {devices.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No devices found</p>
-            ) : (
-              devices.slice(0, 5).map((device) => (
-                <div key={device.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-3 h-3 rounded-full ${
-                      device.isOnline ? 'bg-green-500' :
-                      !device.isActive ? 'bg-yellow-500' :
-                      'bg-red-500'
-                    }`} />
-                    <div>
-                      <p className="font-medium text-gray-900">{device.name}</p>
-                      <p className="text-sm text-gray-600">
-                        {device.deviceType?.name || device.deviceType?.category || 'Unknown'}
-                        {device.area ? ` • ${device.area.name}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className={`inline-flex px-2 py-1 text-xs rounded-full ${
-                      device.isOnline ? 'bg-green-100 text-green-800' :
-                      !device.isActive ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {device.isOnline ? 'Online' : !device.isActive ? 'Inactive' : 'Offline'}
-                    </div>
-                    {device.lastSeen && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {formatDistanceToNow(new Date(device.lastSeen))}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button className="flex items-center justify-center space-x-2 py-3">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>Create Project</span>
-          </Button>
-
-          <Button variant="outline" className="flex items-center justify-center space-x-2 py-3">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-            </svg>
-            <span>Add Device</span>
-          </Button>
-
-          <Button variant="outline" className="flex items-center justify-center space-x-2 py-3">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <span>Create Dashboard</span>
-          </Button>
         </div>
-      </Card>
+      </div>
+
+      {/* ── KPI Cards ───────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Projects"
+          value={stats.totalProjects}
+          icon={Icons.folder}
+          accent="blue"
+          subtitle={`${favoriteProjects.length} favorites`}
+        />
+        <StatCard
+          label="Total Devices"
+          value={stats.totalDevices}
+          icon={Icons.cpu}
+          accent="cyan"
+        />
+        <StatCard
+          label="Online"
+          value={stats.onlineDevices}
+          icon={Icons.signal}
+          accent="green"
+          subtitle={stats.totalDevices > 0 ? `${Math.round((stats.onlineDevices / stats.totalDevices) * 100)}% connectivity` : 'No devices'}
+          subtitleColor="text-emerald-600 dark:text-emerald-400"
+        />
+        <StatCard
+          label="Alarms"
+          value={stats.activeAlarms}
+          icon={Icons.bell}
+          accent={stats.activeAlarms > 0 ? 'red' : 'gray'}
+          subtitle={stats.activeAlarms === 0 ? 'All systems normal' : `${stats.activeAlarms} active`}
+          subtitleColor={stats.activeAlarms === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}
+        />
+      </div>
+
+      {/* ── Main grid ───────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* ── Device health ring + breakdown ─────────────────────── */}
+        <Card className="lg:col-span-1">
+          <CardContent className="p-5 space-y-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Device Health</h2>
+            <div className="flex items-center justify-center py-2">
+              <HealthRing online={stats.onlineDevices} total={stats.totalDevices} />
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 p-2">
+                <p className="text-lg font-bold text-emerald-600">{stats.onlineDevices}</p>
+                <p className="text-muted-foreground">Online</p>
+              </div>
+              <div className="rounded-lg bg-red-50 dark:bg-red-950/30 p-2">
+                <p className="text-lg font-bold text-red-500">{stats.offlineDevices}</p>
+                <p className="text-muted-foreground">Offline</p>
+              </div>
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-2">
+                <p className="text-lg font-bold text-amber-600">{devices.filter((d) => !d.isActive).length}</p>
+                <p className="text-muted-foreground">Inactive</p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={navigate('/devices')}
+            >
+              View all devices
+              <span className="ml-auto">{Icons.arrowRight}</span>
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* ── Recent Projects ────────────────────────────────────── */}
+        <Card className="lg:col-span-2">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recent Projects</h2>
+              <Button variant="ghost" size="sm" onClick={navigate('/projects')} className="text-xs gap-1">
+                View all {Icons.arrowRight}
+              </Button>
+            </div>
+
+            {recentProjects.length === 0 ? (
+              <div className="text-center py-12 space-y-3">
+                <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                  {Icons.folder}
+                </div>
+                <p className="text-sm text-muted-foreground">No projects yet. Create your first project to get started.</p>
+                <Button size="sm" onClick={navigate('/projects')}>{Icons.plus}<span className="ml-1.5">Create Project</span></Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recentProjects.slice(0, 5).map((project) => (
+                  <div
+                    key={project.id}
+                    onClick={navigate(`/projects/${project.id}`)}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-border hover:bg-accent/50 transition-all cursor-pointer group"
+                  >
+                    {/* Color accent bar */}
+                    <div className={`w-1 h-10 rounded-full shrink-0 ${
+                      project.status === 'Active' ? 'bg-emerald-500' :
+                      project.status === 'Inactive' ? 'bg-gray-300 dark:bg-gray-600' :
+                      'bg-amber-400'
+                    }`} />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
+                          {project.name}
+                        </p>
+                        {favoriteProjects.some((f) => f.id === project.id) && Icons.star}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {project.deviceCount ?? 0} devices · {project.dashboardCount ?? 0} dashboards
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className={`px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide ${
+                        project.status === 'Active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' :
+                        project.status === 'Inactive' ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' :
+                        'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+                      }`}>
+                        {project.status || 'Active'}
+                      </div>
+                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        {Icons.clock}
+                        <span>{formatDistanceToNow(new Date(project.updatedTime || Date.now()))}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Devices + Quick Actions row ─────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* ── Device List ────────────────────────────────────────── */}
+        <Card className="lg:col-span-2">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Device Monitor</h2>
+              <Button variant="ghost" size="sm" onClick={navigate('/devices')} className="text-xs gap-1">
+                View all {Icons.arrowRight}
+              </Button>
+            </div>
+
+            {devices.length === 0 ? (
+              <div className="text-center py-12 space-y-3">
+                <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                  {Icons.cpu}
+                </div>
+                <p className="text-sm text-muted-foreground">No devices registered. Add your first IoT device.</p>
+                <Button size="sm" onClick={navigate('/devices')}>{Icons.plus}<span className="ml-1.5">Add Device</span></Button>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50">
+                      <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Device</th>
+                      <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider hidden md:table-cell">Type</th>
+                      <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider hidden sm:table-cell">Area</th>
+                      <th className="text-center py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Status</th>
+                      <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider hidden md:table-cell">Last Seen</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {devices.slice(0, 6).map((device) => (
+                      <tr
+                        key={device.id}
+                        className="hover:bg-accent/30 transition-colors cursor-pointer"
+                        onClick={navigate(`/devices`)}
+                      >
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${
+                              device.isOnline ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' :
+                              !device.isActive ? 'bg-amber-400' :
+                              'bg-red-500'
+                            }`} />
+                            <span className="font-medium truncate">{device.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-muted-foreground hidden md:table-cell">
+                          {device.deviceType?.name || device.deviceType?.category || '—'}
+                        </td>
+                        <td className="py-2.5 px-3 text-muted-foreground hidden sm:table-cell">
+                          {device.area?.name || '—'}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide ${
+                            device.isOnline
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+                              : !device.isActive
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+                              : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                          }`}>
+                            {device.isOnline ? 'Online' : !device.isActive ? 'Inactive' : 'Offline'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-xs text-muted-foreground text-right hidden md:table-cell">
+                          {device.lastSeen ? formatDistanceToNow(new Date(device.lastSeen)) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── Quick Actions ──────────────────────────────────────── */}
+        <Card className="lg:col-span-1">
+          <CardContent className="p-5 space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-1">Quick Actions</h2>
+
+            <button
+              onClick={navigate('/projects')}
+              className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-blue-300 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40 transition-colors text-left group"
+            >
+              <div className="p-2 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                {Icons.folder}
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Create Project</p>
+                <p className="text-xs text-muted-foreground">Start a new IoT project</p>
+              </div>
+            </button>
+
+            <button
+              onClick={navigate('/devices')}
+              className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-cyan-300 dark:border-cyan-800 bg-cyan-50/50 dark:bg-cyan-950/20 hover:bg-cyan-100/70 dark:hover:bg-cyan-950/40 transition-colors text-left group"
+            >
+              <div className="p-2 rounded-lg bg-cyan-100 text-cyan-600 dark:bg-cyan-900/60 dark:text-cyan-400 group-hover:scale-110 transition-transform">
+                {Icons.cpu}
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Add Device</p>
+                <p className="text-xs text-muted-foreground">Register an IoT device</p>
+              </div>
+            </button>
+
+            <button
+              onClick={navigate('/scada/new')}
+              className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/40 transition-colors text-left group"
+            >
+              <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/60 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                {Icons.layout}
+              </div>
+              <div>
+                <p className="text-sm font-semibold">New SCADA Dashboard</p>
+                <p className="text-xs text-muted-foreground">Build a monitoring screen</p>
+              </div>
+            </button>
+
+            <button
+              onClick={navigate('/templates')}
+              className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 hover:bg-purple-100/70 dark:hover:bg-purple-950/40 transition-colors text-left group"
+            >
+              <div className="p-2 rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-900/60 dark:text-purple-400 group-hover:scale-110 transition-transform">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125V6.75c0 .621.504 1.125 1.125 1.125H14.25c.621 0 1.125.504 1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125h2.625c.621 0 1.125.504 1.125 1.125v5.25A3.75 3.75 0 0 1 17.25 21H6.75Z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Templates</p>
+                <p className="text-xs text-muted-foreground">Manage widget & device templates</p>
+              </div>
+            </button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Footer info ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 pb-4">
+        <span>EITEK IoT Platform v1.0</span>
+        <span>Last refresh: {new Date().toLocaleTimeString()}</span>
+      </div>
     </div>
   );
 };

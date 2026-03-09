@@ -382,6 +382,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   headerActions
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const pathname = usePathname();
+
+  // SCADA viewer/editor gets a full-screen layout (no sidebar, no header)
+  const isScadaFullscreen = /^\/scada\/[^/]+/.test(pathname);
+  if (isScadaFullscreen) {
+    return <div className="h-screen">{children}</div>;
+  }
 
   return (
     <div className="h-screen flex bg-gray-50">

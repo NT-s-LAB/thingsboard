@@ -58,7 +58,7 @@ export const ScadaCard: React.FC<ScadaCardProps> = ({ scada, onEdit, onDelete })
         <div className="absolute inset-0 bg-primary-600/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
           <div className="flex items-center space-x-2 text-white">
             <ExternalLink className="w-5 h-5" />
-            <span className="font-medium text-sm">Mở Editor</span>
+            <span className="font-medium text-sm">Xem Dashboard</span>
           </div>
         </div>
 

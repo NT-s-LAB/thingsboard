@@ -36,16 +36,19 @@ function ensureWidgets() {
 interface ScadaEditorV2Props {
   /** Screen definition to load (e.g. from API). */
   screen?: ScreenDefinition;
-  /** Callback to save the screen. */
+  /** Callback to save/deploy the screen. */
   onSave?: (screen: ScreenDefinition) => void;
   /** Save status for visual feedback. */
   saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
+  /** Callback to exit edit mode and return to view mode. */
+  onExitEdit?: () => void;
 }
 
 export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
   screen: screenProp,
   onSave,
   saveStatus = 'idle',
+  onExitEdit,
 }) => {
   const [rightPanel, setRightPanel] = useState<'properties' | 'bindings' | 'actions'>('properties');
   const [widgetEditorOpen, setWidgetEditorOpen] = useState(false);
@@ -243,6 +246,7 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
           {...(onSave ? { onSave: handleSave } : {})}
           {...(screen?.name ? { screenName: screen.name } : {})}
           saveStatus={saveStatus}
+          onExitEdit={onExitEdit}
         />
       )}
 
