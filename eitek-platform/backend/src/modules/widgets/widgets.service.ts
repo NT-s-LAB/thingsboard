@@ -161,6 +161,9 @@ export class WidgetsService {
       throw new NotFoundException('Widget not found');
     }
 
+    // Delete related ScadaWidget records first to avoid FK constraint errors
+    await this.prisma.scadaWidget.deleteMany({ where: { widgetId: id } });
+
     await this.prisma.widget.delete({ where: { id } });
   }
 }

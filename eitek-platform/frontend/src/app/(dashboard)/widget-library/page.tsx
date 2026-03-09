@@ -1,6 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+/** Replace {{placeholder}} tokens with safe defaults so raw SVG previews don't produce DOM errors. */
+function sanitizeSvgPreview(html: string): string {
+  return html.replace(/\{\{(\w+)\}\}/g, '0');
+}
 import {
   Plus, Search, Upload, Trash2, Edit2, FolderPlus,
   Grid, List, MoreVertical, Image, FileCode, Eye, Copy, X,
@@ -406,7 +411,7 @@ const WidgetLibraryPage: React.FC = () => {
               previewWidget.preview.trim().startsWith('<') ? (
                 <div
                   className="max-w-full max-h-[300px]"
-                  dangerouslySetInnerHTML={{ __html: previewWidget.preview }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeSvgPreview(previewWidget.preview) }}
                 />
               ) : (
                 <img src={previewWidget.preview} alt={previewWidget.name} className="max-h-[300px] object-contain" />
@@ -414,7 +419,7 @@ const WidgetLibraryPage: React.FC = () => {
             ) : previewWidget?.template?.svg ? (
               <div
                 className="max-w-full max-h-[300px]"
-                dangerouslySetInnerHTML={{ __html: String(previewWidget.template.svg) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeSvgPreview(String(previewWidget.template.svg)) }}
               />
             ) : (
               <div className="text-gray-400 text-sm">No preview available</div>
@@ -489,12 +494,12 @@ const WidgetCard: React.FC<{
       <div className="aspect-square bg-gray-100 flex items-center justify-center p-4 relative cursor-pointer" onClick={onPreview}>
         {widget.preview ? (
           widget.preview.trim().startsWith('<') ? (
-            <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: widget.preview }} />
+            <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: sanitizeSvgPreview(widget.preview) }} />
           ) : (
             <img src={widget.preview} alt={widget.name} className="max-w-full max-h-full object-contain" />
           )
         ) : widget.template?.svg ? (
-          <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: String(widget.template.svg) }} />
+          <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: sanitizeSvgPreview(String(widget.template.svg)) }} />
         ) : (
           <Package className="w-8 h-8 text-gray-300" />
         )}
@@ -562,7 +567,7 @@ const WidgetListRow: React.FC<{
     <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center flex-shrink-0 mr-3 cursor-pointer" onClick={onPreview}>
       {widget.preview ? (
         widget.preview.trim().startsWith('<') ? (
-          <div className="w-8 h-8" dangerouslySetInnerHTML={{ __html: widget.preview }} />
+          <div className="w-8 h-8" dangerouslySetInnerHTML={{ __html: sanitizeSvgPreview(widget.preview) }} />
         ) : (
           <img src={widget.preview} alt="" className="w-8 h-8 object-contain" />
         )

@@ -30,6 +30,7 @@ import { IndicatorRenderer } from './renderers/IndicatorRenderer';
 import { ProgressBarRenderer } from './renderers/ProgressBarRenderer';
 import { ImageWidgetRenderer } from './renderers/ImageWidgetRenderer';
 import { NumberInputRenderer } from './renderers/NumberInputRenderer';
+import { CustomWidgetRenderer } from './renderers/CustomWidgetRenderer';
 
 // ─── VALUE DISPLAY ───────────────────────────────────────────────────────────
 
@@ -582,6 +583,40 @@ const numberInput: WidgetDefinition = {
   renderer: NumberInputRenderer,
 };
 
+// ─── CUSTOM WIDGET (library) ─────────────────────────────────────────────────
+
+const customWidget: WidgetDefinition = {
+  type: 'customWidget',
+  name: 'Custom Widget',
+  icon: '📦',
+  category: 'custom',
+  defaultSize: { width: 120, height: 80 },
+  supportsSvg: true,
+  propSchema: [
+    { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
+    { key: '_svgContent', label: 'SVG Content', type: 'string', defaultValue: '', group: 'Internal' },
+    { key: '_imageUrl', label: 'Image URL', type: 'image', defaultValue: '', group: 'Internal' },
+    { key: '_libraryId', label: 'Library ID', type: 'string', defaultValue: '', group: 'Internal' },
+    { key: '_libraryName', label: 'Library Name', type: 'string', defaultValue: '', group: 'Internal' },
+    { key: 'fillColor', label: 'Fill Color', type: 'color', defaultValue: '', group: 'Appearance' },
+    { key: 'strokeColor', label: 'Stroke Color', type: 'color', defaultValue: '', group: 'Appearance' },
+    { key: 'bgColor', label: 'Background', type: 'color', defaultValue: 'transparent', group: 'Appearance' },
+    { key: 'labelColor', label: 'Label Color', type: 'color', defaultValue: '#6B7280', group: 'Appearance' },
+    { key: 'borderRadius', label: 'Border Radius', type: 'number', defaultValue: 0, min: 0, max: 30, group: 'Appearance' },
+    { key: 'borderWidth', label: 'Border Width', type: 'number', defaultValue: 0, min: 0, max: 6, group: 'Appearance' },
+    { key: 'borderColor', label: 'Border Color', type: 'color', defaultValue: '#E5E7EB', group: 'Appearance' },
+    { key: 'opacity', label: 'Opacity', type: 'range', defaultValue: 1, min: 0, max: 1, step: 0.05, group: 'Appearance' },
+  ],
+  bindingSchema: [
+    { key: 'value', label: 'Value', valueType: 'number', suggestedKey: '' },
+    { key: 'label', label: 'Label', valueType: 'string' },
+  ],
+  actionSchema: [
+    { trigger: 'click', label: 'On Click' },
+  ],
+  renderer: CustomWidgetRenderer,
+};
+
 // ─── All definitions ─────────────────────────────────────────────────────────
 
 const builtinWidgets: WidgetDefinition[] = [
@@ -602,6 +637,7 @@ const builtinWidgets: WidgetDefinition[] = [
   progressBar,
   imageWidget,
   numberInput,
+  customWidget,
 ];
 
 /**

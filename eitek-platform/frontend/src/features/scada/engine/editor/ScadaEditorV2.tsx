@@ -19,7 +19,9 @@ import { ActionPanelV2 } from './ActionPanelV2';
 import { LayerPanel } from './LayerPanel';
 import { EditorToolbar } from './EditorToolbar';
 import { RuntimeRenderer } from '../runtime/RuntimeRenderer';
+import { WidgetEditorDialog } from './WidgetEditorDialog';
 import type { ScreenDefinition } from '../../core/types';
+import type { WidgetItem } from '../../services/widgetLibraryService';
 import '../../styles/scada.css';
 
 // Ensure widgets are registered
@@ -46,6 +48,8 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
   saveStatus = 'idle',
 }) => {
   const [rightPanel, setRightPanel] = useState<'properties' | 'bindings' | 'actions'>('properties');
+  const [widgetEditorOpen, setWidgetEditorOpen] = useState(false);
+  const [editingWidget, setEditingWidget] = useState<WidgetItem | null>(null);
 
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
 
@@ -144,6 +148,69 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
     [screen, addWidget, selectWidget],
   );
 
+  // Add library widget by clicking (from WidgetLibraryPanel)
+  const handleAddLibraryWidget = useCallback(
+    (widget: WidgetItem) => {
+      if (!screen) return;
+      const cfg = (widget.config || {}) as Record<string, unknown>;
+      const tpl = (widget.template || {}) as Record<string, unknown>;
+      const defW = (cfg.defaultWidth as number) || 120;
+      const defH = (cfg.defaultHeight as number) || 80;
+
+      const props: Record<string, unknown> = {
+        _libraryId: widget.id,
+        _libraryName: widget.name,
+        _svgContent: (tpl.svg as string) || '',
+        _imageUrl: (tpl.imageUrl as string) || '',
+        label: widget.name || '',
+        fillColor: '',
+        strokeColor: '',
+        bgColor: 'transparent',
+        labelColor: '#6B7280',
+        borderRadius: 0,
+        borderWidth: 0,
+        borderColor: '#E5E7EB',
+        opacity: 1,
+      };
+
+      // Merge custom props from config.propSchema
+      const schema = (cfg.propSchema as Array<{ key: string; defaultValue?: unknown }>) || [];
+      for (const field of schema) {
+        if (field.key && !(field.key in props)) {
+          props[field.key] = field.defaultValue ?? '';
+        }
+      }
+
+      const newWidget = {
+        id: `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        type: 'customWidget',
+        name: widget.name || 'Custom Widget',
+        layerId: screen.layers[0]?.id ?? 'default',
+        transform: {
+          position: { x: 100, y: 100 },
+          size: { width: defW, height: defH },
+          rotation: 0,
+          zIndex: screen.widgets.length + 1,
+        },
+        properties: props,
+        bindings: [],
+        actions: [],
+        visible: true,
+        locked: false,
+      };
+
+      addWidget(newWidget);
+      selectWidget(newWidget.id);
+    },
+    [screen, addWidget, selectWidget],
+  );
+
+  // Open widget editor dialog
+  const handleOpenWidgetEditor = useCallback(() => {
+    setEditingWidget(null);
+    setWidgetEditorOpen(true);
+  }, []);
+
   // Save handler
   const handleSave = useCallback(() => {
     if (screen && onSave) {
@@ -183,7 +250,11 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left panel — Widget palette (editor mode only) */}
         {!isRuntime && (
-          <WidgetPaletteV2 onAddWidget={handleAddWidget} />
+          <WidgetPaletteV2
+            onAddWidget={handleAddWidget}
+            onAddLibraryWidget={handleAddLibraryWidget}
+            onCreateWidget={handleOpenWidgetEditor}
+          />
         )}
 
         {/* Center — Canvas or Runtime */}
@@ -250,6 +321,16 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
           ✕ Exit Fullscreen
         </button>
       )}
+
+      {/* Widget Editor Dialog */}
+      <WidgetEditorDialog
+        open={widgetEditorOpen}
+        onClose={() => setWidgetEditorOpen(false)}
+        editWidget={editingWidget}
+        onSaved={() => {
+          // Library panel will auto-refresh on next render
+        }}
+      />
     </div>
   );
 };

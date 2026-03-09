@@ -74,19 +74,88 @@ export const CanvasEditor: React.FC = () => {
     [snapToGrid, gridSize],
   );
 
-  // ── Drop handler — add widget from palette ──
+  // ── Drop handler — add widget from palette or library ──
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      const type = e.dataTransfer.getData('widget-type');
-      if (!type || !canvasRef.current) return;
-
-      const def = widgetRegistry.get(type);
-      if (!def) return;
+      if (!canvasRef.current) return;
 
       const rect = canvasRef.current.getBoundingClientRect();
       const x = snap((e.clientX - rect.left - 40) / zoom - panOffset.x);
       const y = snap((e.clientY - rect.top - 40) / zoom - panOffset.y);
+
+      // ── Library widget drop ──
+      const libraryData = e.dataTransfer.getData('library-widget-data');
+      if (libraryData) {
+        try {
+          const libWidget = JSON.parse(libraryData) as {
+            id: string;
+            name: string;
+            config?: Record<string, unknown>;
+            template?: Record<string, unknown>;
+          };
+          const cfg = libWidget.config || {};
+          const tpl = libWidget.template || {};
+          const defW = (cfg.defaultWidth as number) || 120;
+          const defH = (cfg.defaultHeight as number) || 80;
+
+          // Build properties from library widget's propSchema + internal fields
+          const props: Record<string, unknown> = {
+            _libraryId: libWidget.id,
+            _libraryName: libWidget.name,
+            _svgContent: (tpl.svg as string) || '',
+            _imageUrl: (tpl.imageUrl as string) || '',
+            label: libWidget.name || '',
+            fillColor: '',
+            strokeColor: '',
+            bgColor: 'transparent',
+            labelColor: '#6B7280',
+            borderRadius: 0,
+            borderWidth: 0,
+            borderColor: '#E5E7EB',
+            opacity: 1,
+          };
+
+          // Merge custom property defaults from config.propSchema
+          const schema = (cfg.propSchema as Array<{ key: string; defaultValue?: unknown }>) || [];
+          for (const field of schema) {
+            if (field.key && !(field.key in props)) {
+              props[field.key] = field.defaultValue ?? '';
+            }
+          }
+
+          const newWidget: WidgetInstance = {
+            id: `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            type: 'customWidget',
+            name: libWidget.name || 'Custom Widget',
+            layerId: screen?.layers[0]?.id ?? 'default',
+            transform: {
+              position: { x, y },
+              size: { width: defW, height: defH },
+              rotation: 0,
+              zIndex: (screen?.widgets.length ?? 0) + 1,
+            },
+            properties: props,
+            bindings: [],
+            actions: [],
+            visible: true,
+            locked: false,
+          };
+
+          addWidget(newWidget);
+          selectWidget(newWidget.id);
+          return;
+        } catch {
+          // Fall through to built-in handler
+        }
+      }
+
+      // ── Built-in widget drop ──
+      const type = e.dataTransfer.getData('widget-type');
+      if (!type) return;
+
+      const def = widgetRegistry.get(type);
+      if (!def) return;
 
       const newWidget: WidgetInstance = {
         id: `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,

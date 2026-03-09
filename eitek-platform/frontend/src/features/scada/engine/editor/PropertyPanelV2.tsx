@@ -17,6 +17,16 @@ import type { PropField } from '../../core/types';
 import type { ScreenBackground, BackgroundType } from '../../core/types';
 import '../../styles/scada.css';
 
+/** Sanitize a color value for <input type="color"> — must be #rrggbb */
+function toColorHex(v: unknown): string {
+  const s = String(v ?? '');
+  if (/^#[0-9a-fA-F]{6}$/.test(s)) return s;
+  if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+    return '#' + s[1]! + s[1]! + s[2]! + s[2]! + s[3]! + s[3]!;
+  }
+  return '#000000';
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const resolveImgUrl = (url: string | null | undefined): string => {
   if (!url) return '';
@@ -190,7 +200,7 @@ export const PropertyPanelV2: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
               <input
                 type="color"
-                value={String(selectedWidget.properties._borderColor ?? '#000000')}
+                value={toColorHex(selectedWidget.properties._borderColor)}
                 onChange={(e) => handlePropertyChange('_borderColor', e.target.value)}
                 style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
               />
@@ -217,7 +227,7 @@ export const PropertyPanelV2: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
               <input
                 type="color"
-                value={String(selectedWidget.properties._bgColor ?? '#ffffff')}
+                value={toColorHex(selectedWidget.properties._bgColor || '#ffffff')}
                 onChange={(e) => handlePropertyChange('_bgColor', e.target.value)}
                 style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
               />
@@ -326,7 +336,7 @@ const PropFieldInput: React.FC<PropFieldInputProps> = ({ field, value, onChange 
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <input
               type="color"
-              value={String(effectiveValue ?? '#000000')}
+              value={toColorHex(effectiveValue)}
               onChange={(e) => onChange(e.target.value)}
               style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
             />
@@ -667,7 +677,7 @@ const ScreenPropertiesPanel: React.FC<ScreenPropertiesPanelProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
             <input
               type="color"
-              value={bg.color ?? '#f8fafc'}
+              value={toColorHex(bg.color || '#f8fafc')}
               onChange={(e) => onBackgroundChange({ color: e.target.value })}
               style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
             />
