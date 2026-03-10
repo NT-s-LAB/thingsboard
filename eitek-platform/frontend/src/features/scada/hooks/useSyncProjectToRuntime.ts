@@ -110,14 +110,15 @@ export function useSyncProjectToRuntime() {
           
           const existingPage = state.project.pages[idx]!;
           
-          // Merge widgets: prefer events from runtime widget, fall back to existing widget
+          // Merge widgets: prefer events from runtime widget if defined, otherwise preserve existing
           const mergedWidgets = screen.widgets.map((runtimeWidget) => {
             const existingWidget = existingPage.widgets.find((w) => w.id === runtimeWidget.id);
             const runtimeEvents = (runtimeWidget as any).events;
             const existingEvents = (existingWidget as any)?.events;
             
-            // Use runtime events if present, otherwise preserve existing events
-            const events = (runtimeEvents && runtimeEvents.length > 0)
+            // If runtime has events defined (even empty array), use it
+            // Otherwise preserve existing events (undefined means runtime doesn't know about events)
+            const events = runtimeEvents !== undefined
               ? runtimeEvents
               : existingEvents ?? [];
             
@@ -149,7 +150,10 @@ export function useSyncProjectToRuntime() {
     const page = project.pages.find((p) => p.id === activePageId);
     if (!page) return;
 
+    // Set flag to prevent runtime subscription from triggering during initial sync
+    syncingFromProject.current = true;
     const screen = pageToScreen(page, project.id, project.name);
     useScadaRuntimeStore.getState().loadScreen(screen);
+    syncingFromProject.current = false;
   }, []);
 }

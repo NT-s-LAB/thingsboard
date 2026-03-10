@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { useAuthStore } from '@/features/auth/stores/authStore';
+import { useAuthGuard } from '@/features/auth/hooks/useAuthGuard';
 import { useProjectStore } from '@/features/projects/stores/projectStore';
 import { useDeviceStore } from '@/features/devices/stores/deviceStore';
 import { formatDistanceToNow } from '@/shared/utils/date';
@@ -167,7 +168,8 @@ function HealthRing({ online, total }: { online: number; total: number }) {
 
 const DashboardPage: React.FC = () => {
   const router = useRouter();
-  const { user, isAuthenticated, token } = useAuthStore();
+  const { user } = useAuthStore();
+  const { isReady, isAuthenticated } = useAuthGuard();
   const {
     recentProjects,
     favoriteProjects,
@@ -183,14 +185,14 @@ const DashboardPage: React.FC = () => {
   } = useDeviceStore();
 
   useEffect(() => {
-    if (!isAuthenticated || !token) {
-      router.replace('/login');
+    // Only fetch data when auth is ready and authenticated
+    if (!isReady || !isAuthenticated) {
       return;
     }
     fetchRecentProjects();
     fetchFavorites();
     fetchDevices({ pageSize: 10 });
-  }, [isAuthenticated, token, router, fetchRecentProjects, fetchFavorites, fetchDevices]);
+  }, [isReady, isAuthenticated, fetchRecentProjects, fetchFavorites, fetchDevices]);
 
   const stats = useMemo(() => {
     const totalDevices = pagination.totalElements;
@@ -214,7 +216,20 @@ const DashboardPage: React.FC = () => {
 
   const navigate = useCallback((path: string) => () => router.push(path), [router]);
 
-  const isLoading = projectLoading || deviceLoading;
+  // Show loading while auth hydration is pending or data is loading
+  const isLoading = !isReady || projectLoading || deviceLoading;
+
+  // If auth is ready but not authenticated, show minimal loading while redirecting
+  if (isReady && !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-80px)]">
+        <div className="text-center space-y-3">
+          <LoadingSpinner size="lg" />
+          <p className="text-sm text-muted-foreground animate-pulse">Redirecting to login…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

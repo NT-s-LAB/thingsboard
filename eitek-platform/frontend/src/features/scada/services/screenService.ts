@@ -113,12 +113,37 @@ function mapBackendToScreen(raw: any): ScreenDefinition {
   
   // Extract _projectData from layout if present (multi-page project)
   // Also parse it in case it's a nested JSON string
-  let projectData = layout?._projectData as unknown;
+  let projectData = layout?._projectData as any;
   if (typeof projectData === 'string') {
     try {
       projectData = JSON.parse(projectData);
     } catch {
       // Keep as-is if parsing fails
+    }
+  }
+
+  let widgets = (raw.widgets ?? raw.scadaWidgets ?? []).map(mapBackendWidget);
+
+  // IMPORTANT: Sync events from _projectData into screen.widgets
+  // Backend doesn't persist events in top-level widgets, only in _projectData blob
+  if (projectData?.pages && projectData?.homePageId) {
+    const homePage = projectData.pages.find((p: any) => p.id === projectData.homePageId);
+    if (homePage?.widgets) {
+      // Create a map of widget ID → events from projectData
+      const eventsMap = new Map<string, any[]>();
+      for (const w of homePage.widgets) {
+        if (w.events && w.events.length > 0) {
+          eventsMap.set(w.id, w.events);
+        }
+      }
+      // Merge events into screen widgets
+      widgets = widgets.map((w: import('../core/types/screen.types').WidgetInstance) => {
+        const events = eventsMap.get(w.id);
+        if (events) {
+          return { ...w, events };
+        }
+        return w;
+      });
     }
   }
 
@@ -130,7 +155,7 @@ function mapBackendToScreen(raw: any): ScreenDefinition {
     canvasSize: parseJsonField(raw.canvasSize, null) ?? parseJsonField(raw.settings?.canvasSize, null) ?? { width: 1920, height: 1080 },
     background: parseJsonField(raw.background, null) ?? parseJsonField(raw.settings?.background, null) ?? { type: 'color', color: '#f8fafc' },
     layers: raw.layers ?? (layout?.layers as unknown[]) ?? [{ id: 'default', name: 'Default', visible: true, locked: false, opacity: 1, order: 0 }],
-    widgets: (raw.widgets ?? raw.scadaWidgets ?? []).map(mapBackendWidget),
+    widgets,
     variables: raw.variables ?? (layout?.variables as unknown[]) ?? [],
     metadata: {
       createdAt: raw.createdAt ?? '',

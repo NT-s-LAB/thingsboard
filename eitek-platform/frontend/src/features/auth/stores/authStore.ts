@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { User, LoginRequest } from '@/shared/types';
 import { authService } from '../services/authService';
 import { apiClient } from '@/shared/services/api';
@@ -129,9 +129,11 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       }),
       {
         name: 'auth-store',
+        storage: createJSONStorage(() => localStorage),
         partialize: (state) => ({
           user: state.user,
           token: state.token,
+          refreshToken: state.refreshToken,
           isAuthenticated: state.isAuthenticated,
           permissions: state.permissions,
         }),
@@ -139,6 +141,9 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           // Restore apiClient token from persisted auth state
           if (state?.token) {
             apiClient.setToken(state.token);
+          }
+          if (state?.refreshToken) {
+            apiClient.setRefreshToken(state.refreshToken);
           }
         },
       }
