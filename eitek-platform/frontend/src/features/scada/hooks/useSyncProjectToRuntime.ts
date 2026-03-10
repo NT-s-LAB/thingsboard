@@ -18,7 +18,7 @@ import type { ScreenDefinition } from '../core/types';
 import type { ScadaPage } from '../core/types/project.types';
 
 // Debug flag - set to true to enable logging
-const DEBUG_SYNC = true;
+const DEBUG_SYNC = false;
 
 function debugLog(...args: any[]) {
   if (DEBUG_SYNC) {

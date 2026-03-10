@@ -124,15 +124,6 @@ export const useScadaProjectStore = create<ScadaProjectState>()(
         // ── Project loading ──
         loadProject: (project) =>
           set((s) => {
-            console.log('[ProjectStore] loadProject called:', project.id);
-            const homePage = project.pages.find(p => p.id === project.homePageId);
-            console.log('[ProjectStore] Home page widgets with events:', 
-              homePage?.widgets.filter((w: any) => w.events?.length > 0).map((w: any) => ({
-                id: w.id,
-                name: w.name,
-                eventCount: w.events?.length
-              }))
-            );
             s.project = project;
             s.activePageId = project.homePageId ?? project.pages[0]?.id ?? null;
             s.isDirty = false;

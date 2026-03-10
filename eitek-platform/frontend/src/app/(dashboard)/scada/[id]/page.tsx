@@ -87,21 +87,10 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
     screenService
       .getById(params.id)
       .then((data) => {
-        console.log('[ScadaPage] Screen loaded from backend:', data.id);
-        console.log('[ScadaPage] Screen has _projectData:', !!(data as any)._projectData);
         setScreen(data);
         realIdRef.current = data.id;
         // Migrate to project model
         const proj = screenDefinitionToProject(data);
-        console.log('[ScadaPage] Project after migration:', proj.id, 'pages:', proj.pages.length);
-        const homePage = proj.pages.find(p => p.id === proj.homePageId);
-        console.log('[ScadaPage] Home page widgets with events:', 
-          homePage?.widgets.filter((w: any) => w.events?.length > 0).map((w: any) => ({
-            id: w.id,
-            name: w.name,
-            eventCount: w.events?.length
-          }))
-        );
         setProject(proj);
         useScadaProjectStore.getState().loadProject(proj);
       })
