@@ -17,9 +17,19 @@ import { useScadaRuntimeStore } from '../stores/scadaRuntimeStore';
 import type { ScreenDefinition } from '../core/types';
 import type { ScadaPage } from '../core/types/project.types';
 
+// Debug flag - set to true to enable logging
+const DEBUG_SYNC = true;
+
+function debugLog(...args: any[]) {
+  if (DEBUG_SYNC) {
+    console.log('[SyncProjectToRuntime]', ...args);
+  }
+}
+
 /**
  * Converts a ScadaPage + project metadata into a ScreenDefinition
  * that the runtime store can consume.
+ * IMPORTANT: Preserves widget events.
  */
 function pageToScreen(page: ScadaPage, projectId: string, projectName: string): ScreenDefinition {
   return {
@@ -30,7 +40,11 @@ function pageToScreen(page: ScadaPage, projectId: string, projectName: string): 
     canvasSize: page.canvasSize,
     background: page.background,
     layers: page.layers,
-    widgets: page.widgets,
+    // Preserve events on widgets
+    widgets: page.widgets.map(w => ({
+      ...w,
+      events: (w as any).events ?? [],
+    })),
     variables: page.variables ?? [],
     metadata: {
       createdAt: '',
@@ -46,8 +60,13 @@ function pageToScreen(page: ScadaPage, projectId: string, projectName: string): 
  * changes and pushes the active page into the runtime store.
  */
 export function useSyncProjectToRuntime() {
-  const syncingFromProject = useRef(false);
-  const syncingFromRuntime = useRef(false);
+  // Use a counter to track when we're in a sync operation
+  // This handles the async nature of Zustand subscriptions better than a boolean
+  const syncingFromProjectCounter = useRef(0);
+  const syncingFromRuntimeCounter = useRef(0);
+  
+  // Track if initial sync has completed
+  const initialSyncDone = useRef(false);
 
   // ── Project → Runtime: when active page changes, load into runtime store ──
   useEffect(() => {
@@ -57,16 +76,25 @@ export function useSyncProjectToRuntime() {
         project: state.project,
       }),
       ({ activePageId, project }) => {
-        if (syncingFromRuntime.current) return;
+        if (syncingFromRuntimeCounter.current > 0) {
+          debugLog('Skipping project→runtime sync: runtime is syncing');
+          return;
+        }
         if (!project || !activePageId) return;
 
         const page = project.pages.find((p) => p.id === activePageId);
         if (!page) return;
 
-        syncingFromProject.current = true;
+        debugLog('Project→Runtime sync: loading page', activePageId);
+        syncingFromProjectCounter.current++;
         const screen = pageToScreen(page, project.id, project.name);
         useScadaRuntimeStore.getState().loadScreen(screen);
-        syncingFromProject.current = false;
+        
+        // Delay decrement to allow subscription to fire first
+        setTimeout(() => {
+          syncingFromProjectCounter.current--;
+          debugLog('Project→Runtime sync complete');
+        }, 0);
       },
       { equalityFn: (a, b) => a.activePageId === b.activePageId && a.project === b.project },
     );
@@ -80,7 +108,18 @@ export function useSyncProjectToRuntime() {
     const unsubscribe = useScadaRuntimeStore.subscribe(
       (state) => state.screen,
       (screen) => {
-        if (syncingFromProject.current) return;
+        // Skip if we're in a project→runtime sync
+        if (syncingFromProjectCounter.current > 0) {
+          debugLog('Skipping runtime→project sync: project is syncing');
+          return;
+        }
+        
+        // Skip during initial sync
+        if (!initialSyncDone.current) {
+          debugLog('Skipping runtime→project sync: initial sync not done');
+          return;
+        }
+        
         if (!screen) return;
 
         const { project, activePageId } = useScadaProjectStore.getState();
@@ -89,7 +128,8 @@ export function useSyncProjectToRuntime() {
         const page = project.pages.find((p) => p.id === activePageId);
         if (!page) return;
 
-        // Only sync if there are actual differences
+        // Only sync if there are actual differences (deep compare would be expensive,
+        // so we rely on the fact that user actions modify the runtime store directly)
         const widgetsChanged = screen.widgets !== page.widgets;
         const layersChanged = screen.layers !== page.layers;
         const bgChanged = screen.background !== page.background;
@@ -97,9 +137,13 @@ export function useSyncProjectToRuntime() {
           screen.canvasSize.width !== page.canvasSize.width ||
           screen.canvasSize.height !== page.canvasSize.height;
 
-        if (!widgetsChanged && !layersChanged && !bgChanged && !sizeChanged) return;
+        if (!widgetsChanged && !layersChanged && !bgChanged && !sizeChanged) {
+          debugLog('Runtime→Project sync: no changes detected');
+          return;
+        }
 
-        syncingFromRuntime.current = true;
+        debugLog('Runtime→Project sync: updating project', { widgetsChanged, layersChanged, bgChanged, sizeChanged });
+        syncingFromRuntimeCounter.current++;
 
         // Update the project store's active page with runtime changes
         // IMPORTANT: Preserve widget events that aren't in the screen (runtime store may lose them)
@@ -135,7 +179,7 @@ export function useSyncProjectToRuntime() {
           state.isDirty = true;
         });
 
-        syncingFromRuntime.current = false;
+        syncingFromRuntimeCounter.current--;
       },
     );
 
@@ -150,10 +194,18 @@ export function useSyncProjectToRuntime() {
     const page = project.pages.find((p) => p.id === activePageId);
     if (!page) return;
 
+    debugLog('Initial sync: loading page', activePageId);
+    
     // Set flag to prevent runtime subscription from triggering during initial sync
-    syncingFromProject.current = true;
+    syncingFromProjectCounter.current++;
     const screen = pageToScreen(page, project.id, project.name);
     useScadaRuntimeStore.getState().loadScreen(screen);
-    syncingFromProject.current = false;
+    
+    // Mark initial sync as done after a tick to allow subscriptions to settle
+    setTimeout(() => {
+      syncingFromProjectCounter.current--;
+      initialSyncDone.current = true;
+      debugLog('Initial sync complete, future runtime changes will sync to project');
+    }, 0);
   }, []);
 }

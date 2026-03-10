@@ -148,7 +148,20 @@ export function projectToScreenDefinition(project: ScadaProject): ScreenDefiniti
 export function screenDefinitionToProject(screen: ScreenDefinition): ScadaProject {
   const raw = screen as ScreenDefinition & { _projectData?: ScadaProject };
   if (raw._projectData && raw._projectData.schemaVersion === CURRENT_SCHEMA_VERSION) {
+    // Debug: Log events from home page widgets
+    if (typeof window !== 'undefined') {
+      const homePage = raw._projectData.pages.find(p => p.id === raw._projectData!.homePageId);
+      console.log('[ProjectMigration] Loading from _projectData, homePageId:', raw._projectData.homePageId);
+      console.log('[ProjectMigration] Home page widgets with events:', 
+        homePage?.widgets.filter((w: any) => w.events?.length > 0).map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          eventCount: w.events?.length
+        }))
+      );
+    }
     return raw._projectData;
   }
+  console.log('[ProjectMigration] Migrating from legacy ScreenDefinition');
   return migrateFromScreenDefinition(screen);
 }

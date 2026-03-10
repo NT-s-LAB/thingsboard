@@ -122,6 +122,22 @@ function mapBackendToScreen(raw: any): ScreenDefinition {
     }
   }
 
+  // Debug logging
+  if (typeof window !== 'undefined') {
+    console.log('[ScreenService] mapBackendToScreen - raw.id:', raw.id);
+    console.log('[ScreenService] projectData exists:', !!projectData);
+    if (projectData?.pages) {
+      const homePage = projectData.pages.find((p: any) => p.id === projectData.homePageId);
+      console.log('[ScreenService] Home page widgets with events:', 
+        homePage?.widgets?.filter((w: any) => w.events?.length > 0).map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          events: w.events
+        }))
+      );
+    }
+  }
+
   let widgets = (raw.widgets ?? raw.scadaWidgets ?? []).map(mapBackendWidget);
 
   // IMPORTANT: Sync events from _projectData into screen.widgets

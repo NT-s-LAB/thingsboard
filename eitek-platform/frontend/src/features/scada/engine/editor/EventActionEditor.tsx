@@ -73,7 +73,12 @@ export const EventActionEditor: React.FC = () => {
   // Get the selected widget (only works for single selection)
   const selectedWidget = useMemo(() => {
     if (selectedWidgetIds.length !== 1 || !activePage) return null;
-    return activePage.widgets.find((w) => w.id === selectedWidgetIds[0]) ?? null;
+    const widget = activePage.widgets.find((w) => w.id === selectedWidgetIds[0]) ?? null;
+    if (widget) {
+      console.log('[EventActionEditor] Selected widget:', widget.id, widget.name);
+      console.log('[EventActionEditor] Widget events:', (widget as any).events);
+    }
+    return widget;
   }, [selectedWidgetIds, activePage]);
 
   // Get events from the widget (stored as a property)
