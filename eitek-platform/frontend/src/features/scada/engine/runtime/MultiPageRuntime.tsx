@@ -6,6 +6,7 @@
  *   - Popup overlay stack
  *   - Transition effects (fade / slide / none)
  *   - Action engine integration for the new discriminated-union action system
+ *   - Data binding resolution via SubscriptionManager + bindingResolver
  *
  * This is the top-level runtime component that replaces direct RuntimeRenderer
  * usage in the SCADA page when working with multi-page projects.
@@ -13,12 +14,15 @@
 
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRuntimeNavStore } from '../../stores/runtimeNavStore';
 import { widgetRegistry } from '../../core/registry';
 import { executeActions } from './actionEngine';
+import { collectDataPoints, resolveWidgetProperties } from '../../core/engine/bindingResolver';
+import { SubscriptionManager, DataUpdate, DataValue } from '../../core/engine/subscriptionManager';
+import { useWebSocket } from '@/shared/components/providers/WebSocketProvider';
 import type { ScadaProject, ScadaPage, WidgetEvent } from '../../core/types/project.types';
-import type { WidgetInstance } from '../../core/types';
+import type { WidgetInstance, ScreenDefinition } from '../../core/types';
 import '../../styles/scada.css';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -95,10 +99,84 @@ const PageRenderer: React.FC<{
   page: ScadaPage;
   project: ScadaProject;
   autoFit?: boolean;
-}> = ({ page, autoFit }) => {
+}> = ({ page, autoFit, project }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [fitScale, setFitScale] = React.useState(1);
-  const [fitOffset, setFitOffset] = React.useState({ x: 0, y: 0 });
+  const [fitScale, setFitScale] = useState(1);
+  const [fitOffset, setFitOffset] = useState({ x: 0, y: 0 });
+
+  // Data binding state
+  const [dataCache, setDataCache] = useState<Map<string, DataUpdate>>(new Map());
+  const subscriptionManager = useRef<SubscriptionManager | null>(null);
+  const { subscribe, unsubscribe, emit, connected } = useWebSocket();
+  
+  // Convert page variables to a lookup object
+  const variables = useMemo(() => {
+    const vars: Record<string, unknown> = {};
+    for (const v of page.variables) {
+      vars[v.name] = v.defaultValue;
+    }
+    // Also include project-level global variables
+    if (project.globalVariables) {
+      for (const v of project.globalVariables) {
+        if (!(v.name in vars)) {
+          vars[v.name] = v.defaultValue;
+        }
+      }
+    }
+    return vars;
+  }, [page.variables, project.globalVariables]);
+
+  // Create a pseudo-screen for collectDataPoints (it just needs widgets array)
+  const screenForBinding = useMemo(() => ({
+    widgets: page.widgets,
+  } as ScreenDefinition), [page.widgets]);
+
+  // Collect data points from page widgets
+  const dataPoints = useMemo(
+    () => collectDataPoints(screenForBinding),
+    [screenForBinding],
+  );
+
+  // Set up subscription manager and subscribe to data points
+  useEffect(() => {
+    // Create manager if needed
+    if (!subscriptionManager.current) {
+      subscriptionManager.current = new SubscriptionManager(5000);
+    }
+
+    const manager = subscriptionManager.current;
+
+    // Set up WebSocket handle
+    manager.setWebSocket({ subscribe, unsubscribe, emit, connected });
+
+    // Set up update callback
+    manager.onUpdate((updates: DataUpdate[]) => {
+      setDataCache((prev) => {
+        const next = new Map(prev);
+        for (const update of updates) {
+          next.set(`${update.entityId}::${update.key}`, update);
+        }
+        return next;
+      });
+    });
+
+    // Subscribe to data points
+    if (dataPoints.length > 0) {
+      manager.subscribe(dataPoints);
+    }
+
+    return () => {
+      manager.unsubscribeAll();
+    };
+  }, [dataPoints, subscribe, unsubscribe, emit, connected]);
+
+  // Provide getLatest function for binding resolution
+  const getLatest = useCallback(
+    (entityId: string, key: string): DataValue | undefined => {
+      return dataCache.get(`${entityId}::${key}`)?.value;
+    },
+    [dataCache],
+  );
 
   // Auto-fit logic
   useEffect(() => {
@@ -214,13 +292,18 @@ const PageRenderer: React.FC<{
           overflow: 'hidden',
         }}
       >
-        {sortedWidgets.map((widget) => (
-          <RuntimeWidgetV2
-            key={widget.id}
-            widget={widget}
-            onAction={(trigger) => handleWidgetAction(widget, trigger)}
-          />
-        ))}
+        {sortedWidgets.map((widget) => {
+          // Resolve widget properties with live data bindings
+          const resolvedProperties = resolveWidgetProperties(widget, getLatest, variables);
+          return (
+            <RuntimeWidgetV2
+              key={widget.id}
+              widget={widget}
+              resolvedProperties={resolvedProperties}
+              onAction={(trigger) => handleWidgetAction(widget, trigger)}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -311,8 +394,9 @@ const PopupOverlay: React.FC<{
 
 const RuntimeWidgetV2: React.FC<{
   widget: WidgetInstance;
+  resolvedProperties: Record<string, unknown>;
   onAction: (trigger: string) => void;
-}> = React.memo(({ widget, onAction }) => {
+}> = React.memo(({ widget, resolvedProperties, onAction }) => {
   const definition = widgetRegistry.get(widget.type);
   if (!definition) {
     return (
@@ -345,7 +429,7 @@ const RuntimeWidgetV2: React.FC<{
       }}
     >
       <Renderer
-        properties={widget.properties}
+        properties={resolvedProperties}
         width={widget.transform.size.width}
         height={widget.transform.size.height}
         isRuntime={true}

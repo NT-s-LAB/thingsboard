@@ -279,7 +279,7 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
           {...(onSave ? { onSave: handleSave } : {})}
           {...(screen?.name ? { screenName: screen.name } : {})}
           saveStatus={saveStatus}
-          onExitEdit={onExitEdit}
+          {...(onExitEdit ? { onExitEdit } : {})}
         />
       )}
 

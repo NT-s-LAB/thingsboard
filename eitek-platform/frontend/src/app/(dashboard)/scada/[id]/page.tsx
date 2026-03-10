@@ -57,7 +57,7 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
     if (!params.id) return;
 
     if (params.id === 'new') {
-      const newProject = createDefaultProject();
+      const newProject = createDefaultProject('New SCADA Screen');
       const blank: ScreenDefinition = {
         id: newProject.id,
         version: 1,
@@ -274,7 +274,7 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
         {...(screen ? { screen } : {})}
         onSave={handleDeploy}
         saveStatus={saveStatus}
-        onExitEdit={params.id !== 'new' ? switchToView : undefined}
+        {...(params.id !== 'new' ? { onExitEdit: switchToView } : {})}
       />
     </div>
   );
