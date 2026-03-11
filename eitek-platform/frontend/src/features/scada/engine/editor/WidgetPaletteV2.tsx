@@ -13,6 +13,7 @@ import type { WidgetItem } from '../../services/widgetLibraryService';
 import '../../styles/scada.css';
 
 const CATEGORY_LABELS: Record<WidgetCategory, string> = {
+  shapes: 'Shapes',
   display: 'Display',
   control: 'Control',
   indicator: 'Indicators',
@@ -23,6 +24,7 @@ const CATEGORY_LABELS: Record<WidgetCategory, string> = {
 };
 
 const CATEGORY_ORDER: WidgetCategory[] = [
+  'shapes',
   'display',
   'industrial',
   'indicator',

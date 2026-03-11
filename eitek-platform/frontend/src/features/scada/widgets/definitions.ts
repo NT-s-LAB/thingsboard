@@ -640,12 +640,17 @@ const builtinWidgets: WidgetDefinition[] = [
   customWidget,
 ];
 
+// Import shape widget definitions
+import { registerShapeWidgets } from './shapes';
+
 /**
  * Register all built-in widget definitions with the global widget registry.
  * Call once at application startup.
  */
 export function registerBuiltinWidgets(): void {
   widgetRegistry.registerAll(builtinWidgets);
+  // Register shape widgets
+  registerShapeWidgets();
 }
 
 export { builtinWidgets };

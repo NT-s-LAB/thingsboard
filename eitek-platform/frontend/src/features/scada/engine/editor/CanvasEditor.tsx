@@ -16,6 +16,7 @@ import { widgetRegistry } from '../../core/registry';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
 import type { AlignAction } from '../../stores/scadaRuntimeStore';
 import type { WidgetInstance } from '../../core/types';
+import { ContextMenu, useContextMenuHandler } from './context-menu';
 import '../../styles/scada.css';
 
 /**
@@ -90,6 +91,18 @@ export const CanvasEditor: React.FC = () => {
     origPanY: number;
   } | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
+
+  // ── Context Menu Handler ──
+  const getSelectedWidgetIds = useCallback(() => selectedWidgetIds, [selectedWidgetIds]);
+  const getWidgets = useCallback(() => screen?.widgets ?? [], [screen?.widgets]);
+
+  const { handleContextMenu } = useContextMenuHandler({
+    getSelectedWidgetIds,
+    getWidgets,
+    selectWidget,
+    zoom,
+    panOffset,
+  });
 
   // ── Snap helper ──
   const snap = useCallback(
@@ -483,6 +496,7 @@ export const CanvasEditor: React.FC = () => {
         }}
         onClick={handleCanvasClick}
         onMouseDown={handleCanvasMouseDown}
+        onContextMenu={(e) => handleContextMenu(e, canvasRef.current)}
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
         onMouseMove={handleMouseMove}
@@ -563,6 +577,9 @@ export const CanvasEditor: React.FC = () => {
         )}
       </div>
       </div>
+
+      {/* Context Menu */}
+      <ContextMenu />
     </div>
   );
 };

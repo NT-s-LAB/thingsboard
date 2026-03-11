@@ -126,6 +126,17 @@ interface ScadaRuntimeState {
   // Alignment
   alignWidgets: (action: AlignAction) => void;
 
+  // Lock/Unlock widgets
+  toggleLockWidgets: (ids: string[]) => void;
+  lockWidgets: (ids: string[]) => void;
+  unlockWidgets: (ids: string[]) => void;
+
+  // Z-order management
+  bringToFront: (ids?: string[]) => void;
+  sendToBack: (ids?: string[]) => void;
+  bringForward: (ids?: string[]) => void;
+  sendBackward: (ids?: string[]) => void;
+
   // Windows
   addWindow: (window: ScadaWindow) => void;
   updateWindow: (id: string, patch: Partial<ScadaWindow>) => void;
@@ -559,6 +570,137 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
                   cy += w.transform.size.height + gap;
                 });
                 break;
+              }
+            }
+            s.isDirty = true;
+          }),
+
+        // ── Lock / Unlock widgets ──
+        toggleLockWidgets: (ids) =>
+          set((s) => {
+            if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            const idSet = new Set(ids);
+            for (const w of s.screen.widgets) {
+              if (idSet.has(w.id)) {
+                w.locked = !w.locked;
+              }
+            }
+            s.isDirty = true;
+          }),
+
+        lockWidgets: (ids) =>
+          set((s) => {
+            if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            const idSet = new Set(ids);
+            for (const w of s.screen.widgets) {
+              if (idSet.has(w.id)) {
+                w.locked = true;
+              }
+            }
+            s.isDirty = true;
+          }),
+
+        unlockWidgets: (ids) =>
+          set((s) => {
+            if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            const idSet = new Set(ids);
+            for (const w of s.screen.widgets) {
+              if (idSet.has(w.id)) {
+                w.locked = false;
+              }
+            }
+            s.isDirty = true;
+          }),
+
+        // ── Z-order management ──
+        bringToFront: (ids) =>
+          set((s) => {
+            if (!s.screen) return;
+            const targetIds = ids ?? s.selectedWidgetIds;
+            if (targetIds.length === 0) return;
+            
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+
+            // Get max zIndex currently
+            const maxZ = Math.max(...s.screen.widgets.map((w) => w.transform.zIndex ?? 0));
+            const idSet = new Set(targetIds);
+            let nextZ = maxZ + 1;
+            
+            for (const w of s.screen.widgets) {
+              if (idSet.has(w.id)) {
+                w.transform.zIndex = nextZ++;
+              }
+            }
+            s.isDirty = true;
+          }),
+
+        sendToBack: (ids) =>
+          set((s) => {
+            if (!s.screen) return;
+            const targetIds = ids ?? s.selectedWidgetIds;
+            if (targetIds.length === 0) return;
+            
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+
+            // Get min zIndex currently
+            const minZ = Math.min(...s.screen.widgets.map((w) => w.transform.zIndex ?? 0));
+            const idSet = new Set(targetIds);
+            let nextZ = minZ - targetIds.length;
+            
+            for (const w of s.screen.widgets) {
+              if (idSet.has(w.id)) {
+                w.transform.zIndex = nextZ++;
+              }
+            }
+            s.isDirty = true;
+          }),
+
+        bringForward: (ids) =>
+          set((s) => {
+            if (!s.screen) return;
+            const targetIds = ids ?? s.selectedWidgetIds;
+            if (targetIds.length === 0) return;
+            
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+
+            const idSet = new Set(targetIds);
+            for (const w of s.screen.widgets) {
+              if (idSet.has(w.id)) {
+                w.transform.zIndex = (w.transform.zIndex ?? 0) + 1;
+              }
+            }
+            s.isDirty = true;
+          }),
+
+        sendBackward: (ids) =>
+          set((s) => {
+            if (!s.screen) return;
+            const targetIds = ids ?? s.selectedWidgetIds;
+            if (targetIds.length === 0) return;
+            
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+
+            const idSet = new Set(targetIds);
+            for (const w of s.screen.widgets) {
+              if (idSet.has(w.id)) {
+                w.transform.zIndex = (w.transform.zIndex ?? 0) - 1;
               }
             }
             s.isDirty = true;

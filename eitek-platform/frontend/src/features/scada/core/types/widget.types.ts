@@ -72,6 +72,7 @@ export type WidgetCategory =
   | 'industrial'
   | 'layout'
   | 'chart'
+  | 'shapes'
   | 'custom';
 
 export interface WidgetDefinition {
