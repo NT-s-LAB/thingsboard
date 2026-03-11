@@ -3,6 +3,7 @@
  * 
  * Service for fetching telemetry data for charts.
  * Supports both realtime and historical queries.
+ * Uses deviceService for proper API authentication.
  */
 
 import type { 
@@ -13,25 +14,7 @@ import type {
 } from '../types';
 import type { TimeRange } from '../utils/timeWindowUtils';
 import { CHART_COLOR_PALETTE } from '../constants';
-
-// ─── API Base URL ────────────────────────────────────────────────────────────
-
-const TB_API_BASE = process.env.NEXT_PUBLIC_THINGSBOARD_API_URL || 'http://localhost:8080';
-
-// ─── Auth Token ──────────────────────────────────────────────────────────────
-
-function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('token') || localStorage.getItem('tb_token');
-}
-
-function getHeaders(): HeadersInit {
-  const token = getAuthToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-  };
-}
+import { deviceService } from '@/features/devices/services/deviceService';
 
 // ─── Latest Values API ───────────────────────────────────────────────────────
 
@@ -43,6 +26,7 @@ export interface LatestValueResult {
 
 /**
  * Fetch latest telemetry values for multiple keys.
+ * Uses deviceService.getDeviceTelemetry for proper API routing.
  */
 export async function fetchLatestValues(
   entityType: string,
@@ -53,26 +37,29 @@ export async function fetchLatestValues(
     return {};
   }
 
+  // Only support DEVICE entity type for now
+  if (entityType !== 'DEVICE') {
+    console.warn(`fetchLatestValues: Unsupported entity type '${entityType}', only 'DEVICE' is supported`);
+    return {};
+  }
+
   try {
-    const keysParam = keys.join(',');
-    const res = await fetch(
-      `${TB_API_BASE}/api/plugins/telemetry/${entityType}/${entityId}/values/timeseries?keys=${keysParam}`,
-      { headers: getHeaders() }
-    );
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch latest values: ${res.status}`);
-    }
-
-    const data: Record<string, Array<{ ts: number; value: string }>> = await res.json();
+    const data = await deviceService.getDeviceTelemetry(entityId, keys);
     
     const result: Record<string, ChartDataPoint> = {};
     for (const [key, values] of Object.entries(data)) {
-      const latest = values?.[0];
-      if (latest) {
+      // Handle both array format and direct value format
+      if (Array.isArray(values) && values.length > 0) {
+        const latest = values[0] as { ts: number; value: string };
         result[key] = {
           ts: latest.ts,
           value: parseValue(latest.value),
+        };
+      } else if (values && typeof values === 'object' && 'ts' in values) {
+        const v = values as { ts: number; value: string };
+        result[key] = {
+          ts: v.ts,
+          value: parseValue(v.value),
         };
       }
     }
@@ -88,6 +75,7 @@ export async function fetchLatestValues(
 
 /**
  * Fetch historical timeseries data.
+ * Uses deviceService.getDeviceTimeseries for proper API routing.
  */
 export async function fetchHistoricalData(
   entityType: string,
@@ -101,36 +89,36 @@ export async function fetchHistoricalData(
     return {};
   }
 
+  // Only support DEVICE entity type for now
+  if (entityType !== 'DEVICE') {
+    console.warn(`fetchHistoricalData: Unsupported entity type '${entityType}', only 'DEVICE' is supported`);
+    return {};
+  }
+
   try {
-    const params = new URLSearchParams({
-      keys: keys.join(','),
-      startTs: String(timeRange.startTs),
-      endTs: String(timeRange.endTs),
+    // Build params object, only including defined values
+    const params: { interval?: number; limit?: number; agg?: string } = {
       agg: aggregation?.type || 'NONE',
-    });
-
-    if (aggregation?.interval) {
-      params.set('interval', String(aggregation.interval));
+    };
+    if (aggregation?.interval !== undefined) {
+      params.interval = aggregation.interval;
     }
-    if (limit) {
-      params.set('limit', String(limit));
+    if (limit !== undefined) {
+      params.limit = limit;
     }
-
-    const res = await fetch(
-      `${TB_API_BASE}/api/plugins/telemetry/${entityType}/${entityId}/values/timeseries?${params}`,
-      { headers: getHeaders() }
+    
+    const data = await deviceService.getDeviceTimeseries(
+      entityId,
+      keys,
+      timeRange.startTs,
+      timeRange.endTs,
+      params
     );
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch historical data: ${res.status}`);
-    }
-
-    const data: Record<string, Array<{ ts: number; value: string }>> = await res.json();
     
     const result: Record<string, ChartDataPoint[]> = {};
     for (const [key, values] of Object.entries(data)) {
-      result[key] = (values || [])
-        .map(v => ({
+      result[key] = (Array.isArray(values) ? values : [])
+        .map((v: { ts: number; value: string }) => ({
           ts: v.ts,
           value: parseValue(v.value),
         }))

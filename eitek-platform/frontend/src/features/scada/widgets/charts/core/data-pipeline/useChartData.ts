@@ -70,15 +70,20 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
   configRef.current = config;
   onErrorRef.current = onError;
 
+  // Ensure data.series exists (defensive coding)
+  const series = config?.data?.series ?? [];
+  const dataMode = config?.data?.mode ?? 'realtime';
+  const maxDataPoints = config?.data?.maxDataPoints;
+
   // Stable serialized config key for dependency tracking
   const configKey = useMemo(() => {
     return JSON.stringify({
-      series: config.data.series.map(s => ({ id: s.id, key: s.key, entityId: s.entityId || s.deviceId })),
-      mode: config.data.mode,
-      timeWindow: config.timeWindow,
-      maxDataPoints: config.data.maxDataPoints,
+      series: series.map(s => ({ id: s.id, key: s.key, entityId: s.entityId || s.deviceId })),
+      mode: dataMode,
+      timeWindow: config?.timeWindow,
+      maxDataPoints: maxDataPoints,
     });
-  }, [config.data.series, config.data.mode, config.timeWindow, config.data.maxDataPoints]);
+  }, [series, dataMode, config?.timeWindow, maxDataPoints]);
 
   // Compute time range - use stable reference
   const timeRange = useMemo(() => {

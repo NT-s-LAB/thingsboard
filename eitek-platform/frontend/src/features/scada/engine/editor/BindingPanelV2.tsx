@@ -25,6 +25,20 @@ const SOURCE_TYPES: { value: BindingSourceType; label: string }[] = [
   { value: 'calculated', label: 'Calculated' },
 ];
 
+// Chart series colors palette
+const SERIES_COLORS = [
+  '#3B82F6', // blue
+  '#10B981', // green
+  '#F59E0B', // amber
+  '#EF4444', // red
+  '#8B5CF6', // violet
+  '#EC4899', // pink
+  '#06B6D4', // cyan
+  '#F97316', // orange
+  '#6366F1', // indigo
+  '#84CC16', // lime
+];
+
 export const BindingPanelV2: React.FC = () => {
   const screen = useScadaRuntimeStore((s) => s.screen);
   const selectedWidgetIds = useScadaRuntimeStore((s) => s.selectedWidgetIds);
@@ -175,6 +189,112 @@ export const BindingPanelV2: React.FC = () => {
     );
   }
 
+  // Check if this is a chart widget with dynamic series
+  const isChartWidget = definition.category === 'chart';
+  const chartConfig = selectedWidget.properties.chartConfig as Record<string, unknown> | undefined;
+  const chartSeries = (chartConfig?.data as Record<string, unknown>)?.series as Array<Record<string, unknown>> | undefined;
+  const seriesCount = chartSeries?.length ?? 0;
+
+  // For chart widgets, we show dynamic series bindings
+  if (isChartWidget) {
+    return (
+      <div className="scada-panel" style={{ width: 260, flexShrink: 0 }}>
+        <div className="scada-panel__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Data Series</span>
+          <button
+            onClick={() => {
+              // Add new series
+              const newIndex = seriesCount;
+              const newSeries = {
+                id: `series-${newIndex}`,
+                label: `Series ${newIndex + 1}`,
+                sourceType: 'telemetry',
+                key: '',
+                color: SERIES_COLORS[newIndex % SERIES_COLORS.length],
+                lineWidth: 2,
+              };
+              const currentData = (chartConfig?.data as Record<string, unknown>) ?? { series: [], mode: 'realtime' };
+              const currentSeriesList = Array.isArray(currentData.series) ? [...currentData.series] : [];
+              currentSeriesList.push(newSeries);
+              
+              const updatedConfig = {
+                ...chartConfig,
+                data: { ...currentData, series: currentSeriesList },
+              };
+              updateWidget(selectedWidget.id, {
+                properties: { ...selectedWidget.properties, chartConfig: updatedConfig },
+              });
+            }}
+            style={{
+              padding: '2px 8px',
+              fontSize: 11,
+              color: '#3B82F6',
+              background: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              borderRadius: 4,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add Series
+          </button>
+        </div>
+        <div className="scada-panel__body" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+          {seriesCount === 0 && (
+            <div style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', padding: 16 }}>
+              No series configured.<br />Click "+ Add Series" to start.
+            </div>
+          )}
+          {chartSeries?.map((series, index) => {
+            const targetProperty = `chartConfig.data.series[${index}].key`;
+            const binding = selectedWidget.bindings.find((b) => b.targetProperty === targetProperty);
+            return (
+              <ChartSeriesBindingEditor
+                key={series.id as string || index}
+                index={index}
+                series={series}
+                binding={binding}
+                onSeriesChange={(updates) => {
+                  const updatedSeries = { ...series, ...updates };
+                  const currentData = (chartConfig?.data as Record<string, unknown>) ?? { series: [] };
+                  const currentSeriesList = [...(currentData.series as Array<Record<string, unknown>> || [])];
+                  currentSeriesList[index] = updatedSeries;
+                  const updatedConfig = {
+                    ...chartConfig,
+                    data: { ...currentData, series: currentSeriesList },
+                  };
+                  updateWidget(selectedWidget.id, {
+                    properties: { ...selectedWidget.properties, chartConfig: updatedConfig },
+                  });
+                }}
+                onBindingChange={(updates) => handleBindingChange(targetProperty, updates)}
+                onRemove={() => {
+                  // Remove series from config
+                  const currentData = (chartConfig?.data as Record<string, unknown>) ?? { series: [] };
+                  const currentSeriesList = [...(currentData.series as Array<Record<string, unknown>> || [])];
+                  currentSeriesList.splice(index, 1);
+                  const updatedConfig = {
+                    ...chartConfig,
+                    data: { ...currentData, series: currentSeriesList },
+                  };
+                  // Also remove related binding
+                  const bindings = selectedWidget.bindings.filter((b) => b.targetProperty !== targetProperty);
+                  updateWidget(selectedWidget.id, {
+                    properties: { ...selectedWidget.properties, chartConfig: updatedConfig },
+                    bindings,
+                  });
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Non-chart widgets: show regular binding schema
   if (definition.bindingSchema.length === 0) {
     return (
       <div className="scada-panel" style={{ width: 260, flexShrink: 0 }}>
@@ -518,4 +638,305 @@ const inputStyle: React.CSSProperties = {
   fontSize: 11,
   outline: 'none',
   background: '#fff',
+};
+
+// ─── Chart Series Binding Editor ─────────────────────────────────────────────
+
+interface ChartSeriesBindingEditorProps {
+  index: number;
+  series: Record<string, unknown>;
+  binding: WidgetBinding | undefined;
+  onSeriesChange: (updates: Record<string, unknown>) => void;
+  onBindingChange: (updates: Partial<WidgetBinding>) => void;
+  onRemove: () => void;
+}
+
+const ChartSeriesBindingEditor: React.FC<ChartSeriesBindingEditorProps> = ({
+  index,
+  series,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  binding: _binding,
+  onSeriesChange,
+  onBindingChange,
+  onRemove,
+}) => {
+  const [expanded, setExpanded] = useState(true);
+  const sourceType = (series.sourceType as BindingSourceType) || 'telemetry';
+  
+  // ── Device list from API ──
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+
+  // ── Telemetry keys for selected device ──
+  const [telemetryKeys, setTelemetryKeys] = useState<string[]>([]);
+  const [keysLoading, setKeysLoading] = useState(false);
+
+  // ── Device search ──
+  const [deviceSearch, setDeviceSearch] = useState('');
+
+  // Fetch devices on expand
+  useEffect(() => {
+    if (!expanded) return;
+    if (sourceType !== 'telemetry' && sourceType !== 'attribute') return;
+    let cancelled = false;
+    setDevicesLoading(true);
+    deviceService.getDevices({ pageSize: 100 }).then((res) => {
+      if (!cancelled) setDevices(res.data);
+    }).catch(() => {
+      // silently fail
+    }).finally(() => {
+      if (!cancelled) setDevicesLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [expanded, sourceType]);
+
+  // Fetch telemetry keys when device is selected
+  useEffect(() => {
+    const entityId = series.entityId as string | undefined;
+    if (!entityId || !expanded) return;
+    if (sourceType !== 'telemetry' && sourceType !== 'attribute') return;
+    let cancelled = false;
+    setKeysLoading(true);
+
+    const fetchKeys = sourceType === 'attribute'
+      ? deviceService.getDeviceAttributes(entityId, 'CLIENT_SCOPE')
+      : deviceService.getDeviceTelemetry(entityId);
+
+    fetchKeys.then((data: Record<string, unknown>) => {
+      if (!cancelled) {
+        setTelemetryKeys(Object.keys(data));
+      }
+    }).catch(() => {
+      if (!cancelled) setTelemetryKeys([]);
+    }).finally(() => {
+      if (!cancelled) setKeysLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [series.entityId, expanded, sourceType]);
+
+  const filteredDevices = useMemo(() => {
+    if (!deviceSearch) return devices;
+    const lower = deviceSearch.toLowerCase();
+    return devices.filter((d) => d.name.toLowerCase().includes(lower));
+  }, [devices, deviceSearch]);
+
+  const seriesColor = (series.color as string) || SERIES_COLORS[index % SERIES_COLORS.length];
+  const seriesLabel = (series.label as string) || `Series ${index + 1}`;
+
+  return (
+    <div style={{ marginBottom: 12, border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: 8,
+          background: '#f9fafb',
+          cursor: 'pointer',
+        }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: 2,
+              backgroundColor: seriesColor,
+            }}
+          />
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>
+            {seriesLabel}
+            {Boolean(series.key) && <span style={{ color: '#22C55E', marginLeft: 4, fontSize: 9 }}>●</span>}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{
+              padding: '2px 6px',
+              fontSize: 10,
+              color: '#EF4444',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+            title="Remove series"
+          >
+            ×
+          </button>
+          <span style={{ fontSize: 10, color: '#9CA3AF' }}>{expanded ? '▲' : '▼'}</span>
+        </div>
+      </div>
+
+      {/* Content */}
+      {expanded && (
+        <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Series Label */}
+          <Row label="Label">
+            <input
+              type="text"
+              value={seriesLabel}
+              onChange={(e) => onSeriesChange({ label: e.target.value })}
+              style={inputStyle}
+              placeholder="Series name..."
+            />
+          </Row>
+
+          {/* Color */}
+          <Row label="Color">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input
+                type="color"
+                value={seriesColor}
+                onChange={(e) => onSeriesChange({ color: e.target.value })}
+                style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
+              />
+              <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                {SERIES_COLORS.slice(0, 5).map((c) => (
+                  <div
+                    key={c}
+                    onClick={() => onSeriesChange({ color: c })}
+                    style={{
+                      width: 14,
+                      height: 14,
+                      backgroundColor: c,
+                      borderRadius: 2,
+                      cursor: 'pointer',
+                      border: seriesColor === c ? '2px solid #374151' : '1px solid #e5e7eb',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </Row>
+
+          {/* Source type */}
+          <Row label="Source">
+            <select
+              value={sourceType}
+              onChange={(e) => onSeriesChange({ sourceType: e.target.value })}
+              style={inputStyle}
+            >
+              <option value="telemetry">Telemetry</option>
+              <option value="attribute">Attribute</option>
+            </select>
+          </Row>
+
+          {/* Device picker */}
+          <Row label="Device">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <input
+                type="text"
+                value={deviceSearch}
+                placeholder="Search device..."
+                onChange={(e) => setDeviceSearch(e.target.value)}
+                style={{ ...inputStyle, marginBottom: 2 }}
+              />
+              <select
+                value={(series.entityId as string) ?? ''}
+                onChange={(e) => {
+                  setTelemetryKeys([]);
+                  onSeriesChange({
+                    entityId: e.target.value,
+                    entityType: 'DEVICE',
+                    key: '', // Reset key when device changes
+                  });
+                  // Also update binding
+                  onBindingChange({
+                    source: {
+                      type: sourceType,
+                      entityId: e.target.value,
+                      entityType: 'DEVICE',
+                      key: '',
+                    },
+                  });
+                }}
+                style={inputStyle}
+              >
+                <option value="">
+                  {devicesLoading ? 'Loading...' : '-- Select device --'}
+                </option>
+                {filteredDevices.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}{d.serialNumber ? ` (${d.serialNumber})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </Row>
+
+          {/* Key picker */}
+          <Row label="Key">
+            {telemetryKeys.length > 0 ? (
+              <select
+                value={(series.key as string) ?? ''}
+                onChange={(e) => {
+                  onSeriesChange({ key: e.target.value });
+                  onBindingChange({
+                    source: {
+                      type: sourceType,
+                      entityId: (series.entityId as string) || '',
+                      entityType: 'DEVICE',
+                      key: e.target.value,
+                    },
+                  });
+                }}
+                style={inputStyle}
+              >
+                <option value="">
+                  {keysLoading ? 'Loading...' : '-- Select key --'}
+                </option>
+                {telemetryKeys.map((k) => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={(series.key as string) ?? ''}
+                placeholder={keysLoading ? 'Loading keys...' : 'telemetry key...'}
+                onChange={(e) => {
+                  onSeriesChange({ key: e.target.value });
+                  onBindingChange({
+                    source: {
+                      type: sourceType,
+                      entityId: (series.entityId as string) || '',
+                      entityType: 'DEVICE',
+                      key: e.target.value,
+                    },
+                  });
+                }}
+                style={inputStyle}
+              />
+            )}
+          </Row>
+
+          {/* Unit */}
+          <Row label="Unit">
+            <input
+              type="text"
+              value={(series.unit as string) ?? ''}
+              onChange={(e) => onSeriesChange({ unit: e.target.value })}
+              style={inputStyle}
+              placeholder="°C, kW, %..."
+            />
+          </Row>
+
+          {/* Line Width */}
+          <Row label="Line Width">
+            <input
+              type="range"
+              value={Number(series.lineWidth ?? 2)}
+              min={1}
+              max={5}
+              onChange={(e) => onSeriesChange({ lineWidth: Number(e.target.value) })}
+              style={{ width: '100%' }}
+            />
+          </Row>
+        </div>
+      )}
+    </div>
+  );
 };

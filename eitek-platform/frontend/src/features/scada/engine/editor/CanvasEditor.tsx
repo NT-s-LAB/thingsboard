@@ -68,11 +68,10 @@ export const CanvasEditor: React.FC = () => {
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<{
-    widgetId: string;
     startX: number;
     startY: number;
-    origX: number;
-    origY: number;
+    // Store initial positions of ALL widgets being dragged (for group drag)
+    widgetPositions: Record<string, { x: number; y: number }>;
   } | null>(null);
 
   // ── Rubber-band (marquee) selection state ──
@@ -285,20 +284,45 @@ export const CanvasEditor: React.FC = () => {
       const widget = screen?.widgets.find((w) => w.id === widgetId);
       if (!widget || widget.locked) return;
 
-      selectWidget(widgetId, e.shiftKey || e.ctrlKey);
+      const isAlreadySelected = selectedWidgetIds.includes(widgetId);
+      const isMultiSelectModifier = e.shiftKey || e.ctrlKey || e.metaKey;
+
+      // Handle selection logic
+      if (isMultiSelectModifier) {
+        // Ctrl/Shift click: toggle selection
+        selectWidget(widgetId, true);
+      } else if (!isAlreadySelected) {
+        // Click unselected widget without modifier: select only this widget
+        selectWidget(widgetId, false);
+      }
+      // If already selected without modifier, keep current selection (for group drag)
+
+      // Determine which widgets will be dragged
+      // If clicked widget is in selection (or will be added), drag all selected
+      // Otherwise, only drag the newly selected widget
+      const widgetsToDrag = isAlreadySelected || !isMultiSelectModifier
+        ? (isAlreadySelected ? selectedWidgetIds : [widgetId])
+        : [...selectedWidgetIds, widgetId];
+
+      // Capture initial positions of all widgets to be dragged
+      const widgetPositions: Record<string, { x: number; y: number }> = {};
+      for (const id of widgetsToDrag) {
+        const w = screen?.widgets.find((w) => w.id === id);
+        if (w && !w.locked) {
+          widgetPositions[id] = { x: w.transform.position.x, y: w.transform.position.y };
+        }
+      }
 
       setDragState({
-        widgetId,
         startX: e.clientX,
         startY: e.clientY,
-        origX: widget.transform.position.x,
-        origY: widget.transform.position.y,
+        widgetPositions,
       });
     },
-    [screen, selectWidget, spaceHeld],
+    [screen, selectedWidgetIds, selectWidget, spaceHeld],
   );
 
-  // ── Mouse move — drag widget, update marquee, or pan ──
+  // ── Mouse move — drag widget(s), update marquee, or pan ──
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (panDrag) {
@@ -311,12 +335,15 @@ export const CanvasEditor: React.FC = () => {
         const dx = (e.clientX - dragState.startX) / zoom;
         const dy = (e.clientY - dragState.startY) / zoom;
 
-        updateWidgetTransform(dragState.widgetId, {
-          position: {
-            x: snap(dragState.origX + dx),
-            y: snap(dragState.origY + dy),
-          },
-        });
+        // Move ALL widgets being dragged (group drag)
+        for (const [widgetId, origPos] of Object.entries(dragState.widgetPositions)) {
+          updateWidgetTransform(widgetId, {
+            position: {
+              x: snap(origPos.x + dx),
+              y: snap(origPos.y + dy),
+            },
+          });
+        }
       } else if (marquee && canvasRef.current) {
         const rect = canvasRef.current.getBoundingClientRect();
         const x = (e.clientX - rect.left - 40) / zoom - panOffset.x;

@@ -28,6 +28,91 @@ function toColorHex(v: unknown): string {
   return '#000000';
 }
 
+/**
+ * Get a value from a nested object using dot notation path.
+ * E.g., getNestedValue({ a: { b: 1 } }, 'a.b') returns 1
+ */
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  const keys = path.split('.');
+  let current: unknown = obj;
+  for (const key of keys) {
+    if (current === null || current === undefined) return undefined;
+    // Handle array index notation like "series[0]"
+    const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
+    if (arrayMatch) {
+      const [, prop, idx] = arrayMatch;
+      current = (current as Record<string, unknown>)[prop ?? ''];
+      if (Array.isArray(current)) {
+        current = current[parseInt(idx ?? '0', 10)];
+      } else {
+        return undefined;
+      }
+    } else {
+      current = (current as Record<string, unknown>)[key];
+    }
+  }
+  return current;
+}
+
+/**
+ * Set a value in a nested object using dot notation path.
+ * Creates intermediate objects/arrays as needed.
+ * Returns a new object (immutable).
+ */
+function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
+  const keys = path.split('.');
+  const result = JSON.parse(JSON.stringify(obj ?? {})) as Record<string, unknown>;
+  let current = result;
+  
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i]!;
+    const nextKey = keys[i + 1]!;
+    
+    // Handle array index notation
+    const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
+    if (arrayMatch) {
+      const [, prop, idx] = arrayMatch;
+      const index = parseInt(idx ?? '0', 10);
+      if (!Array.isArray(current[prop ?? ''])) {
+        current[prop ?? ''] = [];
+      }
+      const arr = current[prop ?? ''] as unknown[];
+      while (arr.length <= index) arr.push({});
+      if (typeof arr[index] !== 'object' || arr[index] === null) {
+        arr[index] = {};
+      }
+      current = arr[index] as Record<string, unknown>;
+    } else {
+      // Check if next key is array or object
+      const isNextArray = /^.+\[\d+\]$/.test(nextKey) || /^\d+$/.test(nextKey);
+      if (current[key] === undefined || current[key] === null) {
+        current[key] = isNextArray ? [] : {};
+      } else if (typeof current[key] !== 'object') {
+        current[key] = isNextArray ? [] : {};
+      }
+      current = current[key] as Record<string, unknown>;
+    }
+  }
+  
+  // Set the final value
+  const lastKey = keys[keys.length - 1]!;
+  const lastArrayMatch = lastKey.match(/^(.+)\[(\d+)\]$/);
+  if (lastArrayMatch) {
+    const [, prop, idx] = lastArrayMatch;
+    const index = parseInt(idx ?? '0', 10);
+    if (!Array.isArray(current[prop ?? ''])) {
+      current[prop ?? ''] = [];
+    }
+    const arr = current[prop ?? ''] as unknown[];
+    while (arr.length <= index) arr.push(null);
+    arr[index] = value;
+  } else {
+    current[lastKey] = value;
+  }
+  
+  return result;
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const resolveImgUrl = (url: string | null | undefined): string => {
   if (!url) return '';
@@ -85,7 +170,10 @@ export const PropertyPanelV2: React.FC = () => {
   const handlePropertyChange = useCallback(
     (key: string, value: unknown) => {
       if (!selectedWidget) return;
-      const newProps = { ...selectedWidget.properties, [key]: value };
+      // Support nested property paths like "chartConfig.display.title"
+      const newProps = key.includes('.')
+        ? setNestedValue(selectedWidget.properties, key, value)
+        : { ...selectedWidget.properties, [key]: value };
       updateWidget(selectedWidget.id, { properties: newProps });
     },
     [selectedWidget, updateWidget],
@@ -129,11 +217,23 @@ export const PropertyPanelV2: React.FC = () => {
     return (
       <div className="scada-panel" style={{ width: 260, flexShrink: 0 }}>
         <div className="scada-panel__header">
-          {selectedWidgetIds.length > 1 ? 'Multiple Selection' : `📄 Page: ${activePage?.name || 'Properties'}`}
+          {selectedWidgetIds.length > 1 ? `🔲 ${selectedWidgetIds.length} Widgets Selected` : `📄 Page: ${activePage?.name || 'Properties'}`}
         </div>
         {selectedWidgetIds.length > 1 ? (
-          <div className="scada-panel__body" style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', padding: 16 }}>
-            Multiple widgets selected
+          <div className="scada-panel__body" style={{ padding: 16 }}>
+            <div style={{ color: '#374151', fontSize: 12, marginBottom: 12, textAlign: 'center' }}>
+              <strong>{selectedWidgetIds.length}</strong> widgets selected
+            </div>
+            <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 8 }}>
+              <strong>Tips:</strong>
+            </div>
+            <ul style={{ fontSize: 11, color: '#6B7280', paddingLeft: 16, margin: 0, lineHeight: 1.6 }}>
+              <li>Drag any selected widget to move all</li>
+              <li>Use alignment toolbar above canvas</li>
+              <li>Press Delete to remove all</li>
+              <li>Ctrl+D to duplicate all</li>
+              <li>Click empty area to deselect</li>
+            </ul>
           </div>
         ) : activePage ? (
           <PagePropertiesPanel
@@ -296,14 +396,20 @@ export const PropertyPanelV2: React.FC = () => {
         {/* Property fields by group */}
         {Array.from(groups.entries()).map(([group, fields]) => (
           <FieldGroup key={group} label={group}>
-            {fields.map((field) => (
-              <PropFieldInput
-                key={field.key}
-                field={field}
-                value={selectedWidget.properties[field.key]}
-                onChange={(value) => handlePropertyChange(field.key, value)}
-              />
-            ))}
+            {fields.map((field) => {
+              // Support nested property paths like "chartConfig.display.title"
+              const value = field.key.includes('.')
+                ? getNestedValue(selectedWidget.properties, field.key)
+                : selectedWidget.properties[field.key];
+              return (
+                <PropFieldInput
+                  key={field.key}
+                  field={field}
+                  value={value}
+                  onChange={(v) => handlePropertyChange(field.key, v)}
+                />
+              );
+            })}
           </FieldGroup>
         ))}
       </div>

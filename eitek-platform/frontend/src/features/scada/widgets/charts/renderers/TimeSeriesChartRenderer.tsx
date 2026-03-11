@@ -144,8 +144,8 @@ export const TimeSeriesChartRenderer = memo<TimeSeriesChartRendererProps>(functi
   height,
   isRuntime,
 }) {
-  // Get chart config from properties
-  const chartConfig = (properties.chartConfig as ChartWidgetConfig) || getDefaultConfig();
+  // Get chart config from properties with safe defaults
+  const chartConfig = normalizeChartConfig(properties.chartConfig as Partial<ChartWidgetConfig> | undefined);
 
   // Fetch chart data
   const { state, error } = useChartData({
@@ -304,6 +304,47 @@ function getDefaultConfig(): ChartWidgetConfig {
     },
     thresholds: [],
   };
+}
+
+/**
+ * Normalize chart config by ensuring all required nested properties exist.
+ * Merges partial config with defaults to prevent undefined errors.
+ */
+function normalizeChartConfig(partial: Partial<ChartWidgetConfig> | undefined): ChartWidgetConfig {
+  const defaults = getDefaultConfig();
+  
+  if (!partial) {
+    return defaults;
+  }
+  
+  // Deep merge with defaults, ensuring all required properties exist
+  const merged = {
+    data: {
+      mode: partial.data?.mode ?? defaults.data.mode,
+      series: Array.isArray(partial.data?.series) ? partial.data.series : defaults.data.series,
+      ...(partial.data?.aggregation && { aggregation: partial.data.aggregation }),
+      ...(partial.data?.maxDataPoints !== undefined && { maxDataPoints: partial.data.maxDataPoints }),
+      ...(partial.data?.sampling && { sampling: partial.data.sampling }),
+    },
+    timeWindow: {
+      mode: partial.timeWindow?.mode ?? defaults.timeWindow.mode,
+      realtime: partial.timeWindow?.realtime ?? defaults.timeWindow.realtime,
+      relative: partial.timeWindow?.relative ?? defaults.timeWindow.relative,
+      autoRefreshMs: partial.timeWindow?.autoRefreshMs ?? defaults.timeWindow.autoRefreshMs,
+      ...(partial.timeWindow?.absolute && { absolute: partial.timeWindow.absolute }),
+      ...(partial.timeWindow?.displayTimeWindow !== undefined && { displayTimeWindow: partial.timeWindow.displayTimeWindow }),
+    },
+    display: {
+      ...defaults.display,
+      ...partial.display,
+    },
+    thresholds: partial.thresholds ?? defaults.thresholds,
+    ...(partial.legend && { legend: partial.legend }),
+    ...(partial.axes && { axes: partial.axes }),
+    ...(partial.tooltip && { tooltip: partial.tooltip }),
+  };
+  
+  return merged as ChartWidgetConfig;
 }
 
 export default TimeSeriesChartRenderer;
