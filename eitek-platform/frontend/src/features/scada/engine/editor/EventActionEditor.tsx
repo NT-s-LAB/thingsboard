@@ -110,9 +110,13 @@ export const EventActionEditor: React.FC = () => {
   const allPages = project?.pages ?? [];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 4 }}>
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 4 }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', padding: '0 4px' }}>
-        Events — {selectedWidget.name}
+        Events - {selectedWidget.name}
       </div>
 
       {Object.values(WIDGET_EVENT_TRIGGERS).map((trigger) => (

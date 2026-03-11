@@ -131,8 +131,8 @@ const DashboardPropertiesPanel: React.FC = () => {
         </Section>
 
         <Section title="Editor Settings">
-          <Field label="Grid">{editorState?.showGrid ? '✅ Enabled' : '❌ Disabled'}</Field>
-          <Field label="Snap">{editorState?.snapToGrid ? '✅ Enabled' : '❌ Disabled'}</Field>
+          <Field label="Grid">{editorState?.showGrid ? 'On' : 'Off'}</Field>
+          <Field label="Snap">{editorState?.snapToGrid ? 'On' : 'Off'}</Field>
           <Field label="Zoom">{Math.round((editorState?.viewport?.zoom ?? 1) * 100)}%</Field>
         </Section>
 

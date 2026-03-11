@@ -356,6 +356,12 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
             s.past.push(current(s.screen));
             if (s.past.length > MAX_UNDO) s.past.shift();
             s.future = [];
+            
+            // Get valid layer IDs from the current screen
+            const validLayerIds = new Set(s.screen.layers.map(l => l.id));
+            // Default to first layer if widget's layer doesn't exist in target screen
+            const defaultLayerId = s.screen.layers[0]?.id ?? 'default';
+            
             const newIds: string[] = [];
             for (const orig of s.clipboardWidgets) {
               const newId = genId();
@@ -364,6 +370,12 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
               clone.name = `${orig.name} (paste)`;
               clone.transform.position.x += offset.x;
               clone.transform.position.y += offset.y;
+              // Ensure events array exists for pasted widgets
+              (clone as any).events = (clone as any).events ?? [];
+              // Fix layer ID: if the original layer doesn't exist in target screen, use default
+              if (!validLayerIds.has(clone.layerId)) {
+                clone.layerId = defaultLayerId;
+              }
               s.screen.widgets.push(clone);
               newIds.push(newId);
             }

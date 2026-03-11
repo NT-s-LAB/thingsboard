@@ -147,23 +147,23 @@ const DeployBtn: React.FC<{
   const isError = status === 'error';
   const isDeploying = status === 'saving';
 
-  let label = '🚀 Deploy';
+  let label = 'Deploy';
   let bg = '#f0fdf4';
   let border = '#86efac';
   let color = '#16a34a';
 
   if (isDeploying) {
-    label = '⏳ Deploying...';
+    label = 'Deploying...';
     bg = '#f9fafb';
     border = '#e5e7eb';
     color = '#6B7280';
   } else if (isActive) {
-    label = '✅ Deployed';
+    label = 'Deployed';
     bg = '#eff6ff';
     border = '#3B82F6';
     color = '#2563EB';
   } else if (isError) {
-    label = '❌ Error';
+    label = 'Error';
     bg = '#fef2f2';
     border = '#fca5a5';
     color = '#dc2626';

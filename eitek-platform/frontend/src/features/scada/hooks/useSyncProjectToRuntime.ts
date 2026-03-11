@@ -106,8 +106,16 @@ export function useSyncProjectToRuntime() {
   //    push back to the project store's active page ──
   useEffect(() => {
     const unsubscribe = useScadaRuntimeStore.subscribe(
-      (state) => state.screen,
-      (screen) => {
+      (state) => ({
+        screen: state.screen,
+        // Track widget count and IDs to detect paste/delete operations
+        widgetIds: state.screen?.widgets.map(w => w.id).join(',') ?? '',
+        layerCount: state.screen?.layers.length ?? 0,
+      }),
+      ({ screen, widgetIds, layerCount }) => {
+        void widgetIds; // used for change detection
+        void layerCount; // used for change detection
+        
         // Skip if we're in a project→runtime sync
         if (syncingFromProjectCounter.current > 0) {
           debugLog('Skipping runtime→project sync: project is syncing');
@@ -128,21 +136,41 @@ export function useSyncProjectToRuntime() {
         const page = project.pages.find((p) => p.id === activePageId);
         if (!page) return;
 
-        // Only sync if there are actual differences (deep compare would be expensive,
-        // so we rely on the fact that user actions modify the runtime store directly)
-        const widgetsChanged = screen.widgets !== page.widgets;
-        const layersChanged = screen.layers !== page.layers;
+        // Detect changes by comparing counts and widget IDs (more reliable than reference comparison)
+        const screenWidgetIds = screen.widgets.map(w => w.id).sort().join(',');
+        const pageWidgetIds = page.widgets.map(w => w.id).sort().join(',');
+        const widgetsChanged = screenWidgetIds !== pageWidgetIds || screen.widgets.length !== page.widgets.length;
+        const layersChanged = screen.layers.length !== page.layers.length;
         const bgChanged = screen.background !== page.background;
         const sizeChanged =
           screen.canvasSize.width !== page.canvasSize.width ||
           screen.canvasSize.height !== page.canvasSize.height;
 
-        if (!widgetsChanged && !layersChanged && !bgChanged && !sizeChanged) {
+        // Also check if any widget positions/sizes have changed
+        let widgetDataChanged = false;
+        if (!widgetsChanged && screen.widgets.length === page.widgets.length) {
+          for (let i = 0; i < screen.widgets.length; i++) {
+            const sw = screen.widgets.find(w => w.id === page.widgets[i]?.id);
+            const pw = page.widgets[i];
+            if (sw && pw) {
+              if (sw.transform.position.x !== pw.transform.position.x ||
+                  sw.transform.position.y !== pw.transform.position.y ||
+                  sw.transform.size.width !== pw.transform.size.width ||
+                  sw.transform.size.height !== pw.transform.size.height ||
+                  sw.transform.zIndex !== pw.transform.zIndex) {
+                widgetDataChanged = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!widgetsChanged && !widgetDataChanged && !layersChanged && !bgChanged && !sizeChanged) {
           debugLog('Runtime→Project sync: no changes detected');
           return;
         }
 
-        debugLog('Runtime→Project sync: updating project', { widgetsChanged, layersChanged, bgChanged, sizeChanged });
+        debugLog('Runtime→Project sync: updating project', { widgetsChanged, widgetDataChanged, layersChanged, bgChanged, sizeChanged });
         syncingFromRuntimeCounter.current++;
 
         // Update the project store's active page with runtime changes

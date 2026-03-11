@@ -22,6 +22,7 @@ import { registerBuiltinWidgets } from '@/features/scada/widgets/definitions';
 import { screenDefinitionToProject } from '@/features/scada/core/migrations/projectMigration';
 import { projectToScreenDefinition } from '@/features/scada/core/migrations/projectMigration';
 import { createDefaultProject } from '@/features/scada/core/types/project.types';
+import { validateProject, formatValidationResult } from '@/features/scada/core/validation/projectValidator';
 import { TimeWindowSelector } from '@/features/scada/engine/runtime/TimeWindowSelector';
 import type { ScreenDefinition } from '@/features/scada/core/types';
 import type { ScadaProject } from '@/features/scada/core/types/project.types';
@@ -134,8 +135,28 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
   const handleDeploy = useCallback(async (updated: ScreenDefinition) => {
     setSaveStatus('saving');
     try {
-      // Get the latest project state and serialize to ScreenDefinition
+      // Get the latest project state
       const currentProject = useScadaProjectStore.getState().project;
+      
+      // Validate project before deploy
+      if (currentProject) {
+        const validationResult = validateProject(currentProject);
+        
+        // Show warnings but allow deploy
+        if (validationResult.warnings.length > 0) {
+          console.warn('Deploy warnings:', formatValidationResult(validationResult));
+        }
+        
+        // Block deploy on errors
+        if (!validationResult.valid) {
+          const errorMessage = validationResult.errors.map(e => e.message).join('\n');
+          alert(`Deploy failed - validation errors:\n\n${errorMessage}`);
+          setSaveStatus('error');
+          setTimeout(() => setSaveStatus('idle'), 3000);
+          return;
+        }
+      }
+      
       const screenToSave = currentProject
         ? projectToScreenDefinition(currentProject)
         : updated;
@@ -154,6 +175,8 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err: unknown) {
       console.error('Deploy failed:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Deploy failed: ${errorMsg}`);
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
     }

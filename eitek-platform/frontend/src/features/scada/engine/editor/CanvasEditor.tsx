@@ -466,10 +466,8 @@ export const CanvasEditor: React.FC = () => {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Alignment toolbar — shown when 2+ widgets selected */}
-      {selectedWidgetIds.length >= 2 && (
-        <AlignmentToolbar onAlign={alignWidgets} />
-      )}
+      {/* Alignment toolbar — always visible, disabled when < 2 widgets selected */}
+      <AlignmentToolbar onAlign={alignWidgets} disabled={selectedWidgetIds.length < 2} />
 
       <div
         ref={canvasRef}
@@ -678,7 +676,7 @@ const ALIGN_BUTTONS: { action: AlignAction; label: string; title: string }[] = [
   { action: 'distributeV', label: '⋮', title: 'Distribute Vertically' },
 ];
 
-const AlignmentToolbar: React.FC<{ onAlign: (action: AlignAction) => void }> = ({ onAlign }) => (
+const AlignmentToolbar: React.FC<{ onAlign: (action: AlignAction) => void; disabled?: boolean }> = ({ onAlign, disabled }) => (
   <div
     style={{
       display: 'flex',
@@ -686,25 +684,28 @@ const AlignmentToolbar: React.FC<{ onAlign: (action: AlignAction) => void }> = (
       gap: 4,
       padding: '4px 8px',
       borderBottom: '1px solid #e5e7eb',
-      background: '#f0f9ff',
+      background: disabled ? '#f9fafb' : '#f0f9ff',
       fontSize: 11,
       flexShrink: 0,
     }}
   >
-    <span style={{ color: '#6B7280', marginRight: 4, fontSize: 10 }}>Align:</span>
+    <span style={{ color: disabled ? '#9CA3AF' : '#6B7280', marginRight: 4, fontSize: 10 }}>Align:</span>
     {ALIGN_BUTTONS.map((btn) => (
       <button
         key={btn.action}
-        onClick={() => onAlign(btn.action)}
-        title={btn.title}
+        onClick={() => !disabled && onAlign(btn.action)}
+        title={disabled ? 'Select 2+ widgets to align' : btn.title}
+        disabled={disabled}
         style={{
           padding: '2px 6px',
           border: '1px solid #d1d5db',
           borderRadius: 3,
-          background: '#fff',
-          cursor: 'pointer',
+          background: disabled ? '#f3f4f6' : '#fff',
+          cursor: disabled ? 'not-allowed' : 'pointer',
           fontSize: 12,
           lineHeight: 1,
+          color: disabled ? '#9CA3AF' : 'inherit',
+          opacity: disabled ? 0.6 : 1,
         }}
       >
         {btn.label}
