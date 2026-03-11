@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { widgetRegistry } from '../../core/registry';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
+import { useScadaProjectStore } from '../../stores/scadaProjectStore';
 import type { WidgetBinding, BindingSourceType } from '../../core/types';
 import { deviceService } from '../../../devices/services/deviceService';
 import type { Device } from '../../../devices/types';
@@ -27,7 +28,19 @@ const SOURCE_TYPES: { value: BindingSourceType; label: string }[] = [
 export const BindingPanelV2: React.FC = () => {
   const screen = useScadaRuntimeStore((s) => s.screen);
   const selectedWidgetIds = useScadaRuntimeStore((s) => s.selectedWidgetIds);
-  const updateWidget = useScadaRuntimeStore((s) => s.updateWidget);
+  const updateWidgetRuntime = useScadaRuntimeStore((s) => s.updateWidget);
+  const updateWidgetProject = useScadaProjectStore((s) => s.updateWidgetInPage);
+
+  // Update both stores for persistence
+  const updateWidget = useCallback(
+    (id: string, patch: Parameters<typeof updateWidgetRuntime>[1]) => {
+      // Update runtime store (for immediate UI)
+      updateWidgetRuntime(id, patch);
+      // Update project store (for deploy/save)
+      updateWidgetProject(id, patch);
+    },
+    [updateWidgetRuntime, updateWidgetProject],
+  );
 
   const selectedWidget = useMemo(() => {
     if (!screen || selectedWidgetIds.length !== 1) return null;
@@ -39,17 +52,81 @@ export const BindingPanelV2: React.FC = () => {
     return widgetRegistry.get(selectedWidget.type) ?? null;
   }, [selectedWidget]);
 
+  // Helper to update chart series config when binding changes
+  const updateChartSeriesFromBinding = useCallback(
+    (targetProperty: string, source: WidgetBinding['source']) => {
+      if (!selectedWidget) return;
+      
+      // Check if this is a chart series binding (e.g., chartConfig.data.series[0].key)
+      const seriesMatch = targetProperty.match(/^chartConfig\.data\.series\[(\d+)\]\.key$/);
+      if (!seriesMatch || !seriesMatch[1]) return;
+      
+      const seriesIndex = parseInt(seriesMatch[1], 10);
+      if (isNaN(seriesIndex)) return;
+      
+      // Get current chartConfig from properties
+      const currentConfig = (selectedWidget.properties.chartConfig as Record<string, unknown>) || {
+        data: { series: [], mode: 'realtime' },
+        display: { showTitle: true, showLegend: true, showTooltip: true, showGrid: true, showXAxis: true, showYAxis: true },
+        timeWindow: { mode: 'dashboard', realtime: true, relative: { value: 15, unit: 'minutes' } },
+      };
+      
+      const currentData = (currentConfig.data as Record<string, unknown>) || { series: [] };
+      const currentSeries = Array.isArray(currentData.series) ? [...currentData.series] : [];
+      
+      // Extend array if needed
+      while (currentSeries.length <= seriesIndex) {
+        currentSeries.push({
+          id: `series-${currentSeries.length}`,
+          label: `Series ${currentSeries.length + 1}`,
+          sourceType: 'telemetry',
+          key: '',
+        });
+      }
+      
+      // Update series with binding info
+      currentSeries[seriesIndex] = {
+        ...currentSeries[seriesIndex],
+        entityId: source.entityId || '',
+        entityType: source.entityType || 'DEVICE',
+        key: source.key || '',
+        sourceType: source.type === 'telemetry' ? 'telemetry' : (source.type === 'attribute' ? 'attribute' : 'telemetry'),
+      };
+      
+      // Update widget properties
+      const updatedConfig = {
+        ...currentConfig,
+        data: {
+          ...currentData,
+          series: currentSeries,
+        },
+      };
+      
+      updateWidget(selectedWidget.id, { 
+        properties: { 
+          ...selectedWidget.properties, 
+          chartConfig: updatedConfig 
+        } 
+      });
+    },
+    [selectedWidget, updateWidget],
+  );
+
   const handleBindingChange = useCallback(
     (targetProperty: string, updates: Partial<WidgetBinding>) => {
       if (!selectedWidget) return;
       const bindings = [...selectedWidget.bindings];
       const idx = bindings.findIndex((b) => b.targetProperty === targetProperty);
+      
+      let finalSource: WidgetBinding['source'] | undefined;
+      
       if (idx >= 0) {
         const existing = { ...bindings[idx] } as Record<string, unknown>;
         for (const key of Object.keys(updates)) {
           existing[key] = (updates as Record<string, unknown>)[key];
         }
         bindings[idx] = existing as unknown as WidgetBinding;
+        finalSource = (existing.source as WidgetBinding['source']) || undefined;
       } else {
         // Create new binding
         const newBinding: WidgetBinding = {
@@ -64,10 +141,18 @@ export const BindingPanelV2: React.FC = () => {
         };
         Object.assign(newBinding, updates);
         bindings.push(newBinding);
+        finalSource = newBinding.source;
       }
+      
+      // Update both bindings and chart config if applicable
       updateWidget(selectedWidget.id, { bindings });
+      
+      // Also update chart series config if this is a chart binding
+      if (finalSource && (finalSource.entityId || finalSource.key)) {
+        updateChartSeriesFromBinding(targetProperty, finalSource);
+      }
     },
-    [selectedWidget, updateWidget],
+    [selectedWidget, updateWidget, updateChartSeriesFromBinding],
   );
 
   const handleRemoveBinding = useCallback(

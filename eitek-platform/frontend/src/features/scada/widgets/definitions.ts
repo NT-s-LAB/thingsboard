@@ -642,6 +642,8 @@ const builtinWidgets: WidgetDefinition[] = [
 
 // Import shape widget definitions
 import { registerShapeWidgets } from './shapes';
+// Import chart widget definitions
+import { registerChartWidgets } from './charts';
 
 /**
  * Register all built-in widget definitions with the global widget registry.
@@ -651,6 +653,8 @@ export function registerBuiltinWidgets(): void {
   widgetRegistry.registerAll(builtinWidgets);
   // Register shape widgets
   registerShapeWidgets();
+  // Register chart widgets
+  registerChartWidgets();
 }
 
 export { builtinWidgets };

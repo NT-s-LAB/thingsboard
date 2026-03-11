@@ -37,8 +37,8 @@ const resolveImgUrl = (url: string | null | undefined): string => {
 export const PropertyPanelV2: React.FC = () => {
   const screen = useScadaRuntimeStore((s) => s.screen);
   const selectedWidgetIds = useScadaRuntimeStore((s) => s.selectedWidgetIds);
-  const updateWidget = useScadaRuntimeStore((s) => s.updateWidget);
-  const updateWidgetTransform = useScadaRuntimeStore((s) => s.updateWidgetTransform);
+  const updateWidgetRuntime = useScadaRuntimeStore((s) => s.updateWidget);
+  const updateWidgetTransformRuntime = useScadaRuntimeStore((s) => s.updateWidgetTransform);
   const updateScreenBackground = useScadaRuntimeStore((s) => s.updateScreenBackground);
   const updateScreenCanvasSize = useScadaRuntimeStore((s) => s.updateScreenCanvasSize);
 
@@ -48,6 +48,24 @@ export const PropertyPanelV2: React.FC = () => {
   const renamePage = useScadaProjectStore((s) => s.renamePage);
   const updatePageBackground = useScadaProjectStore((s) => s.updatePageBackground);
   const updatePageCanvasSize = useScadaProjectStore((s) => s.updatePageCanvasSize);
+  const updateWidgetProject = useScadaProjectStore((s) => s.updateWidgetInPage);
+
+  // Update both stores for widget changes
+  const updateWidget = useCallback(
+    (id: string, patch: Parameters<typeof updateWidgetRuntime>[1]) => {
+      updateWidgetRuntime(id, patch);
+      updateWidgetProject(id, patch);
+    },
+    [updateWidgetRuntime, updateWidgetProject],
+  );
+
+  const updateWidgetTransform = useCallback(
+    (id: string, transform: Parameters<typeof updateWidgetTransformRuntime>[1]) => {
+      updateWidgetTransformRuntime(id, transform);
+      updateWidgetProject(id, { transform: { ...screen?.widgets.find((w) => w.id === id)?.transform, ...transform } as any });
+    },
+    [updateWidgetTransformRuntime, updateWidgetProject, screen],
+  );
 
   const activePage = useMemo(() => {
     if (!project || !activePageId) return null;

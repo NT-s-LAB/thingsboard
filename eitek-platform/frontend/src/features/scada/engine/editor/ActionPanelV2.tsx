@@ -17,6 +17,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { widgetRegistry } from '../../core/registry';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
+import { useScadaProjectStore } from '../../stores/scadaProjectStore';
 import { deviceService } from '@/features/devices/services/deviceService';
 import type { Device } from '@/features/devices/types';
 import type {
@@ -49,7 +50,17 @@ function ensureAction(actions: WidgetActionInstance[], trigger: ActionTrigger): 
 export const ActionPanelV2: React.FC = () => {
   const screen = useScadaRuntimeStore((s) => s.screen);
   const selectedWidgetIds = useScadaRuntimeStore((s) => s.selectedWidgetIds);
-  const updateWidget = useScadaRuntimeStore((s) => s.updateWidget);
+  const updateWidgetRuntime = useScadaRuntimeStore((s) => s.updateWidget);
+  const updateWidgetProject = useScadaProjectStore((s) => s.updateWidgetInPage);
+
+  // Update both stores for persistence
+  const updateWidget = useCallback(
+    (id: string, patch: Parameters<typeof updateWidgetRuntime>[1]) => {
+      updateWidgetRuntime(id, patch);
+      updateWidgetProject(id, patch);
+    },
+    [updateWidgetRuntime, updateWidgetProject],
+  );
 
   const selectedWidget = useMemo(() => {
     if (!screen || selectedWidgetIds.length !== 1) return null;

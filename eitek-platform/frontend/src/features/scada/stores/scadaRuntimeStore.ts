@@ -66,6 +66,11 @@ interface ScadaRuntimeState {
 
   // ── Actions ──
   loadScreen: (screen: ScreenDefinition) => void;
+  /**
+   * Sync screen data without resetting selection state.
+   * Used by useSyncProjectToRuntime when only widget data changes (not page switch).
+   */
+  syncScreenData: (screen: ScreenDefinition) => void;
   setDirty: (dirty: boolean) => void;
 
   toggleRuntime: () => void;
@@ -192,6 +197,25 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
             // Set active window to the main window if windows exist
             s.activeWindowId = screen.windows?.find((w) => w.isMain)?.id ?? null;
             s.openWindowIds = [];
+          }),
+
+        // Sync screen data without resetting selection (for Project → Runtime sync)
+        syncScreenData: (screen) =>
+          set((s) => {
+            // Only update screen data, preserve:
+            // - selectedWidgetIds (keep selection stable)
+            // - alarmStates (preserve alarm UI)
+            // - resolvedProperties (preserve resolved bindings)
+            // - past/future (don't break undo/redo for minor syncs)
+            // - activeWindowId/openWindowIds (preserve window state)
+            
+            // Validate selected widgets still exist in new screen
+            const validWidgetIds = new Set(screen.widgets.map(w => w.id));
+            const validSelection = s.selectedWidgetIds.filter(id => validWidgetIds.has(id));
+            
+            s.screen = screen;
+            s.selectedWidgetIds = validSelection;
+            // Note: isDirty is NOT reset - this is a sync, not a fresh load
           }),
 
         setDirty: (dirty) =>

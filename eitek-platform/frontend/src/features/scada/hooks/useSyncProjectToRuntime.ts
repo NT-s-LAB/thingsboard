@@ -67,6 +67,9 @@ export function useSyncProjectToRuntime() {
   
   // Track if initial sync has completed
   const initialSyncDone = useRef(false);
+  
+  // Track last active page ID to distinguish page switch vs widget data update
+  const lastActivePageIdRef = useRef<string | null>(null);
 
   // ── Project → Runtime: when active page changes, load into runtime store ──
   useEffect(() => {
@@ -85,10 +88,22 @@ export function useSyncProjectToRuntime() {
         const page = project.pages.find((p) => p.id === activePageId);
         if (!page) return;
 
-        debugLog('Project→Runtime sync: loading page', activePageId);
-        syncingFromProjectCounter.current++;
         const screen = pageToScreen(page, project.id, project.name);
-        useScadaRuntimeStore.getState().loadScreen(screen);
+        const isPageSwitch = lastActivePageIdRef.current !== null && lastActivePageIdRef.current !== activePageId;
+        
+        syncingFromProjectCounter.current++;
+        
+        if (isPageSwitch) {
+          // Page switch: use loadScreen() which resets selection (correct behavior)
+          debugLog('Project→Runtime sync: PAGE SWITCH to', activePageId);
+          useScadaRuntimeStore.getState().loadScreen(screen);
+        } else {
+          // Same page, widget data update: use syncScreenData() which preserves selection
+          debugLog('Project→Runtime sync: data update for page', activePageId);
+          useScadaRuntimeStore.getState().syncScreenData(screen);
+        }
+        
+        lastActivePageIdRef.current = activePageId;
         
         // Delay decrement to allow subscription to fire first
         setTimeout(() => {
@@ -111,10 +126,15 @@ export function useSyncProjectToRuntime() {
         // Track widget count and IDs to detect paste/delete operations
         widgetIds: state.screen?.widgets.map(w => w.id).join(',') ?? '',
         layerCount: state.screen?.layers.length ?? 0,
+        // Track widget data changes (properties, bindings, transforms)
+        widgetDataHash: state.screen?.widgets.map(w => 
+          `${w.id}:${JSON.stringify(w.properties ?? {})}:${JSON.stringify(w.bindings ?? [])}:${JSON.stringify(w.actions ?? [])}:${w.transform.position.x}:${w.transform.position.y}:${w.transform.size.width}:${w.transform.size.height}:${w.transform.zIndex}`
+        ).join('|') ?? '',
       }),
-      ({ screen, widgetIds, layerCount }) => {
+      ({ screen, widgetIds, layerCount, widgetDataHash }) => {
         void widgetIds; // used for change detection
         void layerCount; // used for change detection
+        void widgetDataHash; // used for change detection
         
         // Skip if we're in a project→runtime sync
         if (syncingFromProjectCounter.current > 0) {
@@ -146,19 +166,38 @@ export function useSyncProjectToRuntime() {
           screen.canvasSize.width !== page.canvasSize.width ||
           screen.canvasSize.height !== page.canvasSize.height;
 
-        // Also check if any widget positions/sizes have changed
+        // Check if any widget data has changed (transforms, properties, bindings, actions)
         let widgetDataChanged = false;
         if (!widgetsChanged && screen.widgets.length === page.widgets.length) {
           for (let i = 0; i < screen.widgets.length; i++) {
             const sw = screen.widgets.find(w => w.id === page.widgets[i]?.id);
             const pw = page.widgets[i];
             if (sw && pw) {
+              // Check transform changes
               if (sw.transform.position.x !== pw.transform.position.x ||
                   sw.transform.position.y !== pw.transform.position.y ||
                   sw.transform.size.width !== pw.transform.size.width ||
                   sw.transform.size.height !== pw.transform.size.height ||
                   sw.transform.zIndex !== pw.transform.zIndex) {
                 widgetDataChanged = true;
+                break;
+              }
+              // Check properties changes
+              if (JSON.stringify(sw.properties ?? {}) !== JSON.stringify(pw.properties ?? {})) {
+                widgetDataChanged = true;
+                debugLog('Properties changed for widget', sw.id);
+                break;
+              }
+              // Check bindings changes
+              if (JSON.stringify(sw.bindings ?? []) !== JSON.stringify(pw.bindings ?? [])) {
+                widgetDataChanged = true;
+                debugLog('Bindings changed for widget', sw.id);
+                break;
+              }
+              // Check actions changes
+              if (JSON.stringify(sw.actions ?? []) !== JSON.stringify(pw.actions ?? [])) {
+                widgetDataChanged = true;
+                debugLog('Actions changed for widget', sw.id);
                 break;
               }
             }
@@ -228,6 +267,9 @@ export function useSyncProjectToRuntime() {
     syncingFromProjectCounter.current++;
     const screen = pageToScreen(page, project.id, project.name);
     useScadaRuntimeStore.getState().loadScreen(screen);
+    
+    // Track initial page ID so future syncs can distinguish page switch vs data update
+    lastActivePageIdRef.current = activePageId;
     
     // Mark initial sync as done after a tick to allow subscriptions to settle
     setTimeout(() => {
