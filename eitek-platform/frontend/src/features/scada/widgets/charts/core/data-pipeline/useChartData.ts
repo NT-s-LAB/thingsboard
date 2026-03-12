@@ -3,12 +3,13 @@
  * 
  * Main hook for managing chart data including:
  * - Historical data fetching
- * - Realtime subscription
- * - Auto refresh
+ * - Realtime WebSocket subscription
+ * - Auto refresh (fallback)
  * - Data transformation
  */
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useWebSocket } from '@/shared/components/providers/WebSocketProvider';
 import type { 
   ChartWidgetConfig, 
   ChartDataPoint,
@@ -53,6 +54,9 @@ export interface UseChartDataResult {
 export function useChartData(options: UseChartDataOptions): UseChartDataResult {
   const { config, dashboardTimeWindow, isRuntime = false, isPreview = false, onError } = options;
 
+  // WebSocket for realtime data
+  const { subscribe, unsubscribe, emit, connected } = useWebSocket();
+
   // State
   const [state, setState] = useState<ChartRuntimeState>({
     loadingState: 'idle',
@@ -65,15 +69,17 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
   const isMountedRef = useRef(true);
   const configRef = useRef(config);
   const onErrorRef = useRef(onError);
+  const stateRef = useRef(state);
   
   // Update refs on each render
   configRef.current = config;
   onErrorRef.current = onError;
+  stateRef.current = state;
 
   // Ensure data.series exists (defensive coding)
   const series = config?.data?.series ?? [];
   const dataMode = config?.data?.mode ?? 'realtime';
-  const maxDataPoints = config?.data?.maxDataPoints;
+  const maxDataPoints = config?.data?.maxDataPoints ?? 500;
 
   // Stable serialized config key for dependency tracking
   const configKey = useMemo(() => {
@@ -219,14 +225,113 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
     fetchData();
   }, [fetchData]);
 
-  // ─── Auto Refresh ────────────────────────────────────────────────────────────
+  // ─── Realtime WebSocket Subscription ─────────────────────────────────────────
 
   useEffect(() => {
+    if (!isRuntime || isPreview) return;
+
     const config = configRef.current;
+    const isRealtimeMode = config.data.mode === 'realtime' || config.timeWindow.realtime;
+    
+    // Collect all device IDs from series config
+    const deviceIds = new Set<string>();
+    for (const s of config.data.series) {
+      const entityId = s.entityId || s.deviceId;
+      if (entityId && (s.entityType === 'DEVICE' || !s.entityType)) {
+        deviceIds.add(entityId);
+      }
+    }
+
+    if (deviceIds.size === 0) return;
+
+    // If WebSocket is connected and in realtime mode, use WebSocket
+    if (connected && isRealtimeMode) {
+      // Build a map of seriesId -> { entityId, key } for quick lookup
+      const seriesMap = new Map<string, { entityId: string; key: string }>();
+      for (const s of config.data.series) {
+        const entityId = s.entityId || s.deviceId;
+        if (entityId) {
+          seriesMap.set(s.id, { entityId, key: s.key });
+        }
+      }
+
+      // Handler for incoming telemetry data
+      const handleTelemetry = (event: { deviceId: string; data: Record<string, Array<{ ts: number; value: string }>> }) => {
+        if (!event?.deviceId || !event?.data || !isMountedRef.current) return;
+
+        const currentState = stateRef.current;
+        const now = Date.now();
+
+        // Update series data with new telemetry
+        const updatedSeriesData = currentState.seriesData.map((series) => {
+          const seriesConfig = seriesMap.get(series.seriesId);
+          if (!seriesConfig) return series;
+          
+          // Check if this telemetry is for this series
+          if (seriesConfig.entityId !== event.deviceId) return series;
+          
+          // Get the new value for this series key
+          const keyData = event.data[seriesConfig.key];
+          if (!keyData || keyData.length === 0) return series;
+
+          // Parse new data points
+          const newPoints: ChartDataPoint[] = keyData.map(v => ({
+            ts: v.ts,
+            value: parseFloat(v.value) || 0,
+          }));
+
+          // Append new points and maintain sliding window
+          const existingData = [...series.data];
+          const combinedData = [...existingData, ...newPoints]
+            .sort((a, b) => a.ts - b.ts)
+            // Remove duplicates by timestamp
+            .filter((point, idx, arr) => idx === 0 || point.ts !== arr[idx - 1]?.ts);
+          
+          // Sliding window: keep only last N points
+          const maxPoints = maxDataPoints;
+          const trimmedData = combinedData.length > maxPoints
+            ? combinedData.slice(-maxPoints)
+            : combinedData;
+
+          return {
+            ...series,
+            data: trimmedData,
+          };
+        });
+
+        setState({
+          loadingState: 'success',
+          seriesData: updatedSeriesData,
+          lastUpdate: now,
+        });
+      };
+
+      // Subscribe to telemetry events
+      subscribe('telemetry', handleTelemetry);
+      
+      // Subscribe to each device
+      Array.from(deviceIds).forEach(deviceId => {
+        emit('subscribe:device', { deviceId });
+        subscriptionsRef.current.add(deviceId);
+      });
+
+      return () => {
+        // Unsubscribe from telemetry
+        unsubscribe('telemetry', handleTelemetry);
+        
+        // Unsubscribe from each device
+        Array.from(subscriptionsRef.current).forEach(deviceId => {
+          emit('unsubscribe:device', { deviceId });
+        });
+        subscriptionsRef.current.clear();
+      };
+    }
+
+    // Fallback: HTTP polling when WebSocket is not available
     const shouldRefresh = shouldAutoRefresh(config.timeWindow, config.data.mode);
     const refreshMs = config.timeWindow.autoRefreshMs || 5000;
 
-    if (isRuntime && shouldRefresh && refreshMs > 0) {
+    if (shouldRefresh && refreshMs > 0) {
       refreshIntervalRef.current = setInterval(() => {
         fetchData();
       }, refreshMs);
@@ -238,7 +343,7 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
         refreshIntervalRef.current = null;
       }
     };
-  }, [isRuntime, configKey, fetchData]);
+  }, [isRuntime, isPreview, connected, configKey, fetchData, subscribe, unsubscribe, emit, maxDataPoints]);
 
   // ─── Initial Fetch ───────────────────────────────────────────────────────────
 
