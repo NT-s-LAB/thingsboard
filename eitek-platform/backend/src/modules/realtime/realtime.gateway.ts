@@ -7,9 +7,22 @@ import {
   OnGatewayDisconnect,
   MessageBody,
   ConnectedSocket,
+  WsException,
 } from '@nestjs/websockets';
 import { Injectable, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { AuthService } from '../auth/auth.service';
+import { RoomAccessService, UserContext } from './services/room-access.service';
+import { JwtPayload } from '../auth/strategies/jwt.strategy';
+
+/**
+ * Authenticated socket with user context
+ */
+export interface AuthenticatedSocket extends Socket {
+  user: UserContext;
+}
 
 /**
  * Room naming conventions for scoped subscriptions:
@@ -42,8 +55,8 @@ export class RealtimeGateway
 
   private readonly logger = new Logger(RealtimeGateway.name);
   
-  // Track connected clients
-  private connectedClients = new Map<string, Socket>();
+  // Track connected clients with their user context
+  private connectedClients = new Map<string, AuthenticatedSocket>();
   
   // Track client subscriptions for cleanup
   private clientSubscriptions = new Map<string, Set<string>>(); // clientId -> Set<room>
@@ -51,14 +64,113 @@ export class RealtimeGateway
   // Track device subscriptions for TB WebSocket management
   private deviceSubscriptions = new Map<string, SubscriptionTracker>();
 
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly authService: AuthService,
+    private readonly roomAccessService: RoomAccessService,
+  ) {}
+
   afterInit(server: Server) {
-    this.logger.log('WebSocket Gateway initialized');
+    this.logger.log('WebSocket Gateway initialized with authentication');
   }
 
-  handleConnection(client: Socket) {
-    this.connectedClients.set(client.id, client);
-    this.clientSubscriptions.set(client.id, new Set());
-    this.logger.log(`Client connected: ${client.id} (total: ${this.connectedClients.size})`);
+  async handleConnection(client: Socket) {
+    try {
+      // Authenticate the connection
+      const user = await this.authenticateClient(client);
+      
+      // Attach user to socket
+      const authClient = client as AuthenticatedSocket;
+      authClient.user = user;
+      
+      this.connectedClients.set(client.id, authClient);
+      this.clientSubscriptions.set(client.id, new Set());
+      
+      this.logger.log(
+        `Client connected: ${client.id} (user: ${user.id}, tenant: ${user.tenantId}) - total: ${this.connectedClients.size}`
+      );
+    } catch (error) {
+      this.logger.warn(`Client ${client.id} connection rejected: ${error.message}`);
+      client.emit('error', { message: 'Authentication failed', code: 'AUTH_FAILED' });
+      client.disconnect(true);
+    }
+  }
+
+  /**
+   * Extract and verify JWT token from handshake
+   */
+  private async authenticateClient(client: Socket): Promise<UserContext> {
+    // Extract token from query, auth, or headers
+    const token = this.extractToken(client);
+
+    if (!token) {
+      throw new WsException('No authentication token provided');
+    }
+
+    // Verify token
+    let payload: JwtPayload;
+    try {
+      payload = this.jwtService.verify<JwtPayload>(token, {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+      });
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        throw new WsException('Token expired');
+      }
+      throw new WsException('Invalid token');
+    }
+
+    // Validate user is active
+    const user = await this.authService.validateUser(payload.sub);
+    if (!user) {
+      throw new WsException('User not found or inactive');
+    }
+
+    return {
+      id: user.id,
+      tenantId: user.tenantId,
+      role: user.role,
+    };
+  }
+
+  /**
+   * Extract JWT from various sources in handshake
+   */
+  private extractToken(client: Socket): string | null {
+    // Method 1: Query parameter
+    const queryToken = client.handshake.query?.token;
+    if (queryToken && typeof queryToken === 'string') {
+      return queryToken;
+    }
+
+    // Method 2: Auth object
+    const authToken = client.handshake.auth?.token;
+    if (authToken && typeof authToken === 'string') {
+      return authToken;
+    }
+
+    // Method 3: Authorization header
+    const authHeader = client.handshake.headers?.authorization;
+    if (authHeader && typeof authHeader === 'string') {
+      const [type, token] = authHeader.split(' ');
+      if (type === 'Bearer' && token) {
+        return token;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get authenticated user from socket, or throw
+   */
+  private getUser(client: Socket): UserContext {
+    const authClient = client as AuthenticatedSocket;
+    if (!authClient.user) {
+      throw new WsException('Not authenticated');
+    }
+    return authClient.user;
   }
 
   handleDisconnect(client: Socket) {
@@ -84,16 +196,21 @@ export class RealtimeGateway
   // ─────────────────────────────────────────────────────────────────────────────
 
   @SubscribeMessage('subscribe:device')
-  handleSubscribeDevice(
+  async handleSubscribeDevice(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { deviceId: string },
   ) {
+    const user = this.getUser(client);
     const room = `device:${data.deviceId}`;
+    
+    // Validate tenant access
+    await this.roomAccessService.validateRoomAccess(user, room);
+    
     client.join(room);
     this.trackClientSubscription(client.id, room);
     this.addClientToDeviceTracking(data.deviceId, client.id);
     
-    this.logger.debug(`Client ${client.id} subscribed to ${room}`);
+    this.logger.debug(`Client ${client.id} (tenant: ${user.tenantId}) subscribed to ${room}`);
     return { event: 'subscribed', data: { room } };
   }
 
@@ -116,14 +233,19 @@ export class RealtimeGateway
   // ─────────────────────────────────────────────────────────────────────────────
 
   @SubscribeMessage('subscribe:area')
-  handleSubscribeArea(
+  async handleSubscribeArea(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { areaId: string },
   ) {
+    const user = this.getUser(client);
     const room = `area:${data.areaId}`;
+    
+    // Validate tenant access
+    await this.roomAccessService.validateRoomAccess(user, room);
+    
     client.join(room);
     this.trackClientSubscription(client.id, room);
-    this.logger.debug(`Client ${client.id} subscribed to ${room}`);
+    this.logger.debug(`Client ${client.id} (tenant: ${user.tenantId}) subscribed to ${room}`);
     return { event: 'subscribed', data: { room } };
   }
 
@@ -144,14 +266,19 @@ export class RealtimeGateway
   // ─────────────────────────────────────────────────────────────────────────────
 
   @SubscribeMessage('subscribe:project')
-  handleSubscribeProject(
+  async handleSubscribeProject(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { projectId: string },
   ) {
+    const user = this.getUser(client);
     const room = `project:${data.projectId}`;
+    
+    // Validate tenant access
+    await this.roomAccessService.validateRoomAccess(user, room);
+    
     client.join(room);
     this.trackClientSubscription(client.id, room);
-    this.logger.debug(`Client ${client.id} subscribed to ${room}`);
+    this.logger.debug(`Client ${client.id} (tenant: ${user.tenantId}) subscribed to ${room}`);
     return { event: 'subscribed', data: { room } };
   }
 
@@ -172,14 +299,19 @@ export class RealtimeGateway
   // ─────────────────────────────────────────────────────────────────────────────
 
   @SubscribeMessage('subscribe:devices:project')
-  handleSubscribeDevicesProject(
+  async handleSubscribeDevicesProject(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { projectId: string },
   ) {
+    const user = this.getUser(client);
     const room = `devices:project:${data.projectId}`;
+    
+    // Validate tenant access
+    await this.roomAccessService.validateRoomAccess(user, room);
+    
     client.join(room);
     this.trackClientSubscription(client.id, room);
-    this.logger.debug(`Client ${client.id} subscribed to ${room}`);
+    this.logger.debug(`Client ${client.id} (tenant: ${user.tenantId}) subscribed to ${room}`);
     return { event: 'subscribed', data: { room } };
   }
 
@@ -196,14 +328,19 @@ export class RealtimeGateway
   }
 
   @SubscribeMessage('subscribe:devices:area')
-  handleSubscribeDevicesArea(
+  async handleSubscribeDevicesArea(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { areaId: string },
   ) {
+    const user = this.getUser(client);
     const room = `devices:area:${data.areaId}`;
+    
+    // Validate tenant access
+    await this.roomAccessService.validateRoomAccess(user, room);
+    
     client.join(room);
     this.trackClientSubscription(client.id, room);
-    this.logger.debug(`Client ${client.id} subscribed to ${room}`);
+    this.logger.debug(`Client ${client.id} (tenant: ${user.tenantId}) subscribed to ${room}`);
     return { event: 'subscribed', data: { room } };
   }
 
@@ -220,15 +357,21 @@ export class RealtimeGateway
   }
 
   // Legacy global subscription (deprecated but kept for backward compatibility)
+  // WARNING: This exposes ALL devices across tenants - should be disabled in production
   @SubscribeMessage('subscribe:devices:list')
   handleSubscribeDevicesList(
     @ConnectedSocket() client: Socket,
   ) {
+    // Verify user is authenticated (but no tenant-specific access check)
+    const user = this.getUser(client);
+    
     const room = 'devices:list';
     client.join(room);
     this.trackClientSubscription(client.id, room);
-    this.logger.debug(`Client ${client.id} subscribed to ${room} (deprecated - use scoped rooms)`);
-    return { event: 'subscribed', data: { room } };
+    this.logger.warn(
+      `Client ${client.id} (tenant: ${user.tenantId}) subscribed to DEPRECATED global room: ${room} - migrate to scoped rooms!`
+    );
+    return { event: 'subscribed', data: { room, deprecated: true, message: 'Use scoped rooms instead' } };
   }
 
   @SubscribeMessage('unsubscribe:devices:list')
