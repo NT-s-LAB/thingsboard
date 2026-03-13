@@ -122,6 +122,49 @@ const lockItems: ContextMenuItem[] = [
 ];
 
 /**
+ * Group/Ungroup items
+ */
+const groupItems: ContextMenuItem[] = [
+  {
+    type: 'item',
+    id: 'group',
+    label: 'Group',
+    icon: 'Group',
+    shortcut: 'Ctrl+G',
+    action: (_ctx) => {
+      const { groupWidgets, selectedWidgetIds } = getStoreActions();
+      groupWidgets?.(selectedWidgetIds);
+    },
+    visible: (ctx) => {
+      // Show Group only when 2+ widgets are selected and not all already in same group
+      if (ctx.type !== 'multiselect' || ctx.selectedWidgets.length < 2) return false;
+      const groupIds = new Set(ctx.selectedWidgets.map((w) => w.groupId).filter(Boolean));
+      // If all widgets are already in the same group, don't show Group option
+      if (groupIds.size === 1 && ctx.selectedWidgets.every((w) => w.groupId)) {
+        return false;
+      }
+      return true;
+    },
+  },
+  {
+    type: 'item',
+    id: 'ungroup',
+    label: 'Ungroup',
+    icon: 'Ungroup',
+    shortcut: 'Ctrl+Shift+G',
+    action: (_ctx) => {
+      const { ungroupWidgets, selectedWidgetIds } = getStoreActions();
+      ungroupWidgets?.(selectedWidgetIds);
+    },
+    visible: (ctx) => {
+      // Show Ungroup only when any selected widget is grouped
+      if (ctx.type !== 'widget' && ctx.type !== 'multiselect') return false;
+      return ctx.selectedWidgets.some((w) => w.groupId);
+    },
+  },
+];
+
+/**
  * Selection group items
  */
 const selectionItems: ContextMenuItem[] = [
@@ -800,6 +843,13 @@ export function registerDefaultMenuItems(): void {
   contextMenuRegistry.registerItems(lockItems, {
     groupId: 'lock',
     priority: 12,
+    contextTypes: ['widget', 'multiselect'],
+  });
+
+  // Group/Ungroup
+  contextMenuRegistry.registerItems(groupItems, {
+    groupId: 'group',
+    priority: 13,
     contextTypes: ['widget', 'multiselect'],
   });
 

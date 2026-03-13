@@ -65,6 +65,8 @@ export const CanvasEditor: React.FC = () => {
   const undo = useScadaRuntimeStore((s) => s.undo);
   const redo = useScadaRuntimeStore((s) => s.redo);
   const alignWidgets = useScadaRuntimeStore((s) => s.alignWidgets);
+  const groupWidgets = useScadaRuntimeStore((s) => s.groupWidgets);
+  const ungroupWidgets = useScadaRuntimeStore((s) => s.ungroupWidgets);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<{
@@ -219,6 +221,8 @@ export const CanvasEditor: React.FC = () => {
   // ── Canvas click — deselect ──
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
+      // Focus canvas to enable keyboard shortcuts
+      canvasRef.current?.focus();
       // Don't deselect if we just finished a pan drag
       if (panDrag) return;
       const target = e.target as HTMLElement;
@@ -232,6 +236,9 @@ export const CanvasEditor: React.FC = () => {
   // ── Canvas mouse down — start rubber-band or pan drag ──
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      // Focus canvas to enable keyboard shortcuts
+      canvasRef.current?.focus();
+      
       const target = e.target as HTMLElement;
       const isCanvasBg = target === canvasRef.current
         || target.classList.contains('scada-canvas-grid')
@@ -264,6 +271,9 @@ export const CanvasEditor: React.FC = () => {
 
       if (e.button !== 0) return; // left click only for selection
 
+      // Prevent text selection when starting marquee selection
+      e.preventDefault();
+
       const rect = canvasRef.current!.getBoundingClientRect();
       const x = (e.clientX - rect.left - 40) / zoom - panOffset.x;
       const y = (e.clientY - rect.top - 40) / zoom - panOffset.y;
@@ -280,6 +290,10 @@ export const CanvasEditor: React.FC = () => {
   const handleWidgetMouseDown = useCallback(
     (e: React.MouseEvent, widgetId: string) => {
       e.stopPropagation();
+      e.preventDefault(); // Prevent text selection when dragging widgets
+      // Focus canvas to enable keyboard shortcuts
+      canvasRef.current?.focus();
+      
       if (spaceHeld) return; // don't pick up widgets while space-panning
       const widget = screen?.widgets.find((w) => w.id === widgetId);
       if (!widget || widget.locked) return;
@@ -438,9 +452,13 @@ export const CanvasEditor: React.FC = () => {
         selectAll();
       }
       if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
-        copySelected();
+        e.preventDefault();
+        if (selectedWidgetIds.length > 0) {
+          copySelected();
+        }
       }
       if (e.key === 'v' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
         pasteClipboard();
       }
       if (e.key === 'd' && (e.ctrlKey || e.metaKey)) {
@@ -467,8 +485,19 @@ export const CanvasEditor: React.FC = () => {
         setZoom(1);
         setPanOffset({ x: 0, y: 0 });
       }
+      // Group/Ungroup shortcuts
+      if (e.key === 'g' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        e.preventDefault();
+        if (selectedWidgetIds.length >= 2) {
+          groupWidgets(selectedWidgetIds);
+        }
+      }
+      if (e.key === 'g' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+        e.preventDefault();
+        ungroupWidgets(selectedWidgetIds);
+      }
     },
-    [selectedWidgetIds, removeWidgets, selectAll, copySelected, pasteClipboard, duplicateWidgets, undo, redo, zoom, setZoom, setPanOffset],
+    [selectedWidgetIds, removeWidgets, selectAll, copySelected, pasteClipboard, duplicateWidgets, undo, redo, zoom, setZoom, setPanOffset, groupWidgets, ungroupWidgets],
   );
 
   const handleKeyUp = useCallback((e: React.KeyboardEvent) => {
@@ -589,6 +618,7 @@ export const CanvasEditor: React.FC = () => {
         {/* Rubber-band / marquee selection overlay */}
         {marquee && (
           <div
+            className="scada-marquee-selection"
             style={{
               position: 'absolute',
               left: Math.min(marquee.startX, marquee.currentX),

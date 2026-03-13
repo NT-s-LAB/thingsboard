@@ -169,6 +169,12 @@ export interface WidgetInstance {
   /** Lock editing */
   locked?: boolean;
   visible?: boolean;
+
+  /**
+   * Group ID — if set, this widget belongs to a group.
+   * All widgets with the same groupId are selected/moved together.
+   */
+  groupId?: string;
 }
 
 // ─── Binding ─────────────────────────────────────────────────────────────────

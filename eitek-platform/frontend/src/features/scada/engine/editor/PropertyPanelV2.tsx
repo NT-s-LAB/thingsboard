@@ -152,6 +152,9 @@ export const PropertyPanelV2: React.FC = () => {
     [updateWidgetTransformRuntime, updateWidgetProject, screen],
   );
 
+  const groupWidgets = useScadaRuntimeStore((s) => s.groupWidgets);
+  const ungroupWidgets = useScadaRuntimeStore((s) => s.ungroupWidgets);
+
   const activePage = useMemo(() => {
     if (!project || !activePageId) return null;
     return project.pages.find((p) => p.id === activePageId) ?? null;
@@ -213,17 +216,93 @@ export const PropertyPanelV2: React.FC = () => {
     [selectedWidget, updateWidget],
   );
 
+  // Check if selected widgets are grouped
+  const selectedWidgetObjects = useMemo(() => {
+    if (!screen) return [];
+    return screen.widgets.filter((w) => selectedWidgetIds.includes(w.id));
+  }, [screen, selectedWidgetIds]);
+
+  const groupInfo = useMemo(() => {
+    const groupIds = new Set(selectedWidgetObjects.map((w) => w.groupId).filter(Boolean));
+    const allGrouped = selectedWidgetObjects.length > 0 && selectedWidgetObjects.every((w) => w.groupId);
+    const anyGrouped = selectedWidgetObjects.some((w) => w.groupId);
+    const sameGroup = groupIds.size === 1 && allGrouped;
+    return { groupIds, allGrouped, anyGrouped, sameGroup, groupId: sameGroup ? Array.from(groupIds)[0] : null };
+  }, [selectedWidgetObjects]);
+
+  const handleGroup = useCallback(() => {
+    if (selectedWidgetIds.length >= 2) {
+      groupWidgets(selectedWidgetIds);
+    }
+  }, [groupWidgets, selectedWidgetIds]);
+
+  const handleUngroup = useCallback(() => {
+    ungroupWidgets(selectedWidgetIds);
+  }, [ungroupWidgets, selectedWidgetIds]);
+
   if (!selectedWidget || !definition) {
     return (
       <div className="scada-panel" style={{ width: 260, flexShrink: 0 }}>
         <div className="scada-panel__header">
-          {selectedWidgetIds.length > 1 ? `🔲 ${selectedWidgetIds.length} Widgets Selected` : `📄 Page: ${activePage?.name || 'Properties'}`}
+          {selectedWidgetIds.length > 1 
+            ? groupInfo.sameGroup 
+              ? '🔗 Group Selected' 
+              : `🔲 ${selectedWidgetIds.length} Widgets Selected`
+            : `📄 Page: ${activePage?.name || 'Properties'}`}
         </div>
         {selectedWidgetIds.length > 1 ? (
           <div className="scada-panel__body" style={{ padding: 16 }}>
             <div style={{ color: '#374151', fontSize: 12, marginBottom: 12, textAlign: 'center' }}>
               <strong>{selectedWidgetIds.length}</strong> widgets selected
+              {groupInfo.sameGroup && (
+                <div style={{ color: '#8B5CF6', marginTop: 4 }}>
+                  (Grouped)
+                </div>
+              )}
             </div>
+
+            {/* Group/Ungroup buttons */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              {!groupInfo.sameGroup && selectedWidgetIds.length >= 2 && (
+                <button
+                  onClick={handleGroup}
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: '#fff',
+                    background: '#8B5CF6',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                  }}
+                  title="Ctrl+G"
+                >
+                  Group
+                </button>
+              )}
+              {groupInfo.anyGrouped && (
+                <button
+                  onClick={handleUngroup}
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: '#8B5CF6',
+                    background: '#fff',
+                    border: '1px solid #8B5CF6',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                  }}
+                  title="Ctrl+Shift+G"
+                >
+                  Ungroup
+                </button>
+              )}
+            </div>
+
             <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 8 }}>
               <strong>Tips:</strong>
             </div>
@@ -232,6 +311,7 @@ export const PropertyPanelV2: React.FC = () => {
               <li>Use alignment toolbar above canvas</li>
               <li>Press Delete to remove all</li>
               <li>Ctrl+D to duplicate all</li>
+              <li>Ctrl+G to group widgets</li>
               <li>Click empty area to deselect</li>
             </ul>
           </div>

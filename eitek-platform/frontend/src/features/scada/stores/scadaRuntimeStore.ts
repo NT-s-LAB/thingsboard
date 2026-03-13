@@ -142,6 +142,12 @@ interface ScadaRuntimeState {
   bringForward: (ids?: string[]) => void;
   sendBackward: (ids?: string[]) => void;
 
+  // Group management
+  groupWidgets: (ids?: string[]) => string | null;
+  ungroupWidgets: (ids?: string[]) => void;
+  getWidgetsInGroup: (groupId: string) => WidgetInstance[];
+  isWidgetGrouped: (widgetId: string) => boolean;
+
   // Windows
   addWindow: (window: ScadaWindow) => void;
   updateWindow: (id: string, patch: Partial<ScadaWindow>) => void;
@@ -348,15 +354,34 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
 
         selectWidget: (id, multi) =>
           set((s) => {
+            if (!s.screen) return;
+            
+            // Find the widget and check if it's in a group
+            const widget = s.screen.widgets.find((w) => w.id === id);
+            const groupId = widget?.groupId;
+            
+            // Get all widget IDs in the same group (if any)
+            const groupWidgetIds = groupId
+              ? s.screen.widgets.filter((w) => w.groupId === groupId).map((w) => w.id)
+              : [id];
+            
             if (multi) {
-              const idx = s.selectedWidgetIds.indexOf(id);
-              if (idx >= 0) {
-                s.selectedWidgetIds.splice(idx, 1);
+              // Multi-select mode: toggle the entire group
+              const isAnyInSelection = groupWidgetIds.some((wid) => s.selectedWidgetIds.includes(wid));
+              if (isAnyInSelection) {
+                // Remove all group members from selection
+                s.selectedWidgetIds = s.selectedWidgetIds.filter((wid) => !groupWidgetIds.includes(wid));
               } else {
-                s.selectedWidgetIds.push(id);
+                // Add all group members to selection
+                for (const wid of groupWidgetIds) {
+                  if (!s.selectedWidgetIds.includes(wid)) {
+                    s.selectedWidgetIds.push(wid);
+                  }
+                }
               }
             } else {
-              s.selectedWidgetIds = [id];
+              // Single select: select all widgets in the group
+              s.selectedWidgetIds = groupWidgetIds;
             }
           }),
 
@@ -729,6 +754,99 @@ export const useScadaRuntimeStore = create<ScadaRuntimeState>()(
             }
             s.isDirty = true;
           }),
+
+        // ── Group management ──
+        /**
+         * Group widgets together. Creates a new group ID and assigns it to all selected widgets.
+         * Returns the new group ID, or null if grouping failed.
+         */
+        groupWidgets: (ids) => {
+          const state = get();
+          if (!state.screen) return null;
+          
+          const targetIds = ids ?? state.selectedWidgetIds;
+          if (targetIds.length < 2) return null;
+          
+          // Don't group widgets that are already in different groups
+          const widgetsToGroup = state.screen.widgets.filter((w) => targetIds.includes(w.id));
+          const existingGroupIds = new Set(widgetsToGroup.map((w) => w.groupId).filter(Boolean));
+          if (existingGroupIds.size > 1) {
+            // Multiple different groups selected - ungroup first or reject
+            return null;
+          }
+          
+          // Generate new group ID
+          const groupId = `group_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          
+          set((s) => {
+            if (!s.screen) return;
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            
+            const idSet = new Set(targetIds);
+            for (const w of s.screen.widgets) {
+              if (idSet.has(w.id)) {
+                w.groupId = groupId;
+              }
+            }
+            s.isDirty = true;
+          });
+          
+          return groupId;
+        },
+
+        /**
+         * Ungroup widgets. Removes groupId from selected widgets or all widgets in the group.
+         */
+        ungroupWidgets: (ids) =>
+          set((s) => {
+            if (!s.screen) return;
+            
+            const targetIds = ids ?? s.selectedWidgetIds;
+            if (targetIds.length === 0) return;
+            
+            // Find all groupIds involved
+            const groupIds = new Set<string>();
+            for (const w of s.screen.widgets) {
+              if (targetIds.includes(w.id) && w.groupId) {
+                groupIds.add(w.groupId);
+              }
+            }
+            
+            if (groupIds.size === 0) return;
+            
+            s.past.push(current(s.screen));
+            if (s.past.length > MAX_UNDO) s.past.shift();
+            s.future = [];
+            
+            // Remove groupId from all widgets in these groups
+            for (const w of s.screen.widgets) {
+              if (w.groupId && groupIds.has(w.groupId)) {
+                delete w.groupId;
+              }
+            }
+            s.isDirty = true;
+          }),
+
+        /**
+         * Get all widgets in a group.
+         */
+        getWidgetsInGroup: (groupId) => {
+          const state = get();
+          if (!state.screen) return [];
+          return state.screen.widgets.filter((w) => w.groupId === groupId);
+        },
+
+        /**
+         * Check if a widget is part of a group.
+         */
+        isWidgetGrouped: (widgetId) => {
+          const state = get();
+          if (!state.screen) return false;
+          const widget = state.screen.widgets.find((w) => w.id === widgetId);
+          return !!widget?.groupId;
+        },
 
         // ── Window management ──
         addWindow: (window) =>

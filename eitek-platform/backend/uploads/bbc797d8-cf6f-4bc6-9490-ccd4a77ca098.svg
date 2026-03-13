@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" width="400" height="120">
+
+<!-- dây điện -->
+<line x1="40" y1="60" x2="360" y2="60"
+stroke="#444"
+stroke-width="8"
+stroke-linecap="round"/>
+
+<!-- dòng điện chạy -->
+<line x1="40" y1="60" x2="360" y2="60"
+stroke="#00ff88"
+stroke-width="4"
+stroke-linecap="round"
+stroke-dasharray="12 8">
+
+<animate
+attributeName="stroke-dashoffset"
+from="0"
+to="40"
+dur="0.8s"
+repeatCount="indefinite"/>
+
+</line>
+
+</svg>

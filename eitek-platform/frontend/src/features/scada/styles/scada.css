@@ -185,3 +185,162 @@
   width: 24px;
   text-align: center;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   DISABLE TEXT SELECTION IN EDITOR
+   Prevents browser text selection during drag, marquee select, and widget interactions.
+   Note: Input fields, textareas, and editable elements are exempted.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Editor root and canvas areas — disable text selection ────────────────── */
+.scada-editor-root,
+.scada-canvas-frame,
+.scada-canvas-grid,
+.scada-widget-wrapper,
+.scada-widget-wrapper *,
+.scada-palette-item,
+.scada-layer-item,
+.scada-alignment-toolbar,
+.scada-toolbar-btn,
+.scada-resize-handle {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ── Prevent drag ghost image on widgets ───────────────────────────────────── */
+.scada-widget-wrapper {
+  -webkit-user-drag: none;
+}
+
+.scada-widget-wrapper img,
+.scada-widget-wrapper svg {
+  -webkit-user-drag: none;
+}
+
+/* Only disable pointer-events on SVGs in EDITOR mode to allow drag selection.
+   In Runtime/Preview mode, SVGs (like buttons) need to receive click events. */
+.scada-widget-wrapper--editing img,
+.scada-widget-wrapper--editing svg {
+  pointer-events: none;
+}
+
+/* ── Widget text labels — not selectable in editor mode ────────────────────── */
+.scada-widget-wrapper--editing .scada-widget-label,
+.scada-widget-wrapper--editing [data-widget-text],
+.scada-widget-wrapper--editing span,
+.scada-widget-wrapper--editing p,
+.scada-widget-wrapper--editing h1,
+.scada-widget-wrapper--editing h2,
+.scada-widget-wrapper--editing h3,
+.scada-widget-wrapper--editing h4,
+.scada-widget-wrapper--editing h5,
+.scada-widget-wrapper--editing h6 {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  cursor: inherit;
+}
+
+/* ── Marquee / rubber-band selection box ───────────────────────────────────── */
+.scada-marquee-selection {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   EXEMPT FORM CONTROLS — Allow text selection in inputs and editable areas
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Property panel and dialogs — enable text selection for inputs ─────────── */
+.scada-property-panel input,
+.scada-property-panel textarea,
+.scada-property-panel [contenteditable="true"],
+.scada-panel input,
+.scada-panel textarea,
+.scada-panel [contenteditable="true"],
+.scada-dialog input,
+.scada-dialog textarea,
+.scada-dialog [contenteditable="true"],
+/* Generic form controls anywhere in editor UI */
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="email"],
+input[type="url"],
+input[type="password"],
+textarea,
+[contenteditable="true"],
+/* Monaco editor and code areas */
+.monaco-editor,
+.monaco-editor *,
+.cm-editor,
+.cm-editor * {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* ── Layer name input in layer panel ───────────────────────────────────────── */
+.scada-layer-item input {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   GROUP WIDGET STYLES
+   Visual styles for grouped widgets in the editor.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Group container visual ────────────────────────────────────────────────── */
+.scada-group-wrapper {
+  position: absolute;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.scada-group-wrapper--selected {
+  outline: 2px dashed #8B5CF6;
+  outline-offset: 4px;
+}
+
+.scada-group-wrapper--editing {
+  cursor: move;
+}
+
+/* ── Group badge indicator ─────────────────────────────────────────────────── */
+.scada-group-badge {
+  position: absolute;
+  top: -20px;
+  left: 0;
+  background: #8B5CF6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: nowrap;
+}
+
+/* ── Grouped widgets have subtle visual indicator ──────────────────────────── */
+.scada-widget-wrapper--grouped {
+  /* Slight purple tint to show grouping */
+}
+
+.scada-widget-wrapper--grouped.scada-widget-wrapper--selected {
+  outline-color: #8B5CF6;
+}

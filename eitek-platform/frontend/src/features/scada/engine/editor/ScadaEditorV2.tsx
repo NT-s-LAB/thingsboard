@@ -271,6 +271,7 @@ export const ScadaEditorV2: React.FC<ScadaEditorV2Props> = ({
     <div
       id="scada-v2-fullscreen-root"
       ref={fullscreenContainerRef}
+      className={!isRuntime ? 'scada-editor-root' : undefined}
       style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: isFullscreen ? '#000' : '#fafbfc' }}
     >
       {/* Toolbar — hidden in fullscreen+runtime */}
