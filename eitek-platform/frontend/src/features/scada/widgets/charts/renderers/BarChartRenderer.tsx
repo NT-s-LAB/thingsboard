@@ -22,6 +22,7 @@ import {
 import type { ChartWidgetConfig, ChartSeriesData } from '../core/types';
 import { BaseChart, ChartEmptyState } from '../components/base/BaseChart';
 import { useChartData } from '../core/data-pipeline';
+import { useRuntimeNavStore } from '../../../stores/runtimeNavStore';
 import type { WidgetRendererProps } from '../../../core/types';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -150,13 +151,17 @@ export const BarChartRenderer = memo<BarChartRendererProps>(function BarChartRen
   height,
   isRuntime,
 }) {
+  // Get dashboard time window from runtime store
+  const dashboardTimeWindow = useRuntimeNavStore((s) => s.timeWindow);
+
   // Get chart config from properties
   const chartConfig = (properties.chartConfig as ChartWidgetConfig) || getDefaultConfig();
   const showLabels = (properties.showLabels as boolean) ?? false;
 
-  // Fetch chart data
+  // Fetch chart data - pass dashboard time window for widgets using dashboard mode
   const { state, error } = useChartData({
     config: chartConfig,
+    dashboardTimeWindow,
     isRuntime,
     isPreview: !isRuntime,
   });

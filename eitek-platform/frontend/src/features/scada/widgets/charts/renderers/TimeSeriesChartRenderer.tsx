@@ -22,6 +22,7 @@ import {
 import type { ChartWidgetConfig, ChartSeriesData, ChartSeriesConfig, ThresholdLineConfig } from '../core/types';
 import { BaseChart, ChartEmptyState } from '../components/base/BaseChart';
 import { useChartData } from '../core/data-pipeline';
+import { useRuntimeNavStore } from '../../../stores/runtimeNavStore';
 import type { WidgetRendererProps } from '../../../core/types';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -144,12 +145,16 @@ export const TimeSeriesChartRenderer = memo<TimeSeriesChartRendererProps>(functi
   height,
   isRuntime,
 }) {
+  // Get dashboard time window from runtime store
+  const dashboardTimeWindow = useRuntimeNavStore((s) => s.timeWindow);
+
   // Get chart config from properties with safe defaults
   const chartConfig = normalizeChartConfig(properties.chartConfig as Partial<ChartWidgetConfig> | undefined);
 
-  // Fetch chart data
+  // Fetch chart data - pass dashboard time window for widgets using dashboard mode
   const { state, error } = useChartData({
     config: chartConfig,
+    dashboardTimeWindow,
     isRuntime,
     isPreview: !isRuntime,
   });

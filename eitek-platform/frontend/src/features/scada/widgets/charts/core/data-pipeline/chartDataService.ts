@@ -89,6 +89,14 @@ export async function fetchHistoricalData(
     return {};
   }
 
+  // Validate time range to prevent NaN errors
+  const startTs = Number(timeRange.startTs);
+  const endTs = Number(timeRange.endTs);
+  if (isNaN(startTs) || isNaN(endTs) || startTs <= 0 || endTs <= startTs) {
+    console.warn('fetchHistoricalData: Invalid time range', { startTs, endTs });
+    return {};
+  }
+
   // Only support DEVICE entity type for now
   if (entityType !== 'DEVICE') {
     console.warn(`fetchHistoricalData: Unsupported entity type '${entityType}', only 'DEVICE' is supported`);
@@ -110,8 +118,8 @@ export async function fetchHistoricalData(
     const data = await deviceService.getDeviceTimeseries(
       entityId,
       keys,
-      timeRange.startTs,
-      timeRange.endTs,
+      startTs,
+      endTs,
       params
     );
     

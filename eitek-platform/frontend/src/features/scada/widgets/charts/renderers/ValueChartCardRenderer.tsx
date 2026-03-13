@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import type { ChartWidgetConfig, ChartDataPoint, LatestValueCardConfig } from '../core/types';
 import { useChartData } from '../core/data-pipeline';
+import { useRuntimeNavStore } from '../../../stores/runtimeNavStore';
 import { CHART_COLOR_PALETTE } from '../core/constants';
 import type { WidgetRendererProps } from '../../../core/types';
 
@@ -118,6 +119,9 @@ export const ValueChartCardRenderer = memo<ValueChartCardRendererProps>(function
   height,
   isRuntime,
 }) {
+  // Get dashboard time window from runtime store
+  const dashboardTimeWindow = useRuntimeNavStore((s) => s.timeWindow);
+
   // Get chart config from properties
   const chartConfig = (properties.chartConfig as ChartWidgetConfig) || getDefaultConfig();
   const cardConfig: LatestValueCardConfig = { ...DEFAULT_CARD_CONFIG, ...chartConfig.latestValueCard };
@@ -128,9 +132,10 @@ export const ValueChartCardRenderer = memo<ValueChartCardRendererProps>(function
   const unit = primarySeries?.unit || '';
   const label = primarySeries?.label || '';
 
-  // Fetch chart data
+  // Fetch chart data - pass dashboard time window for widgets using dashboard mode
   const { state } = useChartData({
     config: chartConfig,
+    dashboardTimeWindow,
     isRuntime,
     isPreview: !isRuntime,
   });

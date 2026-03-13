@@ -36,76 +36,115 @@ export function timeUnitToMs(value: number, unit: 'seconds' | 'minutes' | 'hours
  * 
  * If widget uses 'dashboard' mode, it will use the dashboard time window.
  * If widget uses 'widget' mode, it will use its own configuration.
+ * Always returns valid numeric timestamps (never NaN).
  */
 export function resolveChartTimeWindow(
   widgetConfig: ChartWidgetConfig,
   dashboardTimeWindow?: DashboardTimeWindow
 ): TimeRange {
-  const tw = widgetConfig.timeWindow;
+  const tw = widgetConfig?.timeWindow;
   const now = Date.now();
+  const defaultDuration = 15 * 60 * 1000; // 15 minutes default
 
   // Use dashboard time window if configured
-  if (tw.mode === 'dashboard' && dashboardTimeWindow) {
-    return resolveDashboardTimeWindow(dashboardTimeWindow);
+  if (tw?.mode === 'dashboard' && dashboardTimeWindow) {
+    const result = resolveDashboardTimeWindow(dashboardTimeWindow);
+    // Validate result
+    if (isValidTimeRange(result)) {
+      return result;
+    }
   }
 
   // Use widget-specific time window
-  if (tw.absolute?.startTs && tw.absolute?.endTs) {
-    return {
-      startTs: tw.absolute.startTs,
-      endTs: tw.absolute.endTs,
-    };
+  if (tw?.absolute?.startTs && tw?.absolute?.endTs) {
+    const startTs = Number(tw.absolute.startTs);
+    const endTs = Number(tw.absolute.endTs);
+    if (!isNaN(startTs) && !isNaN(endTs) && startTs > 0 && endTs > startTs) {
+      return { startTs, endTs };
+    }
   }
 
   // Use relative time
-  if (tw.relative) {
-    const durationMs = timeUnitToMs(tw.relative.value, tw.relative.unit);
-    return {
-      startTs: now - durationMs,
-      endTs: now,
-    };
+  if (tw?.relative?.value && tw?.relative?.unit) {
+    const value = Number(tw.relative.value);
+    if (!isNaN(value) && value > 0) {
+      const durationMs = timeUnitToMs(value, tw.relative.unit);
+      if (!isNaN(durationMs) && durationMs > 0) {
+        return {
+          startTs: now - durationMs,
+          endTs: now,
+        };
+      }
+    }
   }
 
   // Default: last 15 minutes
   return {
-    startTs: now - 15 * 60 * 1000,
+    startTs: now - defaultDuration,
     endTs: now,
   };
 }
 
 /**
+ * Validate that a time range has valid numeric timestamps.
+ */
+function isValidTimeRange(range: TimeRange): boolean {
+  return (
+    typeof range.startTs === 'number' &&
+    typeof range.endTs === 'number' &&
+    !isNaN(range.startTs) &&
+    !isNaN(range.endTs) &&
+    range.startTs > 0 &&
+    range.endTs > range.startTs
+  );
+}
+
+/**
  * Resolve time range from dashboard time window config.
+ * Always returns valid numeric timestamps.
  */
 export function resolveDashboardTimeWindow(tw: DashboardTimeWindow): TimeRange {
   const now = Date.now();
+  const defaultDuration = 15 * 60 * 1000;
 
-  if (tw.mode === 'history') {
-    return {
-      startTs: tw.history.startTs,
-      endTs: tw.history.endTs,
-    };
+  if (tw?.mode === 'history' && tw.history) {
+    const startTs = Number(tw.history.startTs);
+    const endTs = Number(tw.history.endTs);
+    if (!isNaN(startTs) && !isNaN(endTs) && startTs > 0 && endTs > startTs) {
+      return { startTs, endTs };
+    }
   }
 
   // Realtime mode
-  if (tw.realtime.type === 'last') {
-    const durationMs = dashboardTimeUnitToMs(tw.realtime.lastValue, tw.realtime.lastUnit);
-    return {
-      startTs: now - durationMs,
-      endTs: now,
-    };
+  if (tw?.realtime?.type === 'last' && tw.realtime.lastValue && tw.realtime.lastUnit) {
+    const lastValue = Number(tw.realtime.lastValue);
+    if (!isNaN(lastValue) && lastValue > 0) {
+      const durationMs = dashboardTimeUnitToMs(lastValue, tw.realtime.lastUnit);
+      if (!isNaN(durationMs) && durationMs > 0) {
+        return {
+          startTs: now - durationMs,
+          endTs: now,
+        };
+      }
+    }
   }
 
   // Relative mode
-  if (tw.realtime.relativeStartMs !== undefined && tw.realtime.relativeEndMs !== undefined) {
-    return {
-      startTs: now + tw.realtime.relativeStartMs,
-      endTs: now + tw.realtime.relativeEndMs,
-    };
+  if (tw?.realtime?.relativeStartMs !== undefined && tw?.realtime?.relativeEndMs !== undefined) {
+    const relStart = Number(tw.realtime.relativeStartMs);
+    const relEnd = Number(tw.realtime.relativeEndMs);
+    if (!isNaN(relStart) && !isNaN(relEnd)) {
+      const startTs = now + relStart;
+      const endTs = now + relEnd;
+      if (startTs > 0 && endTs > startTs) {
+        return { startTs, endTs };
+      }
+    }
   }
 
   // Default: last 15 minutes
   return {
-    startTs: now - 15 * 60 * 1000,
+    startTs: now - defaultDuration,
     endTs: now,
   };
 }

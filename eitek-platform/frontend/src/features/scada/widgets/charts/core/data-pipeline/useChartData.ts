@@ -70,26 +70,47 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
   const configRef = useRef(config);
   const onErrorRef = useRef(onError);
   const stateRef = useRef(state);
+  const dashboardTimeWindowRef = useRef(dashboardTimeWindow);
   
   // Update refs on each render
   configRef.current = config;
   onErrorRef.current = onError;
   stateRef.current = state;
+  dashboardTimeWindowRef.current = dashboardTimeWindow;
 
   // Ensure data.series exists (defensive coding)
   const series = config?.data?.series ?? [];
   const dataMode = config?.data?.mode ?? 'realtime';
   const maxDataPoints = config?.data?.maxDataPoints ?? 500;
+  const useDashboardTimeWindow = config?.timeWindow?.mode === 'dashboard';
 
   // Stable serialized config key for dependency tracking
+  // Include dashboard time window when widget uses dashboard mode
   const configKey = useMemo(() => {
-    return JSON.stringify({
+    const baseKey = {
       series: series.map(s => ({ id: s.id, key: s.key, entityId: s.entityId || s.deviceId })),
       mode: dataMode,
       timeWindow: config?.timeWindow,
       maxDataPoints: maxDataPoints,
-    });
-  }, [series, dataMode, config?.timeWindow, maxDataPoints]);
+    };
+    
+    // When using dashboard time window, include its values in the key
+    // so that changes trigger re-fetch
+    if (useDashboardTimeWindow && dashboardTimeWindow) {
+      return JSON.stringify({
+        ...baseKey,
+        dashboardTw: {
+          mode: dashboardTimeWindow.mode,
+          realtime: dashboardTimeWindow.realtime,
+          history: dashboardTimeWindow.history,
+          aggregation: dashboardTimeWindow.aggregation,
+          groupingIntervalMs: dashboardTimeWindow.groupingIntervalMs,
+        },
+      });
+    }
+    
+    return JSON.stringify(baseKey);
+  }, [series, dataMode, config?.timeWindow, maxDataPoints, useDashboardTimeWindow, dashboardTimeWindow]);
 
   // Compute time range - use stable reference
   const timeRange = useMemo(() => {
@@ -150,12 +171,23 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
     setState(prev => ({ ...prev, loadingState: 'loading' }));
 
     try {
+      // Determine aggregation - use dashboard time window aggregation when in dashboard mode
+      const useDashboard = config.timeWindow?.mode === 'dashboard';
+      const currentDashboardTw = dashboardTimeWindowRef.current;
+      let aggType = config.data.aggregation?.type;
+      let groupingIntervalMs: number | undefined;
+      
+      if (useDashboard && currentDashboardTw) {
+        // Use dashboard aggregation and grouping interval
+        aggType = currentDashboardTw.aggregation;
+        groupingIntervalMs = currentDashboardTw.groupingIntervalMs;
+      }
+      
       // Compute aggregation interval if needed
-      const aggType = config.data.aggregation?.type;
       const aggregation = (aggType && aggType !== 'NONE') 
         ? {
             type: aggType,
-            interval: computeAggregationInterval(timeRange, config.data.maxDataPoints || 500),
+            interval: groupingIntervalMs || computeAggregationInterval(timeRange, config.data.maxDataPoints || 500),
             intervalUnit: config.data.aggregation?.intervalUnit,
           }
         : undefined;
