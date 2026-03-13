@@ -107,6 +107,14 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
     }
   }
 
+  /**
+   * Get current access token (ensures authenticated)
+   */
+  async getAccessToken(): Promise<string> {
+    await this.ensureAuthenticated();
+    return this.accessToken!;
+  }
+
   async refreshToken(): Promise<string> {
     try {
       const response = await firstValueFrom(

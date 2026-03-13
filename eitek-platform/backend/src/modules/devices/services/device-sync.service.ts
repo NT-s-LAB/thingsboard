@@ -1,15 +1,31 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../database/prisma.service';
 import { ThingsBoardDeviceApiService } from '../../thingsboard-integration/services/device-api.service';
 import { ThingsBoardTelemetryApiService } from '../../thingsboard-integration/services/telemetry-api.service';
 import { DeviceMapper } from '../../thingsboard-integration/mappers/device.mapper';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 
+/**
+ * DeviceSyncService
+ * 
+ * NOTE: Global polling has been DISABLED for scalability (1000+ devices).
+ * Real-time updates are now handled by:
+ * - ThingsBoardWebSocketService: Subscribes to TB's native WebSocket API
+ * - DeviceSubscriptionManager: On-demand subscriptions for active viewers
+ * 
+ * This service now only handles:
+ * - Individual device sync on startup/demand
+ * - Manual sync requests
+ */
+
 @Injectable()
 export class DeviceSyncService implements OnModuleInit {
   private readonly logger = new Logger(DeviceSyncService.name);
   private syncIntervals = new Map<string, NodeJS.Timeout>();
+  
+  // Flag to control global polling (disabled by default for scalability)
+  private readonly enableGlobalPolling: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -17,17 +33,26 @@ export class DeviceSyncService implements OnModuleInit {
     private readonly tbTelemetryApi: ThingsBoardTelemetryApiService,
     private readonly deviceMapper: DeviceMapper,
     private readonly realtimeGateway: RealtimeGateway,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    // Only enable global polling if explicitly set (for small deployments)
+    this.enableGlobalPolling = this.configService.get<boolean>('ENABLE_GLOBAL_DEVICE_POLLING', false);
+  }
 
   /**
-   * On app startup, sync all devices to get accurate initial status
+   * On app startup, only sync if global polling is enabled (small deployments).
+   * For large deployments, use DeviceSubscriptionManager instead.
    */
   async onModuleInit(): Promise<void> {
-    this.logger.log('Initializing device sync — running initial sync for all devices...');
-    try {
-      await this.syncAllDevices();
-    } catch (error) {
-      this.logger.error(`Initial device sync failed: ${error.message}`);
+    if (this.enableGlobalPolling) {
+      this.logger.log('Global device polling ENABLED — running initial sync for all devices...');
+      try {
+        await this.syncAllDevices();
+      } catch (error) {
+        this.logger.error(`Initial device sync failed: ${error.message}`);
+      }
+    } else {
+      this.logger.log('Global device polling DISABLED — using on-demand subscriptions via DeviceSubscriptionManager');
     }
   }
 
@@ -152,10 +177,16 @@ export class DeviceSyncService implements OnModuleInit {
   }
 
   /**
-   * Sync all active devices — runs every 60 seconds via @nestjs/schedule
+   * Sync all active devices.
+   * NOTE: Global polling is disabled by default for scalability.
+   * Set ENABLE_GLOBAL_DEVICE_POLLING=true for small deployments (< 100 devices).
    */
-  @Interval(10000)
   async syncAllDevices(): Promise<void> {
+    if (!this.enableGlobalPolling) {
+      this.logger.debug('syncAllDevices called but global polling is disabled');
+      return;
+    }
+
     const devices = await this.prisma.device.findMany({
       where: { isActive: true },
       select: { id: true, tbDeviceId: true },

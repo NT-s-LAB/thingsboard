@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -34,6 +35,9 @@ import thingsBoardConfig from './config/thingsboard.config';
 
     // Scheduler
     ScheduleModule.forRoot(),
+
+    // Event Emitter (for internal event-driven communication)
+    EventEmitterModule.forRoot(),
 
     // Database
     DatabaseModule,

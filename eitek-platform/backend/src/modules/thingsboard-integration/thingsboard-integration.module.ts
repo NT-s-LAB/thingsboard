@@ -4,6 +4,7 @@ import { ThingsBoardClientService } from './services/thingsboard-client.service'
 import { ThingsBoardDeviceApiService } from './services/device-api.service';
 import { ThingsBoardTelemetryApiService } from './services/telemetry-api.service';
 import { ThingsBoardRpcApiService } from './services/rpc-api.service';
+import { ThingsBoardWebSocketService } from './services/thingsboard-websocket.service';
 import { DeviceMapper } from './mappers/device.mapper';
 
 @Module({
@@ -18,6 +19,7 @@ import { DeviceMapper } from './mappers/device.mapper';
     ThingsBoardDeviceApiService,
     ThingsBoardTelemetryApiService,
     ThingsBoardRpcApiService,
+    ThingsBoardWebSocketService,
     DeviceMapper,
   ],
   exports: [
@@ -25,6 +27,7 @@ import { DeviceMapper } from './mappers/device.mapper';
     ThingsBoardDeviceApiService,
     ThingsBoardTelemetryApiService,
     ThingsBoardRpcApiService,
+    ThingsBoardWebSocketService,
     DeviceMapper,
   ],
 })
