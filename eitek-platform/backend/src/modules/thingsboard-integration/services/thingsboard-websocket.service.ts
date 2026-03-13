@@ -50,6 +50,12 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
   private isConnected = false;
   private isReconnecting = false;
   
+  // Exponential backoff for reconnection
+  private reconnectAttempts = 0;
+  private readonly RECONNECT_BASE_DELAY = 1000; // 1 second
+  private readonly RECONNECT_MAX_DELAY = 60000; // 60 seconds max
+  private readonly RECONNECT_MAX_ATTEMPTS = 10; // Max attempts before giving up
+  
   // Subscription management
   private subscriptions = new Map<number, TbWebSocketSubscription>();
   private entitySubscriptions = new Map<string, Set<number>>(); // entityId -> subscriptionIds
@@ -279,6 +285,7 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
   private handleOpen(): void {
     this.isConnected = true;
     this.isReconnecting = false;
+    this.resetReconnectAttempts(); // Reset on successful connection
     this.logger.log('Connected to ThingsBoard WebSocket');
 
     // Start heartbeat
@@ -362,15 +369,35 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
   private scheduleReconnect(): void {
     if (this.isReconnecting) return;
 
-    this.isReconnecting = true;
-    const delay = 5000; // 5 seconds
+    // Check if we've exceeded max attempts
+    if (this.reconnectAttempts >= this.RECONNECT_MAX_ATTEMPTS) {
+      this.logger.error(`Exceeded max reconnect attempts (${this.RECONNECT_MAX_ATTEMPTS}). Giving up.`);
+      this.isReconnecting = false;
+      return;
+    }
 
-    this.logger.log(`Scheduling reconnect in ${delay}ms...`);
+    this.isReconnecting = true;
+    this.reconnectAttempts++;
+
+    // Calculate delay with exponential backoff + jitter
+    // Formula: min(baseDelay * 2^attempts + jitter, maxDelay)
+    const exponentialDelay = this.RECONNECT_BASE_DELAY * Math.pow(2, this.reconnectAttempts - 1);
+    const jitter = Math.random() * 1000; // 0-1000ms jitter
+    const delay = Math.min(exponentialDelay + jitter, this.RECONNECT_MAX_DELAY);
+
+    this.logger.log(`Scheduling reconnect in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts}/${this.RECONNECT_MAX_ATTEMPTS})...`);
 
     this.reconnectTimer = setTimeout(async () => {
       this.isReconnecting = false;
       await this.connect();
     }, delay);
+  }
+
+  /**
+   * Reset reconnect attempts on successful connection
+   */
+  private resetReconnectAttempts(): void {
+    this.reconnectAttempts = 0;
   }
 
   private startHeartbeat(): void {

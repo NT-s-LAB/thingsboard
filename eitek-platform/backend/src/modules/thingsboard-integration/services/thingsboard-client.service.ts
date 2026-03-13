@@ -13,6 +13,7 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
   private accessToken: string | null = null;
   private refreshTokenValue: string | null = null;
   private tokenExpiry = 0;
+  private tbTenantId: string | null = null; // ThingsBoard tenant ID from JWT
 
   constructor(
     private readonly httpService: HttpService,
@@ -99,12 +100,38 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
       // Set expiry to 50 minutes (tokens typically last 60 min)
       this.tokenExpiry = Date.now() + 50 * 60 * 1000;
 
-      this.logger.debug('ThingsBoard authentication successful');
+      // Extract tenantId from JWT token for API calls that require it
+      this.tbTenantId = this.extractTenantIdFromToken(this.accessToken);
+      
+      this.logger.debug(`ThingsBoard authentication successful (tenantId: ${this.tbTenantId})`);
       return this.accessToken;
     } catch (error) {
       this.logger.error(`ThingsBoard login failed: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Extract tenantId from JWT token payload
+   */
+  private extractTenantIdFromToken(token: string): string | null {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+      return payload.tenantId || null;
+    } catch (error) {
+      this.logger.warn('Failed to extract tenantId from JWT token');
+      return null;
+    }
+  }
+
+  /**
+   * Get ThingsBoard tenant ID
+   */
+  getTenantId(): string | null {
+    return this.tbTenantId;
   }
 
   /**
@@ -126,6 +153,9 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
       this.accessToken = response.data.token;
       this.refreshTokenValue = response.data.refreshToken;
       this.tokenExpiry = Date.now() + 50 * 60 * 1000;
+      
+      // Re-extract tenantId from new token
+      this.tbTenantId = this.extractTenantIdFromToken(this.accessToken);
 
       return this.accessToken;
     } catch (error) {
@@ -505,7 +535,12 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
     };
     if (params.startTime) queryParams.startTime = params.startTime;
     if (params.endTime) queryParams.endTime = params.endTime;
-    if (params.tenantId) queryParams.tenantId = params.tenantId;
+    
+    // Use provided tenantId or fall back to auto-extracted from JWT
+    const tenantId = params.tenantId || this.tbTenantId;
+    if (tenantId) {
+      queryParams.tenantId = tenantId;
+    }
 
     return this.tbRequest<TbPageData<TbEvent>>('getEvents', () =>
       this.httpService.get(
