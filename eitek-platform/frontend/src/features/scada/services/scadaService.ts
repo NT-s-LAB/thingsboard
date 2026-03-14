@@ -44,7 +44,7 @@ class ScadaService {
     // Only send fields the backend UpdateScadaViewDto accepts, strip id and extra props
     const { id, ...rest } = data;
     const payload: Record<string, unknown> = {};
-    const allowedKeys = ['name', 'description', 'layout', 'background', 'canvasSize', 'settings', 'isActive'];
+    const allowedKeys = ['name', 'description', 'icon', 'layout', 'background', 'canvasSize', 'settings', 'isActive'];
     for (const key of allowedKeys) {
       if ((rest as any)[key] !== undefined) {
         payload[key] = (rest as any)[key];

@@ -12,6 +12,11 @@ export class UpdateScadaViewDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({ description: 'Icon identifier for the dashboard', example: 'monitor' })
+  @IsOptional()
+  @IsString()
+  icon?: string;
+
   @ApiPropertyOptional({ description: 'Layout configuration (JSON)' })
   @IsOptional()
   @IsObject()

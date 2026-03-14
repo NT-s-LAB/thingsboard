@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,6 +14,8 @@ import {
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
+import { ImagePickerDialog } from '@/shared/components/ImagePickerDialog';
+import { Monitor } from 'lucide-react';
 
 const scadaSchema = z.object({
   name: z.string().min(1, 'Tên SCADA không được để trống').max(100, 'Tối đa 100 ký tự'),
@@ -30,11 +32,13 @@ interface ScadaFormModalProps {
   onSubmit: (data: {
     name: string;
     description?: string | undefined;
+    icon?: string | undefined;
     canvasSize?: { width: number; height: number } | undefined;
   }) => Promise<void>;
   initialData?: {
     name: string;
     description?: string | undefined;
+    icon?: string | undefined;
     canvasWidth?: number | undefined;
     canvasHeight?: number | undefined;
   } | undefined;
@@ -65,6 +69,9 @@ export const ScadaFormModal: React.FC<ScadaFormModalProps> = ({
     },
   });
 
+  const [iconUrl, setIconUrl] = useState<string>(initialData?.icon || '');
+  const [showImagePicker, setShowImagePicker] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       reset({
@@ -73,6 +80,7 @@ export const ScadaFormModal: React.FC<ScadaFormModalProps> = ({
         canvasWidth: initialData?.canvasWidth || 1920,
         canvasHeight: initialData?.canvasHeight || 1080,
       });
+      setIconUrl(initialData?.icon || '');
     }
   }, [isOpen, initialData, reset]);
 
@@ -80,13 +88,35 @@ export const ScadaFormModal: React.FC<ScadaFormModalProps> = ({
     await onSubmit({
       name: data.name,
       description: data.description,
+      icon: iconUrl || undefined,
       canvasSize: { width: data.canvasWidth, height: data.canvasHeight },
     });
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent 
+          className="sm:max-w-lg"
+          onPointerDownOutside={(e) => {
+            // Prevent closing when ImagePickerDialog is open
+            if (showImagePicker) {
+              e.preventDefault();
+            }
+          }}
+          onInteractOutside={(e) => {
+            // Prevent closing when ImagePickerDialog is open
+            if (showImagePicker) {
+              e.preventDefault();
+            }
+          }}
+          onEscapeKeyDown={(e) => {
+            // Prevent closing main dialog via Escape when ImagePickerDialog is open
+            if (showImagePicker) {
+              e.preventDefault();
+            }
+          }}
+        >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -105,6 +135,36 @@ export const ScadaFormModal: React.FC<ScadaFormModalProps> = ({
             {errors.name && (
               <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>
             )}
+          </div>
+
+          {/* Icon from Image Library */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Icon
+            </label>
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden flex-shrink-0">
+                {iconUrl ? (
+                  <img src={iconUrl} alt="Dashboard icon" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <Monitor className="w-6 h-6 text-gray-400" />
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowImagePicker(true)}>
+                  📂 Chọn từ thư viện
+                </Button>
+                {iconUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setIconUrl('')}
+                    className="text-xs text-red-500 hover:text-red-700 text-left"
+                  >
+                    ✕ Xóa icon
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Description */}
@@ -197,6 +257,16 @@ export const ScadaFormModal: React.FC<ScadaFormModalProps> = ({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+
+      <ImagePickerDialog
+        open={showImagePicker}
+        onClose={() => setShowImagePicker(false)}
+        onPick={(url) => {
+          setIconUrl(url);
+          setShowImagePicker(false);
+        }}
+      />
+    </>
   );
 };

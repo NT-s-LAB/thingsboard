@@ -16,6 +16,7 @@ interface ScadaCardItem {
   id: string;
   name: string;
   description?: string | null;
+  icon?: string | null;
   canvasSize?: { width?: number; height?: number } | null;
   isActive?: boolean;
   createdAt?: string;
@@ -48,7 +49,11 @@ export const ScadaCard: React.FC<ScadaCardProps> = ({ scada, onEdit, onDelete })
         onClick={handleOpen}
       >
         <div className="text-center">
-          <Monitor className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+          {scada.icon ? (
+            <img src={scada.icon} alt={scada.name} className="w-12 h-12 mx-auto mb-2 object-contain" />
+          ) : (
+            <Monitor className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+          )}
           <span className="text-xs text-gray-400">
             {canvasW} × {canvasH}
           </span>

@@ -386,6 +386,7 @@ export interface ScadaDashboard {
   id: string;
   name: string;
   description?: string;
+  icon?: string;
   projectId: string;
   canvasSize: Size;
   backgroundColor?: string;
@@ -517,7 +518,7 @@ export function getDefaultWidgetSize(type: WidgetType): Size {
 // API Types
 // ============================================================
 
-export interface DashboardCreateRequest { name: string; description?: string; projectId: string; templateId?: string; canvasSize?: Size; }
-export interface DashboardUpdateRequest { id: string; name?: string; description?: string; widgets?: Widget[]; layers?: ScadaLayer[]; variables?: ScadaVariable[]; scripts?: ScadaScript[]; settings?: ScadaDashboard['settings']; }
+export interface DashboardCreateRequest { name: string; description?: string; icon?: string; projectId: string; templateId?: string; canvasSize?: Size; }
+export interface DashboardUpdateRequest { id: string; name?: string; description?: string; icon?: string; widgets?: Widget[]; layers?: ScadaLayer[]; variables?: ScadaVariable[]; scripts?: ScadaScript[]; settings?: ScadaDashboard['settings']; }
 export interface DashboardListParams { projectId?: string; search?: string; tags?: string[]; createdBy?: string; page?: number; pageSize?: number; }
 export interface DashboardListResponse { data: ScadaDashboard[]; totalElements: number; totalPages: number; hasNext: boolean; }

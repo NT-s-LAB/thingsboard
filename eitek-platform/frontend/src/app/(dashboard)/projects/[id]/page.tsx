@@ -177,6 +177,7 @@ const ProjectDetailPage: React.FC = () => {
   const handleCreateScada = async (data: {
     name: string;
     description?: string | undefined;
+    icon?: string | undefined;
     canvasSize?: { width: number; height: number } | undefined;
   }) => {
     try {
@@ -184,6 +185,7 @@ const ProjectDetailPage: React.FC = () => {
       await scadaService.createDashboard({
         name: data.name,
         ...(data.description ? { description: data.description } : {}),
+        ...(data.icon ? { icon: data.icon } : {}),
         projectId,
         ...(data.canvasSize ? { canvasSize: data.canvasSize } : {}),
       });
@@ -199,6 +201,7 @@ const ProjectDetailPage: React.FC = () => {
   const handleEditScada = async (data: {
     name: string;
     description?: string | undefined;
+    icon?: string | undefined;
     canvasSize?: { width: number; height: number } | undefined;
   }) => {
     if (!selectedScada) return;
@@ -208,6 +211,7 @@ const ProjectDetailPage: React.FC = () => {
         id: selectedScada.id,
         name: data.name,
         ...(data.description ? { description: data.description } : {}),
+        ...(data.icon ? { icon: data.icon } : {}),
       });
       setIsScadaEditOpen(false);
       setSelectedScada(null);
@@ -572,6 +576,7 @@ const ProjectDetailPage: React.FC = () => {
             ? {
                 name: selectedScada.name,
                 description: selectedScada.description || '',
+                icon: selectedScada.icon || '',
                 canvasWidth: (selectedScada.canvasSize as any)?.width || 1920,
                 canvasHeight: (selectedScada.canvasSize as any)?.height || 1080,
               }

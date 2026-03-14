@@ -102,7 +102,7 @@ export const ImagePickerDialog: React.FC<{
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" style={{ pointerEvents: 'auto' }} onClick={onClose}>
       <div
         className="bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden"
         style={{ width: '80vw', maxWidth: 960, height: '75vh', maxHeight: 680 }}

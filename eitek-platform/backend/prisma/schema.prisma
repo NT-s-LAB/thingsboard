@@ -291,6 +291,7 @@ model ScadaView {
   id           String        @id @default(uuid())
   name         String
   description  String?
+  icon         String?
   layout       Json
   background   String?
   canvasSize   Json

@@ -70,6 +70,7 @@ export class ScadaViewsService {
     const data: any = {
       name: createDto.name,
       description: createDto.description,
+      icon: createDto.icon,
       layout: createDto.layout || { type: 'free' },
       background: createDto.background,
       canvasSize: createDto.canvasSize || { width: 1920, height: 1080 },
@@ -263,6 +264,7 @@ export class ScadaViewsService {
     const prismaData: any = {};
     if (rest.name !== undefined) prismaData.name = rest.name;
     if (rest.description !== undefined) prismaData.description = rest.description;
+    if (rest.icon !== undefined) prismaData.icon = rest.icon;
     if (rest.layout !== undefined) prismaData.layout = rest.layout;
     if (rest.canvasSize !== undefined) prismaData.canvasSize = rest.canvasSize;
     if (rest.settings !== undefined) prismaData.settings = rest.settings;
