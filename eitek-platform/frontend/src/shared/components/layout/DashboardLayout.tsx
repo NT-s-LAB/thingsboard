@@ -20,6 +20,7 @@ import {
   ImageIcon,
   ChevronDown,
   ChevronRight,
+  Shield,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
@@ -158,6 +159,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
 
       {/* Navigation */}
       <nav className="flex-1 p-4">
+        {/* Admin Panel Link for Super Admin */}
+        {user?.role === 'SUPER_ADMIN' && !isCollapsed && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <Link
+              href="/admin"
+              className="flex items-center text-sm font-medium text-red-700 hover:text-red-800"
+            >
+              <Shield className="w-4 h-4 mr-2" />
+              Go to Admin Panel
+            </Link>
+          </div>
+        )}
         <ul className="space-y-1">
           {navigation.map((entry) => {
             if (isNavGroup(entry)) {
@@ -243,6 +256,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
                   {user?.firstName} {user?.lastName}
                 </p>
                 <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded">
+                  {user?.role?.replace('_', ' ')}
+                </span>
               </div>
             </div>
             <Button

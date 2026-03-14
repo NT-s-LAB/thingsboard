@@ -6,6 +6,8 @@ export interface BaseEntity {
 }
 
 // User & Auth types
+export type UserRoleEnum = 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'PROJECT_MANAGER' | 'OPERATOR' | 'VIEWER';
+
 export interface User extends BaseEntity {
   email: string;
   username?: string;
@@ -13,6 +15,7 @@ export interface User extends BaseEntity {
   lastName: string;
   avatar?: string;
   phone?: string;
+  role: UserRoleEnum;
   isActive: boolean;
   lastLogin?: string;
   tenantId: string;

@@ -5,6 +5,12 @@ import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto';
 import { Tenant } from '@prisma/client';
 
+export interface TenantWithCounts extends Tenant {
+  usersCount: number;
+  projectsCount: number;
+  devicesCount: number;
+}
+
 @Injectable()
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -33,7 +39,7 @@ export class TenantsService {
     });
   }
 
-  async findAll(pagination: PaginationDto): Promise<PaginatedResult<Tenant>> {
+  async findAll(pagination: PaginationDto): Promise<PaginatedResult<TenantWithCounts>> {
     const page = pagination.page;
     const limit = pagination.effectiveLimit;
     const offset = pagination.offset;
@@ -73,10 +79,34 @@ export class TenantsService {
       this.prisma.tenant.count({ where }),
     ]);
 
+    // Get device counts for each tenant (Device -> Area -> Site -> Project -> Tenant)
+    const tenantsWithCounts = await Promise.all(
+      tenants.map(async (tenant) => {
+        const devicesCount = await this.prisma.device.count({
+          where: {
+            area: {
+              site: {
+                project: {
+                  tenantId: tenant.id,
+                },
+              },
+            },
+          },
+        });
+
+        return {
+          ...tenant,
+          usersCount: (tenant as any)._count?.users || 0,
+          projectsCount: (tenant as any)._count?.projects || 0,
+          devicesCount,
+        };
+      }),
+    );
+
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data: tenants,
+      data: tenantsWithCounts,
       pagination: {
         total,
         page,
@@ -88,7 +118,7 @@ export class TenantsService {
     };
   }
 
-  async findOne(id: string): Promise<Tenant> {
+  async findOne(id: string): Promise<TenantWithCounts> {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id },
       include: {
@@ -102,7 +132,25 @@ export class TenantsService {
       throw new NotFoundException('Tenant not found');
     }
 
-    return tenant;
+    // Get device count for this tenant
+    const devicesCount = await this.prisma.device.count({
+      where: {
+        area: {
+          site: {
+            project: {
+              tenantId: id,
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      ...tenant,
+      usersCount: (tenant as any)._count?.users || 0,
+      projectsCount: (tenant as any)._count?.projects || 0,
+      devicesCount,
+    };
   }
 
   async update(id: string, updateTenantDto: UpdateTenantDto): Promise<Tenant> {

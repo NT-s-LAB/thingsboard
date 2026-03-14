@@ -15,6 +15,8 @@ import { CreateWidgetDto } from './dto/create-widget.dto';
 import { UpdateWidgetDto } from './dto/update-widget.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequestUser } from '../../common/interfaces/common.interface';
 import { IsOptional, IsString } from 'class-validator';
 
 class FindAllWidgetsQueryDto extends PaginationDto {
@@ -32,8 +34,8 @@ export class WidgetsController {
 
   @ApiOperation({ summary: 'Create a new widget' })
   @Post()
-  async create(@Body() createDto: CreateWidgetDto) {
-    const widget = await this.widgetsService.create(createDto);
+  async create(@Body() createDto: CreateWidgetDto, @CurrentUser() user: RequestUser) {
+    const widget = await this.widgetsService.create(createDto, user);
     return {
       success: true,
       message: 'Widget created successfully',
@@ -46,8 +48,9 @@ export class WidgetsController {
   @Get()
   async findAll(
     @Query() query: FindAllWidgetsQueryDto,
+    @CurrentUser() user: RequestUser,
   ) {
-    const result = await this.widgetsService.findAll(query, query.categoryId);
+    const result = await this.widgetsService.findAll(query, user, query.categoryId);
     return {
       success: true,
       message: 'Widgets retrieved successfully',
@@ -74,8 +77,9 @@ export class WidgetsController {
   async update(
     @Param('id') id: string,
     @Body() updateDto: UpdateWidgetDto,
+    @CurrentUser() user: RequestUser,
   ) {
-    const widget = await this.widgetsService.update(id, updateDto);
+    const widget = await this.widgetsService.update(id, updateDto, user);
     return {
       success: true,
       message: 'Widget updated successfully',
@@ -86,8 +90,8 @@ export class WidgetsController {
 
   @ApiOperation({ summary: 'Delete widget' })
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    await this.widgetsService.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    await this.widgetsService.remove(id, user);
     return {
       success: true,
       message: 'Widget deleted successfully',

@@ -154,6 +154,153 @@ async function main() {
 
   console.log(`✓ Admin user created: ${adminUser.email}`);
 
+  // Create test users for each role
+  console.log('👥 Creating test users for each role...');
+
+  // Tenant Admin user
+  const tenantAdminUser = await prisma.user.upsert({
+    where: { email: 'tenant@eitek.com' },
+    update: {},
+    create: {
+      email: 'tenant@eitek.com',
+      firstName: 'Tenant',
+      lastName: 'Administrator',
+      password: hashedPassword,
+      tenantId: defaultTenant.id,
+      role: 'TENANT_ADMIN',
+      isActive: true,
+    },
+  });
+
+  // Get Tenant Administrator role
+  const tenantAdminRole = await prisma.role.findUnique({
+    where: { name: 'Tenant Administrator' },
+  });
+  if (tenantAdminRole) {
+    await prisma.userRoleMapping.upsert({
+      where: {
+        userId_roleId: {
+          userId: tenantAdminUser.id,
+          roleId: tenantAdminRole.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: tenantAdminUser.id,
+        roleId: tenantAdminRole.id,
+      },
+    });
+  }
+  console.log(`✓ Tenant Admin created: ${tenantAdminUser.email}`);
+
+  // Project Manager user
+  const projectManagerUser = await prisma.user.upsert({
+    where: { email: 'manager@eitek.com' },
+    update: {},
+    create: {
+      email: 'manager@eitek.com',
+      firstName: 'Project',
+      lastName: 'Manager',
+      password: hashedPassword,
+      tenantId: defaultTenant.id,
+      role: 'PROJECT_MANAGER',
+      isActive: true,
+    },
+  });
+
+  // Get Project Manager role
+  const projectManagerRole = await prisma.role.findUnique({
+    where: { name: 'Project Manager' },
+  });
+  if (projectManagerRole) {
+    await prisma.userRoleMapping.upsert({
+      where: {
+        userId_roleId: {
+          userId: projectManagerUser.id,
+          roleId: projectManagerRole.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: projectManagerUser.id,
+        roleId: projectManagerRole.id,
+      },
+    });
+  }
+  console.log(`✓ Project Manager created: ${projectManagerUser.email}`);
+
+  // Operator user
+  const operatorUser = await prisma.user.upsert({
+    where: { email: 'operator@eitek.com' },
+    update: {},
+    create: {
+      email: 'operator@eitek.com',
+      firstName: 'System',
+      lastName: 'Operator',
+      password: hashedPassword,
+      tenantId: defaultTenant.id,
+      role: 'OPERATOR',
+      isActive: true,
+    },
+  });
+
+  // Get Operator role
+  const operatorRole = await prisma.role.findUnique({
+    where: { name: 'Operator' },
+  });
+  if (operatorRole) {
+    await prisma.userRoleMapping.upsert({
+      where: {
+        userId_roleId: {
+          userId: operatorUser.id,
+          roleId: operatorRole.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: operatorUser.id,
+        roleId: operatorRole.id,
+      },
+    });
+  }
+  console.log(`✓ Operator created: ${operatorUser.email}`);
+
+  // Viewer user
+  const viewerUser = await prisma.user.upsert({
+    where: { email: 'viewer@eitek.com' },
+    update: {},
+    create: {
+      email: 'viewer@eitek.com',
+      firstName: 'Read',
+      lastName: 'Only',
+      password: hashedPassword,
+      tenantId: defaultTenant.id,
+      role: 'VIEWER',
+      isActive: true,
+    },
+  });
+
+  // Get Viewer role
+  const viewerRole = await prisma.role.findUnique({
+    where: { name: 'Viewer' },
+  });
+  if (viewerRole) {
+    await prisma.userRoleMapping.upsert({
+      where: {
+        userId_roleId: {
+          userId: viewerUser.id,
+          roleId: viewerRole.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: viewerUser.id,
+        roleId: viewerRole.id,
+      },
+    });
+  }
+  console.log(`✓ Viewer created: ${viewerUser.email}`);
+
   // 4. Create default device types
   console.log('🔧 Creating default device types...');
 
@@ -270,7 +417,12 @@ async function main() {
   console.log('');
   console.log('📋 Summary:');
   console.log(`   • Tenant: ${defaultTenant.name} (${defaultTenant.code})`);
-  console.log(`   • Admin user: ${adminUser.email} / admin123`);
+  console.log('   • Users created (password: admin123):');
+  console.log(`     - SUPER_ADMIN: ${adminUser.email}`);
+  console.log(`     - TENANT_ADMIN: ${tenantAdminUser.email}`);
+  console.log(`     - PROJECT_MANAGER: ${projectManagerUser.email}`);
+  console.log(`     - OPERATOR: ${operatorUser.email}`);
+  console.log(`     - VIEWER: ${viewerUser.email}`);
   console.log(`   • Roles: 5 default roles created`);
   console.log(`   • Device types: 3 sample types created`);
   console.log(`   • Project structure: Factory Demo created`);

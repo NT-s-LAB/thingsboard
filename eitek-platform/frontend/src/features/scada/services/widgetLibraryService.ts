@@ -30,6 +30,9 @@ export interface WidgetCategoryItem {
   createdAt: string;
   updatedAt: string;
   _count?: { widgets: number; children?: number };
+  /** Multi-tenant fields */
+  tenantId?: string | null;
+  isSystem?: boolean;
 }
 
 export interface WidgetItem {
@@ -48,6 +51,9 @@ export interface WidgetItem {
   createdAt: string;
   updatedAt: string;
   _count?: { scadaWidgets: number };
+  /** Multi-tenant fields */
+  tenantId?: string | null;
+  isSystem?: boolean;
 }
 
 export interface PaginatedResponse<T> {

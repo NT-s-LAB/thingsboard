@@ -14,6 +14,8 @@ export interface ImageCategoryItem {
   icon?: string;
   order: number;
   isActive: boolean;
+  isSystem?: boolean;
+  tenantId?: string | null;
   parentId?: string | null;
   children?: ImageCategoryItem[];
   _count?: { files: number; children: number };
@@ -28,8 +30,16 @@ export interface ImageItem {
   mimetype: string;
   size: number;
   url: string | null;
+  isSystem?: boolean;
+  tenantId?: string | null;
   imageCategoryId: string | null;
   createdAt: string;
+  uploader?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
 }
 
 interface PaginationResult {

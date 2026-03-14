@@ -42,8 +42,8 @@ export class ImageLibraryController {
 
   @ApiOperation({ summary: 'Create image category (folder)' })
   @Post('categories')
-  async createCategory(@Body() dto: CreateImageCategoryDto) {
-    const category = await this.service.createCategory(dto);
+  async createCategory(@Body() dto: CreateImageCategoryDto, @CurrentUser() user: RequestUser) {
+    const category = await this.service.createCategory(dto, user);
     return {
       success: true,
       message: 'Image category created successfully',
@@ -54,8 +54,8 @@ export class ImageLibraryController {
 
   @ApiOperation({ summary: 'Get all image categories (tree)' })
   @Get('categories')
-  async findAllCategories(@Query() pagination: PaginationDto) {
-    const result = await this.service.findAllCategories(pagination);
+  async findAllCategories(@Query() pagination: PaginationDto, @CurrentUser() user: RequestUser) {
+    const result = await this.service.findAllCategories(pagination, user);
     return {
       success: true,
       message: 'Image categories retrieved successfully',
@@ -91,8 +91,8 @@ export class ImageLibraryController {
 
   @ApiOperation({ summary: 'Delete image category' })
   @Delete('categories/:id')
-  async removeCategory(@Param('id') id: string) {
-    await this.service.removeCategory(id);
+  async removeCategory(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    await this.service.removeCategory(id, user);
     return {
       success: true,
       message: 'Image category deleted successfully',
@@ -152,8 +152,9 @@ export class ImageLibraryController {
   @Get('images')
   async findImages(
     @Query() query: FindImagesQueryDto,
+    @CurrentUser() user: RequestUser,
   ) {
-    const result = await this.service.findImages(query, query.categoryId);
+    const result = await this.service.findImages(query, user, query.categoryId);
     return {
       success: true,
       message: 'Images retrieved successfully',
@@ -180,8 +181,8 @@ export class ImageLibraryController {
 
   @ApiOperation({ summary: 'Delete image' })
   @Delete('images/:id')
-  async deleteImage(@Param('id') id: string) {
-    await this.service.deleteImage(id);
+  async deleteImage(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    await this.service.deleteImage(id, user);
     return {
       success: true,
       message: 'Image deleted successfully',

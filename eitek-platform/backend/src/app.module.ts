@@ -20,6 +20,7 @@ import { ThingsBoardIntegrationModule } from './modules/thingsboard-integration/
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { FilesModule } from './modules/files/files.module';
 import { ImageLibraryModule } from './modules/image-library/image-library.module';
+import { AdminModule } from './modules/admin/admin.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import thingsBoardConfig from './config/thingsboard.config';
@@ -64,6 +65,9 @@ import thingsBoardConfig from './config/thingsboard.config';
     RealtimeModule,
     FilesModule,
     ImageLibraryModule,
+
+    // Admin
+    AdminModule,
   ],
 })
 export class AppModule {}

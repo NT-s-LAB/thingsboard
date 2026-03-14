@@ -365,9 +365,9 @@ export class ScadaViewsService {
   // ========== ScadaWidget CRUD ==========
 
   private async ensureWidgetLibraryEntry(type: string, name: string): Promise<string> {
-    // Find or create a Widget library entry for this type
+    // Find or create a Widget library entry for this type (system widget)
     const libName = `__scada_${type}`;
-    let widget = await this.prisma.widget.findUnique({ where: { name: libName } });
+    let widget = await this.prisma.widget.findFirst({ where: { name: libName, tenantId: null } });
     if (!widget) {
       widget = await this.prisma.widget.create({
         data: {
@@ -376,6 +376,8 @@ export class ScadaViewsService {
           config: {},
           template: {},
           description: `Auto-created library entry for SCADA ${type} widget`,
+          isSystem: true,
+          tenantId: null,
         },
       });
     }

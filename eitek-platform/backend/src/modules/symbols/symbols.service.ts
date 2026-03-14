@@ -9,9 +9,9 @@ export class SymbolsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateSymbolDto): Promise<Symbol> {
-    // Check unique name
-    const existing = await this.prisma.symbol.findUnique({
-      where: { name: dto.name },
+    // Check unique name (system symbols have tenantId = null)
+    const existing = await this.prisma.symbol.findFirst({
+      where: { name: dto.name, tenantId: null },
     });
     if (existing) {
       throw new ConflictException(`Symbol with name "${dto.name}" already exists`);
@@ -24,6 +24,8 @@ export class SymbolsService {
         svg: dto.svgContent,
         metadata: dto.category ? { category: dto.category } : undefined,
         tags: dto.tags ?? [],
+        isSystem: true,  // Symbols created via API are system symbols
+        tenantId: null,
       },
     });
   }
