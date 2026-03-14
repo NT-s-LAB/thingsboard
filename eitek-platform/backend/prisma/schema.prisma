@@ -142,8 +142,39 @@ model User {
   userProjects UserProject[]
   fileUploads  File[]              @relation("FileUploader")
   auditLogs    AuditLog[]
+  settings     UserSettings?
 
   @@map("users")
+}
+
+model UserSettings {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Appearance
+  theme           String  @default("light") // light, dark, auto
+  language        String  @default("vi")
+  timezone        String  @default("Asia/Ho_Chi_Minh")
+  dateFormat      String  @default("DD/MM/YYYY")
+  compactMode     Boolean @default(false)
+  showGridLines   Boolean @default(true)
+
+  // Notifications
+  emailNotifications    Boolean @default(true)
+  deviceAlerts          Boolean @default(true)
+  systemUpdates         Boolean @default(true)
+  projectActivity       Boolean @default(true)
+  weeklyReports         Boolean @default(false)
+
+  // Advanced
+  defaultProjectId String?
+  dashboardLayout  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_settings")
 }
 
 model Role {
@@ -512,4 +543,23 @@ model AuditLog {
   device    Device?     @relation(fields: [deviceId], references: [id])
 
   @@map("audit_logs")
+}
+
+// ================================
+// SYSTEM SETTINGS (Super Admin)
+// ================================
+
+model SystemSettings {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  category  String   // general, thingsboard, email, branding, security
+  label     String?
+  description String?
+  isSecret  Boolean  @default(false) // true = mask value in API response
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@map("system_settings")
 }

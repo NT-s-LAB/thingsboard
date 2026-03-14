@@ -1,42 +1,593 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings, 
   Server, 
   Mail,
-  Database,
   Globe,
   Shield,
   Save,
   RotateCcw,
   CheckCircle,
+  Loader2,
+  AlertTriangle,
+  TestTube,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
+import {
+  adminSettingsService,
+  type SettingsCategory,
+  DEFAULT_GENERAL_SETTINGS,
+  DEFAULT_THINGSBOARD_SETTINGS,
+  DEFAULT_EMAIL_SETTINGS,
+  DEFAULT_BRANDING_SETTINGS,
+  DEFAULT_SECURITY_SETTINGS,
+} from '@/features/admin/services/adminSettingsService';
 
 interface SettingSection {
-  id: string;
+  id: SettingsCategory;
   title: string;
   description: string;
   icon: React.ReactNode;
 }
 
 const sections: SettingSection[] = [
-  { id: 'general', title: 'General', description: 'Basic platform settings', icon: <Settings className="w-5 h-5" /> },
-  { id: 'thingsboard', title: 'ThingsBoard', description: 'ThingsBoard integration', icon: <Server className="w-5 h-5" /> },
-  { id: 'email', title: 'Email', description: 'Email server configuration', icon: <Mail className="w-5 h-5" /> },
-  { id: 'database', title: 'Database', description: 'Database settings', icon: <Database className="w-5 h-5" /> },
-  { id: 'branding', title: 'Branding', description: 'Platform appearance', icon: <Globe className="w-5 h-5" /> },
+  { id: 'general', title: 'Cài đặt chung', description: 'Cấu hình nền tảng cơ bản', icon: <Settings className="w-5 h-5" /> },
+  { id: 'thingsboard', title: 'ThingsBoard', description: 'Tích hợp ThingsBoard', icon: <Server className="w-5 h-5" /> },
+  { id: 'email', title: 'Email', description: 'Cấu hình máy chủ email', icon: <Mail className="w-5 h-5" /> },
+  { id: 'branding', title: 'Thương hiệu', description: 'Giao diện nền tảng', icon: <Globe className="w-5 h-5" /> },
+  { id: 'security', title: 'Bảo mật', description: 'Cài đặt bảo mật', icon: <Shield className="w-5 h-5" /> },
 ];
 
 export default function AdminSettingsPage() {
-  const [activeSection, setActiveSection] = useState('general');
+  const [activeSection, setActiveSection] = useState<SettingsCategory>('general');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testingTB, setTestingTB] = useState(false);
+  const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  // Form states
+  const [generalSettings, setGeneralSettings] = useState(DEFAULT_GENERAL_SETTINGS);
+  const [tbSettings, setTbSettings] = useState(DEFAULT_THINGSBOARD_SETTINGS);
+  const [emailSettings, setEmailSettings] = useState(DEFAULT_EMAIL_SETTINGS);
+  const [brandingSettings, setBrandingSettings] = useState(DEFAULT_BRANDING_SETTINGS);
+  const [securitySettings, setSecuritySettings] = useState(DEFAULT_SECURITY_SETTINGS);
+
+  // Password visibility
+  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+
+  // Load settings
+  const loadSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await adminSettingsService.getAll();
+
+      // Extract values from grouped settings
+      setGeneralSettings(
+        adminSettingsService.extractCategoryValues(data, 'general', DEFAULT_GENERAL_SETTINGS)
+      );
+      setTbSettings(
+        adminSettingsService.extractCategoryValues(data, 'thingsboard', DEFAULT_THINGSBOARD_SETTINGS)
+      );
+      setEmailSettings(
+        adminSettingsService.extractCategoryValues(data, 'email', DEFAULT_EMAIL_SETTINGS)
+      );
+      setBrandingSettings(
+        adminSettingsService.extractCategoryValues(data, 'branding', DEFAULT_BRANDING_SETTINGS)
+      );
+      setSecuritySettings(
+        adminSettingsService.extractCategoryValues(data, 'security', DEFAULT_SECURITY_SETTINGS)
+      );
+    } catch (err: any) {
+      setError(err.message || 'Không thể tải cài đặt');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  // Save current section
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+
+      let settings: Record<string, any> = {};
+      switch (activeSection) {
+        case 'general':
+          settings = generalSettings;
+          break;
+        case 'thingsboard':
+          settings = tbSettings;
+          break;
+        case 'email':
+          settings = emailSettings;
+          break;
+        case 'branding':
+          settings = brandingSettings;
+          break;
+        case 'security':
+          settings = securitySettings;
+          break;
+      }
+
+      await adminSettingsService.updateCategory(activeSection, settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err: any) {
+      setError(err.message || 'Không thể lưu cài đặt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Reset to defaults
+  const handleReset = async () => {
+    if (!confirm('Bạn có chắc muốn khôi phục tất cả cài đặt về giá trị mặc định?')) return;
+
+    try {
+      setSaving(true);
+      await adminSettingsService.resetToDefaults();
+      await loadSettings();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err: any) {
+      setError(err.message || 'Không thể khôi phục cài đặt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Test email
+  const handleTestEmail = async () => {
+    try {
+      setTestingEmail(true);
+      setTestResult(null);
+      const result = await adminSettingsService.testEmail();
+      setTestResult({ type: result.success ? 'success' : 'error', message: result.message });
+    } catch (err: any) {
+      setTestResult({ type: 'error', message: err.message });
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
+  // Test ThingsBoard
+  const handleTestThingsBoard = async () => {
+    try {
+      setTestingTB(true);
+      setTestResult(null);
+      const result = await adminSettingsService.testThingsBoard();
+      setTestResult({ type: result.success ? 'success' : 'error', message: result.message });
+    } catch (err: any) {
+      setTestResult({ type: 'error', message: err.message });
+    } finally {
+      setTestingTB(false);
+    }
+  };
+
+  const togglePasswordVisibility = (key: string) => {
+    setShowPasswords((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Render sections
+  const renderGeneralSettings = () => (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Cài đặt chung</h2>
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Tên nền tảng</label>
+            <Input
+              value={generalSettings.platformName}
+              onChange={(e) => setGeneralSettings({ ...generalSettings, platformName: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">URL nền tảng</label>
+            <Input
+              value={generalSettings.platformUrl}
+              onChange={(e) => setGeneralSettings({ ...generalSettings, platformUrl: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Múi giờ mặc định</label>
+            <select
+              value={generalSettings.defaultTimezone}
+              onChange={(e) => setGeneralSettings({ ...generalSettings, defaultTimezone: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="Asia/Ho_Chi_Minh">Asia/Ho Chi Minh (GMT+7)</option>
+              <option value="Asia/Bangkok">Asia/Bangkok (GMT+7)</option>
+              <option value="Asia/Singapore">Asia/Singapore (GMT+8)</option>
+              <option value="UTC">UTC</option>
+              <option value="America/New_York">America/New_York (EST)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Ngôn ngữ mặc định</label>
+            <select
+              value={generalSettings.defaultLanguage}
+              onChange={(e) => setGeneralSettings({ ...generalSettings, defaultLanguage: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="vi">Tiếng Việt</option>
+              <option value="en">English</option>
+              <option value="zh">中文</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-200 pt-6">
+        <h3 className="text-md font-medium text-slate-900 mb-4">Cài đặt phiên</h3>
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Thời gian hết phiên (phút)</label>
+            <Input
+              type="number"
+              value={generalSettings.sessionTimeout}
+              onChange={(e) => setGeneralSettings({ ...generalSettings, sessionTimeout: parseInt(e.target.value) || 60 })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Số lần đăng nhập sai tối đa</label>
+            <Input
+              type="number"
+              value={generalSettings.maxLoginAttempts}
+              onChange={(e) => setGeneralSettings({ ...generalSettings, maxLoginAttempts: parseInt(e.target.value) || 5 })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-200 pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-md font-medium text-slate-900">Chế độ bảo trì</h3>
+            <p className="text-sm text-slate-500">Khi bật, chỉ Super Admin mới có thể truy cập</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={generalSettings.maintenanceMode}
+              onChange={(e) => setGeneralSettings({ ...generalSettings, maintenanceMode: e.target.checked })}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderThingsBoardSettings = () => (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold text-slate-900 mb-4">Tích hợp ThingsBoard</h2>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">ThingsBoard URL</label>
+          <Input
+            value={tbSettings.url}
+            onChange={(e) => setTbSettings({ ...tbSettings, url: e.target.value })}
+            placeholder="https://thingsboard.cloud"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">System Admin Username</label>
+          <Input
+            value={tbSettings.username}
+            onChange={(e) => setTbSettings({ ...tbSettings, username: e.target.value })}
+            placeholder="sysadmin@thingsboard.org"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">System Admin Password</label>
+          <div className="relative">
+            <Input
+              type={showPasswords.tbPassword ? 'text' : 'password'}
+              value={tbSettings.password}
+              onChange={(e) => setTbSettings({ ...tbSettings, password: e.target.value })}
+              placeholder="••••••••"
+            />
+            <button
+              type="button"
+              onClick={() => togglePasswordVisibility('tbPassword')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              {showPasswords.tbPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="tb-sync"
+              checked={tbSettings.autoSync}
+              onChange={(e) => setTbSettings({ ...tbSettings, autoSync: e.target.checked })}
+              className="rounded"
+            />
+            <label htmlFor="tb-sync" className="text-sm text-slate-700">
+              Bật đồng bộ thiết bị tự động
+            </label>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Khoảng thời gian đồng bộ (giây)</label>
+            <Input
+              type="number"
+              value={tbSettings.syncInterval}
+              onChange={(e) => setTbSettings({ ...tbSettings, syncInterval: parseInt(e.target.value) || 300 })}
+            />
+          </div>
+        </div>
+        <Button variant="outline" onClick={handleTestThingsBoard} disabled={testingTB}>
+          {testingTB ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <TestTube className="w-4 h-4 mr-2" />}
+          Kiểm tra kết nối
+        </Button>
+        {testResult && activeSection === 'thingsboard' && (
+          <div className={`p-3 rounded-lg text-sm ${testResult.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            {testResult.message}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderEmailSettings = () => (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold text-slate-900 mb-4">Cấu hình Email</h2>
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">SMTP Host</label>
+          <Input
+            value={emailSettings.smtpHost}
+            onChange={(e) => setEmailSettings({ ...emailSettings, smtpHost: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">SMTP Port</label>
+          <Input
+            type="number"
+            value={emailSettings.smtpPort}
+            onChange={(e) => setEmailSettings({ ...emailSettings, smtpPort: parseInt(e.target.value) || 587 })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">SMTP Username</label>
+          <Input
+            value={emailSettings.smtpUsername}
+            onChange={(e) => setEmailSettings({ ...emailSettings, smtpUsername: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">SMTP Password</label>
+          <div className="relative">
+            <Input
+              type={showPasswords.smtpPassword ? 'text' : 'password'}
+              value={emailSettings.smtpPassword}
+              onChange={(e) => setEmailSettings({ ...emailSettings, smtpPassword: e.target.value })}
+            />
+            <button
+              type="button"
+              onClick={() => togglePasswordVisibility('smtpPassword')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              {showPasswords.smtpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Tên người gửi</label>
+          <Input
+            value={emailSettings.fromName}
+            onChange={(e) => setEmailSettings({ ...emailSettings, fromName: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Email người gửi</label>
+          <Input
+            value={emailSettings.fromEmail}
+            onChange={(e) => setEmailSettings({ ...emailSettings, fromEmail: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="flex items-center space-x-3">
+        <input
+          type="checkbox"
+          id="smtp-secure"
+          checked={emailSettings.smtpSecure}
+          onChange={(e) => setEmailSettings({ ...emailSettings, smtpSecure: e.target.checked })}
+          className="rounded"
+        />
+        <label htmlFor="smtp-secure" className="text-sm text-slate-700">Sử dụng TLS/SSL</label>
+      </div>
+      <Button variant="outline" onClick={handleTestEmail} disabled={testingEmail}>
+        {testingEmail ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
+        Gửi email kiểm tra
+      </Button>
+      {testResult && activeSection === 'email' && (
+        <div className={`p-3 rounded-lg text-sm ${testResult.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {testResult.message}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderBrandingSettings = () => (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold text-slate-900 mb-4">Cài đặt thương hiệu</h2>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">URL Logo</label>
+          <Input
+            value={brandingSettings.logoUrl}
+            onChange={(e) => setBrandingSettings({ ...brandingSettings, logoUrl: e.target.value })}
+            placeholder="https://example.com/logo.png"
+          />
+          {brandingSettings.logoUrl && (
+            <div className="mt-2 p-4 bg-slate-100 rounded-lg">
+              <img src={brandingSettings.logoUrl} alt="Logo preview" className="h-12 object-contain" />
+            </div>
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">URL Favicon</label>
+          <Input
+            value={brandingSettings.faviconUrl}
+            onChange={(e) => setBrandingSettings({ ...brandingSettings, faviconUrl: e.target.value })}
+            placeholder="https://example.com/favicon.ico"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Màu chính</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={brandingSettings.primaryColor}
+                onChange={(e) => setBrandingSettings({ ...brandingSettings, primaryColor: e.target.value })}
+                className="w-12 h-10 rounded cursor-pointer border border-slate-200"
+              />
+              <Input
+                value={brandingSettings.primaryColor}
+                onChange={(e) => setBrandingSettings({ ...brandingSettings, primaryColor: e.target.value })}
+                className="w-32"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Màu phụ</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={brandingSettings.secondaryColor}
+                onChange={(e) => setBrandingSettings({ ...brandingSettings, secondaryColor: e.target.value })}
+                className="w-12 h-10 rounded cursor-pointer border border-slate-200"
+              />
+              <Input
+                value={brandingSettings.secondaryColor}
+                onChange={(e) => setBrandingSettings({ ...brandingSettings, secondaryColor: e.target.value })}
+                className="w-32"
+              />
+            </div>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Văn bản footer</label>
+          <Input
+            value={brandingSettings.footerText}
+            onChange={(e) => setBrandingSettings({ ...brandingSettings, footerText: e.target.value })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderSecuritySettings = () => (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold text-slate-900 mb-4">Cài đặt bảo mật</h2>
+      
+      <div className="bg-slate-50 rounded-lg p-4">
+        <h3 className="text-md font-medium text-slate-900 mb-4">Yêu cầu mật khẩu</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Độ dài tối thiểu</label>
+            <Input
+              type="number"
+              value={securitySettings.passwordMinLength}
+              onChange={(e) => setSecuritySettings({ ...securitySettings, passwordMinLength: parseInt(e.target.value) || 8 })}
+            />
+          </div>
+          <div className="space-y-3 pt-6">
+            <label className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                checked={securitySettings.passwordRequireUppercase}
+                onChange={(e) => setSecuritySettings({ ...securitySettings, passwordRequireUppercase: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm text-slate-700">Yêu cầu chữ hoa</span>
+            </label>
+            <label className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                checked={securitySettings.passwordRequireLowercase}
+                onChange={(e) => setSecuritySettings({ ...securitySettings, passwordRequireLowercase: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm text-slate-700">Yêu cầu chữ thường</span>
+            </label>
+            <label className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                checked={securitySettings.passwordRequireNumber}
+                onChange={(e) => setSecuritySettings({ ...securitySettings, passwordRequireNumber: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm text-slate-700">Yêu cầu số</span>
+            </label>
+            <label className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                checked={securitySettings.passwordRequireSpecial}
+                onChange={(e) => setSecuritySettings({ ...securitySettings, passwordRequireSpecial: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm text-slate-700">Yêu cầu ký tự đặc biệt</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-200 pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-md font-medium text-slate-900">Xác thực hai yếu tố (2FA)</h3>
+            <p className="text-sm text-slate-500">Yêu cầu 2FA cho tất cả người dùng</p>
+          </div>
+          <div className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
+            Sắp ra mắt
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+        </div>
+      );
+    }
+
+    switch (activeSection) {
+      case 'general':
+        return renderGeneralSettings();
+      case 'thingsboard':
+        return renderThingsBoardSettings();
+      case 'email':
+        return renderEmailSettings();
+      case 'branding':
+        return renderBrandingSettings();
+      case 'security':
+        return renderSecuritySettings();
+      default:
+        return null;
+    }
   };
 
   return (
@@ -44,20 +595,34 @@ export default function AdminSettingsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">System Settings</h1>
-          <p className="text-slate-500 mt-1">Configure platform-wide settings</p>
+          <h1 className="text-2xl font-bold text-slate-900">Cài đặt hệ thống</h1>
+          <p className="text-slate-500 mt-1">Cấu hình toàn nền tảng</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleReset} disabled={saving}>
             <RotateCcw className="w-4 h-4 mr-2" />
-            Reset
+            Khôi phục mặc định
           </Button>
-          <Button onClick={handleSave} className="bg-red-600 hover:bg-red-700">
-            {saved ? <CheckCircle className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-            {saved ? 'Saved!' : 'Save Changes'}
+          <Button onClick={handleSave} disabled={saving || loading} className="bg-blue-600 hover:bg-blue-700">
+            {saving ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : saved ? (
+              <CheckCircle className="w-4 h-4 mr-2" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" />
+            )}
+            {saved ? 'Đã lưu!' : 'Lưu thay đổi'}
           </Button>
         </div>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5" />
+          {error}
+        </div>
+      )}
 
       <div className="flex gap-6">
         {/* Sidebar */}
@@ -65,14 +630,17 @@ export default function AdminSettingsPage() {
           {sections.map((section) => (
             <button
               key={section.id}
-              onClick={() => setActiveSection(section.id)}
+              onClick={() => {
+                setActiveSection(section.id);
+                setTestResult(null);
+              }}
               className={`w-full flex items-center px-4 py-3 rounded-lg text-left transition-colors ${
                 activeSection === section.id
-                  ? 'bg-red-50 text-red-700 border border-red-200'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              <span className={`mr-3 ${activeSection === section.id ? 'text-red-600' : 'text-slate-400'}`}>
+              <span className={`mr-3 ${activeSection === section.id ? 'text-blue-600' : 'text-slate-400'}`}>
                 {section.icon}
               </span>
               <div>
@@ -85,207 +653,7 @@ export default function AdminSettingsPage() {
 
         {/* Content */}
         <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          {activeSection === 'general' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">General Settings</h2>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Platform Name
-                    </label>
-                    <Input defaultValue="EITEK IoT Platform" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Platform URL
-                    </label>
-                    <Input defaultValue="https://iot.eitek.com" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Default Timezone
-                    </label>
-                    <select className="w-full px-3 py-2 border border-slate-200 rounded-lg">
-                      <option>Asia/Ho_Chi_Minh</option>
-                      <option>UTC</option>
-                      <option>America/New_York</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Default Language
-                    </label>
-                    <select className="w-full px-3 py-2 border border-slate-200 rounded-lg">
-                      <option>Vietnamese</option>
-                      <option>English</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-slate-200 pt-6">
-                <h3 className="text-md font-medium text-slate-900 mb-4">Session Settings</h3>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Session Timeout (minutes)
-                    </label>
-                    <Input type="number" defaultValue={60} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Max Login Attempts
-                    </label>
-                    <Input type="number" defaultValue={5} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeSection === 'thingsboard' && (
-            <div className="space-y-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">ThingsBoard Integration</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    ThingsBoard URL
-                  </label>
-                  <Input defaultValue="https://thingsboard.cloud" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    System Admin Username
-                  </label>
-                  <Input defaultValue="sysadmin@thingsboard.org" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    System Admin Password
-                  </label>
-                  <Input type="password" defaultValue="••••••••" />
-                </div>
-                <div className="flex items-center space-x-3">
-                  <input type="checkbox" id="tb-sync" className="rounded" defaultChecked />
-                  <label htmlFor="tb-sync" className="text-sm text-slate-700">
-                    Enable automatic device synchronization
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeSection === 'email' && (
-            <div className="space-y-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Email Configuration</h2>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    SMTP Host
-                  </label>
-                  <Input defaultValue="smtp.gmail.com" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    SMTP Port
-                  </label>
-                  <Input type="number" defaultValue={587} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    SMTP Username
-                  </label>
-                  <Input defaultValue="noreply@eitek.com" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    SMTP Password
-                  </label>
-                  <Input type="password" defaultValue="••••••••" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    From Name
-                  </label>
-                  <Input defaultValue="EITEK Platform" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    From Email
-                  </label>
-                  <Input defaultValue="noreply@eitek.com" />
-                </div>
-              </div>
-              <Button variant="outline" className="mt-4">
-                <Mail className="w-4 h-4 mr-2" />
-                Send Test Email
-              </Button>
-            </div>
-          )}
-
-          {activeSection === 'database' && (
-            <div className="space-y-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Database Settings</h2>
-              <div className="bg-slate-50 rounded-lg p-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-slate-500">Database Type:</span>
-                    <span className="ml-2 font-medium text-slate-900">PostgreSQL</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Host:</span>
-                    <span className="ml-2 font-medium text-slate-900">localhost:5432</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Database:</span>
-                    <span className="ml-2 font-medium text-slate-900">eitek_platform</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Connection Pool:</span>
-                    <span className="ml-2 font-medium text-slate-900">10 connections</span>
-                  </div>
-                </div>
-              </div>
-              <p className="text-sm text-amber-600 flex items-center">
-                <Shield className="w-4 h-4 mr-2" />
-                Database credentials are managed via environment variables for security.
-              </p>
-            </div>
-          )}
-
-          {activeSection === 'branding' && (
-            <div className="space-y-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Branding Settings</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Logo (Light Theme)
-                  </label>
-                  <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center">
-                    <p className="text-sm text-slate-500">Drop image here or click to upload</p>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Primary Color
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input type="color" defaultValue="#dc2626" className="w-12 h-10 rounded cursor-pointer" />
-                    <Input defaultValue="#dc2626" className="w-32" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Favicon
-                  </label>
-                  <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center">
-                    <p className="text-sm text-slate-500">Upload .ico or .png (32x32)</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {renderContent()}
         </div>
       </div>
     </div>

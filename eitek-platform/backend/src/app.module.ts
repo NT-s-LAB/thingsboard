@@ -21,6 +21,8 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
 import { FilesModule } from './modules/files/files.module';
 import { ImageLibraryModule } from './modules/image-library/image-library.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import thingsBoardConfig from './config/thingsboard.config';
@@ -65,9 +67,11 @@ import thingsBoardConfig from './config/thingsboard.config';
     RealtimeModule,
     FilesModule,
     ImageLibraryModule,
+    SettingsModule,
 
     // Admin
     AdminModule,
+    AdminSettingsModule,
   ],
 })
 export class AppModule {}
