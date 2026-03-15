@@ -8,6 +8,8 @@ import '../../features/projects/screens/projects_screen.dart';
 import '../../features/devices/screens/devices_screen.dart';
 import '../../features/devices/screens/device_detail_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
+import '../../features/scada/screens/scada_list_screen.dart';
+import '../../features/scada/screens/scada_native_runtime_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -124,10 +126,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           // SCADA
           GoRoute(
             path: '/scada',
-            builder: (context, state) => Scaffold(
-              appBar: AppBar(title: const Text('SCADA')),
-              body: const Center(child: Text('SCADA Views')),
-            ),
+            builder: (context, state) => const ScadaListScreen(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (context, state) {
+                  final id = state.pathParameters['id']!;
+                  return ScadaNativeRuntimeScreen(viewId: id);
+                },
+              ),
+            ],
           ),
         ],
       ),

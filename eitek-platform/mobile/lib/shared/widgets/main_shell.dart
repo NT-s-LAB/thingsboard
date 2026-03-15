@@ -9,7 +9,7 @@ class MainShell extends StatelessWidget {
   int _getSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
     if (location.startsWith('/dashboard')) return 0;
-    if (location.startsWith('/projects')) return 1;
+    if (location.startsWith('/scada')) return 1;
     if (location.startsWith('/devices')) return 2;
     if (location.startsWith('/settings')) return 3;
     return 0;
@@ -22,6 +22,7 @@ class MainShell extends StatelessWidget {
     return Scaffold(
       body: child,
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         currentIndex: selectedIndex,
         onTap: (index) {
           switch (index) {
@@ -29,7 +30,7 @@ class MainShell extends StatelessWidget {
               context.go('/dashboard');
               break;
             case 1:
-              context.go('/projects');
+              context.go('/scada');
               break;
             case 2:
               context.go('/devices');
@@ -46,9 +47,9 @@ class MainShell extends StatelessWidget {
             label: 'Trang chủ',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.folder_outlined),
-            activeIcon: Icon(Icons.folder),
-            label: 'Dự án',
+            icon: Icon(Icons.dashboard_outlined),
+            activeIcon: Icon(Icons.dashboard),
+            label: 'SCADA',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.devices_outlined),

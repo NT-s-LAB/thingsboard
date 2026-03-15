@@ -3,26 +3,76 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../projects/providers/projects_provider.dart';
 import '../../devices/providers/devices_provider.dart';
+import '../../projects/providers/projects_provider.dart';
+import '../providers/dashboard_provider.dart';
+import '../widgets/widgets.dart';
 
+/// Main dashboard screen
+/// Shows overview of system statistics and quick actions
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final projects = ref.watch(projectsProvider);
-    final devices = ref.watch(devicesProvider);
+    final dashboardState = ref.watch(dashboardProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('EITEK IoT'),
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.hub,
+                color: AppColors.primary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'EITEK IoT',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
+            icon: Stack(
+              children: [
+                const Icon(Icons.notifications_outlined),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.error,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             onPressed: () {
-              // TODO: Show notifications
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Tính năng thông báo đang phát triển'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
             },
           ),
           IconButton(
@@ -33,380 +83,130 @@ class DashboardScreen extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.read(projectsProvider.notifier).refresh();
-          ref.read(devicesProvider.notifier).refresh();
+          // Refresh using existing providers
+          await ref.read(devicesProvider.notifier).refresh();
+          await ref.read(projectsProvider.notifier).refresh();
         },
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Welcome Card
-              _WelcomeCard(user: user),
+              // Welcome Header
+              WelcomeHeader(user: user),
               const SizedBox(height: 24),
 
-              // Quick Stats
-              _QuickStats(
-                projectCount: projects.projects.length,
-                deviceCount: devices.devices.length,
-                onlineCount: devices.onlineCount,
-                offlineCount: devices.offlineCount,
+              // Error Banner (if any)
+              if (dashboardState.hasError) ...[
+                _ErrorBanner(
+                  message: dashboardState.errorMessage ?? 'Có lỗi xảy ra',
+                  onRetry: () {
+                    ref.read(devicesProvider.notifier).refresh();
+                    ref.read(projectsProvider.notifier).refresh();
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // Quick Stats Overview
+              StatsOverview(
+                stats: dashboardState.stats,
+                isLoading: dashboardState.isLoading,
               ),
               const SizedBox(height: 24),
 
               // Quick Actions
-              const Text(
-                'Truy cập nhanh',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _QuickActions(),
+              const QuickActionsPanel(),
               const SizedBox(height: 24),
 
               // Recent Devices
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Thiết bị gần đây',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+              RecentDevicesSection(
+                devices: dashboardState.stats.recentDevices,
+                isLoading: dashboardState.isLoading,
+              ),
+              const SizedBox(height: 16),
+
+              // Last updated
+              if (dashboardState.lastUpdated != null)
+                Center(
+                  child: Text(
+                    'Cập nhật: ${_formatLastUpdated(dashboardState.lastUpdated!)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textLight,
                     ),
                   ),
-                  TextButton(
-                    onPressed: () => context.go('/devices'),
-                    child: const Text('Xem tất cả'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              _RecentDevices(devices: devices.devices.take(5).toList()),
+                ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
       ),
     );
   }
+
+  String _formatLastUpdated(DateTime dateTime) {
+    final now = DateTime.now();
+    final diff = now.difference(dateTime);
+
+    if (diff.inSeconds < 60) {
+      return 'Vừa xong';
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes} phút trước';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours} giờ trước';
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    }
+  }
 }
 
-class _WelcomeCard extends StatelessWidget {
-  final dynamic user;
+/// Error banner widget
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback? onRetry;
 
-  const _WelcomeCard({required this.user});
+  const _ErrorBanner({
+    required this.message,
+    this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final greeting = _getGreeting();
-
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.error.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.error.withValues(alpha: 0.3),
+        ),
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundColor: Colors.white.withValues(alpha: 0.2),
+          const Icon(
+            Icons.error_outline,
+            color: AppColors.error,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Text(
-              user?.firstName?.substring(0, 1).toUpperCase() ?? 'U',
+              message,
               style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: AppColors.error,
+                fontSize: 14,
               ),
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  greeting,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  user?.fullName ?? 'Người dùng',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+          if (onRetry != null)
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Thử lại'),
             ),
-          ),
         ],
       ),
-    );
-  }
-
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Chào buổi sáng';
-    if (hour < 18) return 'Chào buổi chiều';
-    return 'Chào buổi tối';
-  }
-}
-
-class _QuickStats extends StatelessWidget {
-  final int projectCount;
-  final int deviceCount;
-  final int onlineCount;
-  final int offlineCount;
-
-  const _QuickStats({
-    required this.projectCount,
-    required this.deviceCount,
-    required this.onlineCount,
-    required this.offlineCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.5,
-      children: [
-        _StatCard(
-          icon: Icons.folder_outlined,
-          label: 'Dự án',
-          value: projectCount.toString(),
-          color: AppColors.primary,
-        ),
-        _StatCard(
-          icon: Icons.devices,
-          label: 'Thiết bị',
-          value: deviceCount.toString(),
-          color: AppColors.secondary,
-        ),
-        _StatCard(
-          icon: Icons.check_circle_outline,
-          label: 'Online',
-          value: onlineCount.toString(),
-          color: AppColors.online,
-        ),
-        _StatCard(
-          icon: Icons.cancel_outlined,
-          label: 'Offline',
-          value: offlineCount.toString(),
-          color: AppColors.offline,
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: color, size: 24),
-                const Spacer(),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickActions extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.add_circle_outline,
-            label: 'Thêm thiết bị',
-            onTap: () => context.push('/devices/new'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.qr_code_scanner,
-            label: 'Quét QR',
-            onTap: () {
-              // TODO: QR Scanner
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.dashboard_outlined,
-            label: 'SCADA',
-            onTap: () => context.push('/scada'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: AppColors.primary, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RecentDevices extends StatelessWidget {
-  final List devices;
-
-  const _RecentDevices({required this.devices});
-
-  @override
-  Widget build(BuildContext context) {
-    if (devices.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: Column(
-              children: [
-                Icon(
-                  Icons.devices_other,
-                  size: 48,
-                  color: AppColors.textLight,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Chưa có thiết bị nào',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      children: devices.map((device) {
-        final isOnline = device.status == 'ONLINE';
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: (isOnline ? AppColors.online : AppColors.offline)
-                  .withValues(alpha: 0.1),
-              child: Icon(
-                Icons.device_hub,
-                color: isOnline ? AppColors.online : AppColors.offline,
-              ),
-            ),
-            title: Text(device.name),
-            subtitle: Text(device.type),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: (isOnline ? AppColors.online : AppColors.offline)
-                    .withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                isOnline ? 'Online' : 'Offline',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isOnline ? AppColors.online : AppColors.offline,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            onTap: () => context.push('/devices/${device.id}'),
-          ),
-        );
-      }).toList(),
     );
   }
 }
