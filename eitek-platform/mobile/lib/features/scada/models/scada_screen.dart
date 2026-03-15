@@ -11,11 +11,15 @@ class ScadaPoint {
 
   const ScadaPoint({required this.x, required this.y});
 
-  factory ScadaPoint.fromJson(Map<String, dynamic> json) {
-    return ScadaPoint(
-      x: (json['x'] as num?)?.toDouble() ?? 0,
-      y: (json['y'] as num?)?.toDouble() ?? 0,
-    );
+  factory ScadaPoint.fromJson(dynamic json) {
+    if (json is Map) {
+      final map = Map<String, dynamic>.from(json);
+      return ScadaPoint(
+        x: (map['x'] as num?)?.toDouble() ?? 0,
+        y: (map['y'] as num?)?.toDouble() ?? 0,
+      );
+    }
+    return const ScadaPoint(x: 0, y: 0);
   }
 
   Map<String, dynamic> toJson() => {'x': x, 'y': y};
@@ -27,11 +31,15 @@ class ScadaSize {
 
   const ScadaSize({required this.width, required this.height});
 
-  factory ScadaSize.fromJson(Map<String, dynamic> json) {
-    return ScadaSize(
-      width: (json['width'] as num?)?.toDouble() ?? 100,
-      height: (json['height'] as num?)?.toDouble() ?? 100,
-    );
+  factory ScadaSize.fromJson(dynamic json) {
+    if (json is Map) {
+      final map = Map<String, dynamic>.from(json);
+      return ScadaSize(
+        width: (map['width'] as num?)?.toDouble() ?? 100,
+        height: (map['height'] as num?)?.toDouble() ?? 100,
+      );
+    }
+    return const ScadaSize(width: 100, height: 100);
   }
 
   Map<String, dynamic> toJson() => {'width': width, 'height': height};
@@ -52,15 +60,19 @@ class ScadaTransform {
     this.opacity = 1.0,
   });
 
-  factory ScadaTransform.fromJson(Map<String, dynamic> json) {
+  factory ScadaTransform.fromJson(dynamic json) {
+    if (json is! Map) {
+      return ScadaTransform.defaultTransform();
+    }
+    final map = Map<String, dynamic>.from(json);
     return ScadaTransform(
-      position: ScadaPoint.fromJson(json['position'] ?? {'x': 0, 'y': 0}),
-      size: ScadaSize.fromJson(json['size'] ?? {'width': 100, 'height': 100}),
-      rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
-      scale: json['scale'] != null 
-          ? ScadaPoint.fromJson(json['scale']) 
+      position: ScadaPoint.fromJson(map['position'] ?? {'x': 0, 'y': 0}),
+      size: ScadaSize.fromJson(map['size'] ?? {'width': 100, 'height': 100}),
+      rotation: (map['rotation'] as num?)?.toDouble() ?? 0,
+      scale: map['scale'] != null 
+          ? ScadaPoint.fromJson(map['scale']) 
           : const ScadaPoint(x: 1, y: 1),
-      opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
+      opacity: (map['opacity'] as num?)?.toDouble() ?? 1.0,
     );
   }
 
@@ -240,20 +252,50 @@ class ScadaWidgetInstance {
   });
 
   factory ScadaWidgetInstance.fromJson(Map<String, dynamic> json) {
+    // Parse bindings - can be List or Map format
+    List<ScadaBinding> bindings = [];
+    final bindingsRaw = json['bindings'];
+    if (bindingsRaw is List) {
+      bindings = bindingsRaw
+          .where((e) => e is Map)
+          .map((e) => ScadaBinding.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } else if (bindingsRaw is Map) {
+      // Convert Map format { "value": {...} } to List format
+      int index = 0;
+      bindingsRaw.forEach((key, value) {
+        if (value is Map) {
+          final valueMap = Map<String, dynamic>.from(value);
+          bindings.add(ScadaBinding(
+            id: 'binding-$index',
+            targetProperty: key as String,
+            source: ScadaBindingSource.fromJson(valueMap),
+          ));
+          index++;
+        }
+      });
+    }
+    
+    // Parse actions
+    List<ScadaAction> actions = [];
+    final actionsRaw = json['actions'];
+    if (actionsRaw is List) {
+      actions = actionsRaw
+          .where((e) => e is Map)
+          .map((e) => ScadaAction.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    
     return ScadaWidgetInstance(
       id: json['id'] as String? ?? '',
       type: json['type'] as String? ?? 'unknown',
       name: json['name'] as String? ?? '',
       transform: ScadaTransform.fromJson(json['transform'] ?? {}),
-      properties: Map<String, dynamic>.from(json['properties'] ?? {}),
-      bindings: (json['bindings'] as List<dynamic>?)
-              ?.map((e) => ScadaBinding.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
-      actions: (json['actions'] as List<dynamic>?)
-              ?.map((e) => ScadaAction.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
+      properties: json['properties'] is Map 
+          ? Map<String, dynamic>.from(json['properties'] as Map)
+          : {},
+      bindings: bindings,
+      actions: actions,
       visible: json['visible'] as bool? ?? true,
       locked: json['locked'] as bool? ?? false,
     );
@@ -290,9 +332,9 @@ class ScadaBinding {
     return ScadaBinding(
       id: json['id'] as String? ?? '',
       targetProperty: json['targetProperty'] as String? ?? '',
-      source: ScadaBindingSource.fromJson(json['source'] ?? {}),
-      format: json['format'] != null
-          ? ScadaBindingFormat.fromJson(json['format'] as Map<String, dynamic>)
+      source: ScadaBindingSource.fromJson(json['source']),
+      format: json['format'] != null && json['format'] is Map
+          ? ScadaBindingFormat.fromJson(Map<String, dynamic>.from(json['format'] as Map))
           : null,
     );
   }
@@ -309,11 +351,15 @@ class ScadaBindingSource {
     this.key,
   });
 
-  factory ScadaBindingSource.fromJson(Map<String, dynamic> json) {
+  factory ScadaBindingSource.fromJson(dynamic json) {
+    if (json is! Map) {
+      return const ScadaBindingSource(type: 'constant');
+    }
+    final map = Map<String, dynamic>.from(json);
     return ScadaBindingSource(
-      type: json['type'] as String? ?? 'constant',
-      deviceId: json['deviceId'] as String? ?? json['entityId'] as String?,
-      key: json['key'] as String?,
+      type: map['type'] as String? ?? 'constant',
+      deviceId: map['deviceId'] as String? ?? map['entityId'] as String?,
+      key: map['key'] as String? ?? map['dataKey'] as String?,
     );
   }
 }
@@ -361,7 +407,11 @@ class ScadaAction {
     return ScadaAction(
       trigger: json['trigger'] as String? ?? 'click',
       type: json['type'] as String? ?? json['actionType'] as String? ?? 'none',
-      params: Map<String, dynamic>.from(json['params'] ?? {}),
+      params: json['params'] is Map 
+          ? Map<String, dynamic>.from(json['params'] as Map)
+          : (json['config'] is Map 
+              ? Map<String, dynamic>.from(json['config'] as Map)
+              : {}),
     );
   }
 }
