@@ -45,7 +45,7 @@ export class SitesService {
   }
 
   async findAll(pagination: PaginationDto, user: RequestUser, projectId?: string): Promise<PaginatedResult<Site>> {
-    const page = pagination.page;
+    const page = pagination.effectivePage;
     const limit = pagination.effectiveLimit;
     const offset = pagination.offset;
     const search = pagination.effectiveSearch;

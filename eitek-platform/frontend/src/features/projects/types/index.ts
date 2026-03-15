@@ -411,3 +411,7 @@ export interface ProjectNode extends Omit<Project, 'type' | 'children'> {
   isExpanded?: boolean;
   hasChildren?: boolean;
 }
+
+// Re-export Area and Site types
+export * from './area';
+export * from './site';

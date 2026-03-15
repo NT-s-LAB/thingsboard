@@ -60,7 +60,7 @@ export class AreasService {
     user: RequestUser,
     siteId?: string,
   ): Promise<PaginatedResult<Area>> {
-    const page = pagination.page;
+    const page = pagination.effectivePage;
     const limit = pagination.effectiveLimit;
     const offset = pagination.offset;
     const search = pagination.effectiveSearch;

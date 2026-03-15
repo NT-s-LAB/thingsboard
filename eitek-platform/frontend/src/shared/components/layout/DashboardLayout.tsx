@@ -21,6 +21,8 @@ import {
   ChevronDown,
   ChevronRight,
   Shield,
+  MapPin,
+  Building2,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
@@ -81,6 +83,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       href: '/projects',
       icon: <FolderTree className="w-5 h-5" />,
       label: 'Projects'
+    },
+    {
+      href: '/sites',
+      icon: <Building2 className="w-5 h-5" />,
+      label: 'Sites'
+    },
+    {
+      href: '/areas',
+      icon: <MapPin className="w-5 h-5" />,
+      label: 'Areas'
     },
     {
       href: '/templates',

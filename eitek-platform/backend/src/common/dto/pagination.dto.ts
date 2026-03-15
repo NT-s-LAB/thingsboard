@@ -58,8 +58,12 @@ export class PaginationDto {
     return order === 'asc' ? 'asc' : 'desc';
   }
 
+  get effectivePage(): number {
+    return this.page ?? 1;
+  }
+
   get offset(): number {
-    return (this.page - 1) * this.effectiveLimit;
+    return (this.effectivePage - 1) * this.effectiveLimit;
   }
 }
 
