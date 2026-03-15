@@ -14,6 +14,7 @@ import type {
   ChartWidgetConfig, 
   ChartDataPoint,
   ChartRuntimeState,
+  ChartSeriesData,
 } from '../types';
 import type { DashboardTimeWindow } from '../../../../core/types/timeWindow.types';
 import { 
@@ -47,6 +48,8 @@ export interface UseChartDataResult {
   refresh: () => void;
   isLoading: boolean;
   error: string | undefined;
+  /** Fetch data for custom time range (used for export) */
+  fetchForExport: (startTs: number, endTs: number) => Promise<ChartSeriesData[]>;
 }
 
 // ─── Main Hook ───────────────────────────────────────────────────────────────
@@ -426,11 +429,78 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
     };
   }, []);
 
+  // ─── Fetch For Export ────────────────────────────────────────────────────────
+
+  const fetchForExport = useCallback(async (startTs: number, endTs: number): Promise<ChartSeriesData[]> => {
+    const config = configRef.current;
+    
+    // Preview mode: return empty
+    if (isPreview || config.data.series.length === 0) {
+      return [];
+    }
+
+    // Group series by entity
+    const entityGroups = new Map<string, { entityType: string; keys: string[] }>();
+    
+    for (const series of config.data.series) {
+      if (series.sourceType === 'mock') continue;
+      
+      const entityId = series.entityId || series.deviceId;
+      if (!entityId) continue;
+
+      const key = entityId;
+      if (!entityGroups.has(key)) {
+        entityGroups.set(key, {
+          entityType: series.entityType || 'DEVICE',
+          keys: [],
+        });
+      }
+      entityGroups.get(key)!.keys.push(series.key);
+    }
+
+    if (entityGroups.size === 0) {
+      return [];
+    }
+
+    try {
+      // Fetch data for all entities with NO aggregation for export
+      const rawData = new Map<string, Record<string, ChartDataPoint[]>>();
+      
+      const fetchPromises = Array.from(entityGroups.entries()).map(async ([entityId, { entityType, keys }]) => {
+        const customTimeRange = { startTs, endTs };
+        const data = await fetchHistoricalData(
+          entityType,
+          entityId,
+          keys,
+          customTimeRange,
+          undefined, // No aggregation for export
+          50000 // Higher limit for export
+        );
+        return { entityId, data };
+      });
+
+      const results = await Promise.all(fetchPromises);
+      
+      for (const { entityId, data } of results) {
+        rawData.set(entityId, data);
+      }
+
+      // Build chart series data
+      const seriesData = buildSeriesData(config.data.series, rawData);
+      return seriesData;
+
+    } catch (error) {
+      console.error('Error fetching export data:', error);
+      return [];
+    }
+  }, [isPreview]);
+
   return {
     state,
     refresh,
     isLoading: state.loadingState === 'loading',
     error: state.error,
+    fetchForExport,
   };
 }
 

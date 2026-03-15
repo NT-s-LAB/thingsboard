@@ -67,11 +67,10 @@ function mergeSeriesDataForRecharts(seriesData: ChartSeriesData[]): Array<Record
 
 function formatTimestamp(ts: number): string {
   const date = new Date(ts);
-  return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  // 24h format: HH:mm (no seconds, no AM/PM)
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
 // ─── Custom Tooltip ──────────────────────────────────────────────────────────
@@ -152,7 +151,7 @@ export const TimeSeriesChartRenderer = memo<TimeSeriesChartRendererProps>(functi
   const chartConfig = normalizeChartConfig(properties.chartConfig as Partial<ChartWidgetConfig> | undefined);
 
   // Fetch chart data - pass dashboard time window for widgets using dashboard mode
-  const { state, error } = useChartData({
+  const { state, error, fetchForExport } = useChartData({
     config: chartConfig,
     dashboardTimeWindow,
     isRuntime,
@@ -177,6 +176,7 @@ export const TimeSeriesChartRenderer = memo<TimeSeriesChartRendererProps>(functi
       loadingState={state.loadingState}
       error={error ?? ''}
       hasData={hasData}
+      onFetchExportData={fetchForExport}
     >
       {!hasData && <ChartEmptyState message={chartConfig.display.emptyStateText ?? 'No data'} />}
       

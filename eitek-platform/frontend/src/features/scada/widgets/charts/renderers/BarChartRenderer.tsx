@@ -64,20 +64,20 @@ function mergeSeriesDataForRecharts(seriesData: ChartSeriesData[]): Array<Record
 
 function formatTimestamp(ts: number): string {
   const date = new Date(ts);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  // 24h format: HH:mm
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${month} ${day}, ${hours}:${minutes}`;
 }
 
 function formatShortTimestamp(ts: number): string {
   const date = new Date(ts);
-  return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  // 24h format: HH:mm
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
 // ─── Custom Tooltip ──────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ export const BarChartRenderer = memo<BarChartRendererProps>(function BarChartRen
   const showLabels = (properties.showLabels as boolean) ?? false;
 
   // Fetch chart data - pass dashboard time window for widgets using dashboard mode
-  const { state, error } = useChartData({
+  const { state, error, fetchForExport } = useChartData({
     config: chartConfig,
     dashboardTimeWindow,
     isRuntime,
@@ -184,6 +184,7 @@ export const BarChartRenderer = memo<BarChartRendererProps>(function BarChartRen
       loadingState={state.loadingState}
       error={error ?? ''}
       hasData={hasData}
+      onFetchExportData={fetchForExport}
     >
       {!hasData && <ChartEmptyState message={chartConfig.display.emptyStateText ?? 'No data'} />}
       

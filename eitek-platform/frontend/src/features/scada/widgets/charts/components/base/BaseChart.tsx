@@ -7,10 +7,14 @@
 
 'use client';
 
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useState, useCallback } from 'react';
 import type { ChartWidgetConfig, ChartSeriesData, ChartLoadingState } from '../../core/types';
+import { ExportChartDialog } from '../ExportChartDialog';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
+
+/** Callback to fetch data for a specific time range (used by export) */
+export type FetchExportDataFn = (startTs: number, endTs: number) => Promise<ChartSeriesData[]>;
 
 export interface BaseChartProps {
   config: ChartWidgetConfig;
@@ -22,6 +26,10 @@ export interface BaseChartProps {
   children: React.ReactNode;
   /** Whether the chart already has data (to differentiate initial load vs refresh) */
   hasData?: boolean;
+  /** Enable export functionality */
+  enableExport?: boolean;
+  /** Callback to fetch data for export with custom time range */
+  onFetchExportData?: FetchExportDataFn;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -35,8 +43,21 @@ export const BaseChart = memo<BaseChartProps>(function BaseChart({
   error,
   children,
   hasData = false,
+  enableExport = true,
+  onFetchExportData,
 }) {
   const { display } = config;
+
+  // Export dialog state
+  const [showExportDialog, setShowExportDialog] = useState(false);
+
+  const handleOpenExport = useCallback(() => {
+    setShowExportDialog(true);
+  }, []);
+
+  const handleCloseExport = useCallback(() => {
+    setShowExportDialog(false);
+  }, []);
 
   // Determine if this is initial load or a refresh
   const isInitialLoad = loadingState === 'loading' && !hasData && seriesData.length === 0;
@@ -69,7 +90,7 @@ export const BaseChart = memo<BaseChartProps>(function BaseChart({
 
   return (
     <div style={containerStyle}>
-      {/* Title with refresh indicator */}
+      {/* Title with refresh indicator and export button */}
       {display.showTitle && display.title && (
         <div
           style={{
@@ -91,6 +112,10 @@ export const BaseChart = memo<BaseChartProps>(function BaseChart({
           </span>
           {/* Subtle refresh indicator */}
           {isRefreshing && <RefreshIndicator />}
+          {/* Export button */}
+          {enableExport && seriesData.length > 0 && (
+            <ExportButton onClick={handleOpenExport} />
+          )}
         </div>
       )}
 
@@ -121,17 +146,23 @@ export const BaseChart = memo<BaseChartProps>(function BaseChart({
           </div>
         )}
 
-        {/* Refresh indicator when no title is shown */}
-        {isRefreshing && !display.showTitle && (
+        {/* Refresh indicator and export button when no title is shown */}
+        {!display.showTitle && (
           <div
             style={{
               position: 'absolute',
               top: 8,
               right: 8,
               zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
             }}
           >
-            <RefreshIndicator />
+            {isRefreshing && <RefreshIndicator />}
+            {enableExport && seriesData.length > 0 && (
+              <ExportButton onClick={handleOpenExport} />
+            )}
           </div>
         )}
 
@@ -157,6 +188,15 @@ export const BaseChart = memo<BaseChartProps>(function BaseChart({
         {/* Chart Content */}
         {loadingState !== 'error' && children}
       </div>
+
+      {/* Export Dialog */}
+      <ExportChartDialog
+        open={showExportDialog}
+        onClose={handleCloseExport}
+        config={config}
+        seriesData={seriesData}
+        onFetchExportData={onFetchExportData}
+      />
     </div>
   );
 });
@@ -205,6 +245,64 @@ const RefreshIndicator: React.FC = () => (
   >
     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
   </svg>
+);
+
+// ─── Export Button ───────────────────────────────────────────────────────────
+
+interface ExportButtonProps {
+  onClick: () => void;
+}
+
+const ExportButton: React.FC<ExportButtonProps> = ({ onClick }) => (
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      onClick();
+    }}
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 24,
+      height: 24,
+      padding: 0,
+      border: 'none',
+      borderRadius: 4,
+      backgroundColor: 'transparent',
+      cursor: 'pointer',
+      color: '#6B7280',
+      transition: 'color 0.15s, background-color 0.15s',
+      flexShrink: 0,
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.backgroundColor = '#F3F4F6';
+      e.currentTarget.style.color = '#3B82F6';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.backgroundColor = 'transparent';
+      e.currentTarget.style.color = '#6B7280';
+    }}
+    title="Export data"
+  >
+    {/* FileSpreadsheet icon */}
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+      <polyline points="14 2 14 8 20 8" />
+      <path d="M8 13h2" />
+      <path d="M8 17h2" />
+      <path d="M14 13h2" />
+      <path d="M14 17h2" />
+    </svg>
+  </button>
 );
 
 // ─── Error Icon ──────────────────────────────────────────────────────────────
