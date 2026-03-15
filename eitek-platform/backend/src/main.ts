@@ -20,13 +20,37 @@ async function bootstrap() {
   // CORS (before static assets so headers apply to file responses too)
   const frontendUrl = configService.get('FRONTEND_URL') || 'http://localhost:3000';
   const corsOrigins = configService.get('CORS_ORIGINS');
-  const origins = corsOrigins
-    ? corsOrigins.split(',').map((o: string) => o.trim())
-    : [frontendUrl, 'http://192.168.1.68'];
+  const defaultOrigins = [frontendUrl, 'http://192.168.1.68'];
+  
+  // Allow all localhost ports in development (for Flutter web, etc.)
+  const isDevMode = configService.get('NODE_ENV') !== 'production';
+  
   app.enableCors({
-    origin: origins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      // In development, allow all localhost origins
+      if (isDevMode && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) {
+        return callback(null, true);
+      }
+      
+      // Check against configured origins
+      const allowedOrigins = corsOrigins
+        ? corsOrigins.split(',').map((o: string) => o.trim())
+        : defaultOrigins;
+      
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   });
 
   // Serve uploaded files statically
