@@ -113,6 +113,7 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
   }, [series, dataMode, config?.timeWindow, maxDataPoints, useDashboardTimeWindow, dashboardTimeWindow]);
 
   // Compute time range - use stable reference
+  // Note: For realtime mode, fetchData will compute fresh time range on each call
   const timeRange = useMemo(() => {
     return resolveChartTimeWindow(configRef.current, dashboardTimeWindow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,6 +125,17 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
     if (!isMountedRef.current) return;
     
     const config = configRef.current;
+    const currentDashboardTw = dashboardTimeWindowRef.current;
+
+    // For realtime mode, always compute fresh time range to ensure sliding window works
+    const isRealtimeMode = config.data.mode === 'realtime' || 
+                           config.timeWindow.realtime || 
+                           (currentDashboardTw?.mode === 'realtime');
+    
+    // Compute current time range - fresh calculation for realtime, cached for historical
+    const currentTimeRange = isRealtimeMode 
+      ? resolveChartTimeWindow(config, currentDashboardTw)
+      : timeRange;
 
     // Preview mode: use mock data
     if (isPreview || config.data.series.length === 0) {
@@ -131,7 +143,7 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
         { id: 'mock-1', label: 'Series 1', key: 'value', sourceType: 'mock' as const, color: CHART_COLOR_PALETTE[0] ?? '#5470C6' },
       ];
       
-      const mockData = generateMockData(mockConfig as any, timeRange, 50);
+      const mockData = generateMockData(mockConfig as any, currentTimeRange, 50);
       setState({
         loadingState: 'success',
         seriesData: mockData,
@@ -173,7 +185,6 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
     try {
       // Determine aggregation - use dashboard time window aggregation when in dashboard mode
       const useDashboard = config.timeWindow?.mode === 'dashboard';
-      const currentDashboardTw = dashboardTimeWindowRef.current;
       let aggType = config.data.aggregation?.type;
       let groupingIntervalMs: number | undefined;
       
@@ -187,7 +198,7 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
       const aggregation = (aggType && aggType !== 'NONE') 
         ? {
             type: aggType,
-            interval: groupingIntervalMs || computeAggregationInterval(timeRange, config.data.maxDataPoints || 500),
+            interval: groupingIntervalMs || computeAggregationInterval(currentTimeRange, config.data.maxDataPoints || 500),
             intervalUnit: config.data.aggregation?.intervalUnit,
           }
         : undefined;
@@ -200,7 +211,7 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
           entityType,
           entityId,
           keys,
-          timeRange,
+          currentTimeRange,
           aggregation,
           config.data.maxDataPoints
         );
@@ -347,6 +358,16 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
         subscriptionsRef.current.add(deviceId);
       });
 
+      // IMPORTANT: Even with WebSocket, we need periodic refresh for sliding time window
+      // This ensures the chart's time range slides forward (e.g., "last 12 hours" stays current)
+      // and re-fetches historical data with updated time bounds
+      const refreshMs = config.timeWindow.autoRefreshMs || 30000; // Default 30s for realtime sliding window
+      refreshIntervalRef.current = setInterval(() => {
+        if (isMountedRef.current) {
+          fetchData();
+        }
+      }, refreshMs);
+
       return () => {
         // Unsubscribe from telemetry
         unsubscribe('telemetry', handleTelemetry);
@@ -356,6 +377,12 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
           emit('unsubscribe:device', { deviceId });
         });
         subscriptionsRef.current.clear();
+
+        // Clear periodic refresh
+        if (refreshIntervalRef.current) {
+          clearInterval(refreshIntervalRef.current);
+          refreshIntervalRef.current = null;
+        }
       };
     }
 

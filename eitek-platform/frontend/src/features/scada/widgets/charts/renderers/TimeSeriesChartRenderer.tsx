@@ -176,6 +176,7 @@ export const TimeSeriesChartRenderer = memo<TimeSeriesChartRendererProps>(functi
       height={height}
       loadingState={state.loadingState}
       error={error ?? ''}
+      hasData={hasData}
     >
       {!hasData && <ChartEmptyState message={chartConfig.display.emptyStateText ?? 'No data'} />}
       

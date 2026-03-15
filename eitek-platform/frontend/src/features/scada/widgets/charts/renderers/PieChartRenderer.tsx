@@ -258,6 +258,7 @@ export const PieChartRenderer = memo<PieChartRendererProps>(function PieChartRen
       height={height}
       loadingState={loading ? 'loading' : hasData ? 'success' : 'idle'}
       error={error ?? ''}
+      hasData={hasData}
     >
       {!hasData && !loading && (
         <ChartEmptyState message={chartConfig.display.emptyStateText ?? 'No data'} />

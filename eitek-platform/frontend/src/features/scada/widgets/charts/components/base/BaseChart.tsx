@@ -20,19 +20,27 @@ export interface BaseChartProps {
   loadingState?: ChartLoadingState;
   error?: string;
   children: React.ReactNode;
+  /** Whether the chart already has data (to differentiate initial load vs refresh) */
+  hasData?: boolean;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export const BaseChart = memo<BaseChartProps>(function BaseChart({
   config,
+  seriesData,
   width,
   height,
   loadingState = 'idle',
   error,
   children,
+  hasData = false,
 }) {
   const { display } = config;
+
+  // Determine if this is initial load or a refresh
+  const isInitialLoad = loadingState === 'loading' && !hasData && seriesData.length === 0;
+  const isRefreshing = loadingState === 'loading' && (hasData || seriesData.length > 0);
 
   // Compute content area dimensions
   const contentStyle = useMemo(() => {
@@ -61,7 +69,7 @@ export const BaseChart = memo<BaseChartProps>(function BaseChart({
 
   return (
     <div style={containerStyle}>
-      {/* Title */}
+      {/* Title with refresh indicator */}
       {display.showTitle && display.title && (
         <div
           style={{
@@ -73,9 +81,16 @@ export const BaseChart = memo<BaseChartProps>(function BaseChart({
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
           }}
         >
-          {display.title}
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {display.title}
+          </span>
+          {/* Subtle refresh indicator */}
+          {isRefreshing && <RefreshIndicator />}
         </div>
       )}
 
@@ -89,8 +104,8 @@ export const BaseChart = memo<BaseChartProps>(function BaseChart({
           minHeight: 0,
         }}
       >
-        {/* Loading State */}
-        {loadingState === 'loading' && (
+        {/* Full Loading overlay - only on initial load */}
+        {isInitialLoad && (
           <div
             style={{
               position: 'absolute',
@@ -103,6 +118,20 @@ export const BaseChart = memo<BaseChartProps>(function BaseChart({
             }}
           >
             <LoadingSpinner />
+          </div>
+        )}
+
+        {/* Refresh indicator when no title is shown */}
+        {isRefreshing && !display.showTitle && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              zIndex: 10,
+            }}
+          >
+            <RefreshIndicator />
           </div>
         )}
 
@@ -152,6 +181,28 @@ const LoadingSpinner: React.FC = () => (
     <style>
       {`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}
     </style>
+    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+  </svg>
+);
+
+// ─── Refresh Indicator (subtle) ──────────────────────────────────────────────
+
+const RefreshIndicator: React.FC = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{
+      animation: 'spin 1s linear infinite',
+      color: '#9CA3AF',
+      flexShrink: 0,
+    }}
+  >
     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
   </svg>
 );

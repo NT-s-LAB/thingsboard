@@ -183,6 +183,7 @@ export const BarChartRenderer = memo<BarChartRendererProps>(function BarChartRen
       height={height}
       loadingState={state.loadingState}
       error={error ?? ''}
+      hasData={hasData}
     >
       {!hasData && <ChartEmptyState message={chartConfig.display.emptyStateText ?? 'No data'} />}
       

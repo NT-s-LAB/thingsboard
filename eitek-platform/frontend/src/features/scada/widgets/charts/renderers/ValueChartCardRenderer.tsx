@@ -174,6 +174,11 @@ export const ValueChartCardRenderer = memo<ValueChartCardRendererProps>(function
   const showUnit = cardConfig.showUnit ?? true;
   const showLabel = cardConfig.showLabel ?? true;
 
+  // Determine if this is initial load vs refresh
+  const hasData = seriesData.length > 0;
+  const isInitialLoad = state.loadingState === 'loading' && !hasData;
+  const isRefreshing = state.loadingState === 'loading' && hasData;
+
   return (
     <div
       style={{
@@ -188,7 +193,7 @@ export const ValueChartCardRenderer = memo<ValueChartCardRendererProps>(function
         overflow: 'hidden',
       }}
     >
-      {/* Title / Label */}
+      {/* Title / Label with refresh indicator */}
       {showLabel && label && (
         <div
           style={{
@@ -196,9 +201,31 @@ export const ValueChartCardRenderer = memo<ValueChartCardRendererProps>(function
             color: '#6b7280',
             fontWeight: 500,
             marginBottom: 4,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
           }}
         >
-          {label}
+          <span>{label}</span>
+          {/* Subtle refresh indicator */}
+          {isRefreshing && (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                animation: 'spin 1s linear infinite',
+                color: '#9CA3AF',
+              }}
+            >
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+          )}
         </div>
       )}
 
@@ -290,8 +317,8 @@ export const ValueChartCardRenderer = memo<ValueChartCardRendererProps>(function
         </div>
       )}
 
-      {/* Loading overlay */}
-      {state.loadingState === 'loading' && (
+      {/* Loading overlay - only on initial load */}
+      {isInitialLoad && (
         <div
           style={{
             position: 'absolute',
