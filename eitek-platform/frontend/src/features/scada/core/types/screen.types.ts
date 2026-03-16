@@ -238,6 +238,10 @@ export interface BindingFormat {
   dateFormat?: string;
   /** Map value → display string (e.g. { "0": "OFF", "1": "ON" }) */
   valueMap?: Record<string, string>;
+  /** Multiply numeric value before formatting */
+  multiplier?: number;
+  /** Add offset to numeric value before formatting */
+  offset?: number;
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────

@@ -71,14 +71,14 @@ class WebSocketService {
 
   bool get isConnected => _connected;
 
-  // Subscribe to device telemetry
+  // Subscribe to device telemetry (matches backend: 'subscribe:device')
   void subscribeToDevice(String deviceId) {
-    _socket?.emit('subscribe_device', {'deviceId': deviceId});
+    _socket?.emit('subscribe:device', {'deviceId': deviceId});
   }
 
   // Unsubscribe from device telemetry
   void unsubscribeFromDevice(String deviceId) {
-    _socket?.emit('unsubscribe_device', {'deviceId': deviceId});
+    _socket?.emit('unsubscribe:device', {'deviceId': deviceId});
   }
 
   // Subscribe to events

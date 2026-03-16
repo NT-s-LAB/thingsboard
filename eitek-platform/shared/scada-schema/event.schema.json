@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "scada-event",
+  "title": "SCADA Widget Event",
+  "description": "Event binding: trigger → actions.",
+  "type": "object",
+  "required": ["id", "trigger", "actions"],
+  "properties": {
+    "id": { "type": "string" },
+    "trigger": {
+      "type": "string",
+      "enum": [
+        "onClick", "onDoubleClick",
+        "onMouseDown", "onMouseUp",
+        "onMouseEnter", "onMouseLeave",
+        "onValueChange",
+        "onPageLoad", "onPageUnload"
+      ],
+      "description": "When this event fires. Web click = Mobile tap. Web mouseDown = Mobile touchStart."
+    },
+    "actions": {
+      "type": "array",
+      "items": { "$ref": "action.schema.json" },
+      "description": "Actions executed in order when the event fires"
+    },
+    "enabled": { "type": "boolean", "default": true },
+    "conditions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/EventCondition" },
+      "description": "Optional conditions; event only fires when all conditions are met"
+    },
+    "debounceMs": { "type": "integer", "description": "Debounce delay in milliseconds" },
+    "throttleMs": { "type": "integer", "description": "Throttle delay in milliseconds" },
+    "stopPropagation": { "type": "boolean", "default": false }
+  },
+  "definitions": {
+    "EventCondition": {
+      "type": "object",
+      "properties": {
+        "source": { "type": "string", "description": "Variable or binding key" },
+        "operator": {
+          "type": "string",
+          "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "contains", "notContains"]
+        },
+        "value": { "description": "Value to compare against" }
+      }
+    }
+  }
+}

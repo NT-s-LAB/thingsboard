@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "scada-widget-instance",
+  "title": "SCADA Widget Instance",
+  "description": "A concrete widget placed on a SCADA page/screen.",
+  "type": "object",
+  "required": ["id", "type", "name", "layerId", "transform", "properties", "bindings"],
+  "properties": {
+    "id": { "type": "string", "description": "Unique within the page" },
+    "type": { "type": "string", "description": "Must match a registered widget type (e.g. 'button', 'gauge', 'text')" },
+    "name": { "type": "string", "description": "User-visible label" },
+    "layerId": { "type": "string" },
+    "transform": { "$ref": "#/definitions/Transform" },
+    "properties": {
+      "type": "object",
+      "description": "Static widget-specific props (colors, labels, thresholds, etc.)"
+    },
+    "bindings": {
+      "type": "array",
+      "items": { "$ref": "binding.schema.json" }
+    },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "event.schema.json" }
+    },
+    "actions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/LegacyAction" },
+      "description": "Legacy action format — prefer events[] instead"
+    },
+    "svgAssetId": { "type": "string" },
+    "locked": { "type": "boolean", "default": false },
+    "visible": { "type": "boolean", "default": true },
+    "groupId": { "type": "string" }
+  },
+  "definitions": {
+    "Transform": {
+      "type": "object",
+      "required": ["position", "size"],
+      "properties": {
+        "position": {
+          "type": "object",
+          "required": ["x", "y"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        },
+        "size": {
+          "type": "object",
+          "required": ["width", "height"],
+          "properties": {
+            "width": { "type": "number" },
+            "height": { "type": "number" }
+          }
+        },
+        "rotation": { "type": "number", "default": 0 },
+        "zIndex": { "type": "integer", "default": 0 }
+      }
+    },
+    "LegacyAction": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "trigger": { "type": "string" },
+        "actionType": { "type": "string" },
+        "config": { "type": "object" }
+      }
+    }
+  }
+}

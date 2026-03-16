@@ -3,6 +3,8 @@
 // Represents a SCADA view/screen from the backend.
 // Contains screen definition for native rendering.
 
+import 'package:flutter/foundation.dart';
+
 class ScadaView {
   final String id;
   final String name;
@@ -39,6 +41,8 @@ class ScadaView {
   });
 
   factory ScadaView.fromJson(Map<String, dynamic> json) {
+    debugPrint('[SCADA-VIEW] fromJson: ${json.keys.toList()}');
+    
     // Parse canvasSize - can be Map or List [width, height]
     ScadaCanvasSize? canvasSize;
     if (json['canvasSize'] != null) {
@@ -61,6 +65,12 @@ class ScadaView {
       scadaWidgets = (json['scadaWidgets'] as List)
           .map((w) => w is Map<String, dynamic> ? w : Map<String, dynamic>.from(w as Map))
           .toList();
+      debugPrint('[SCADA-VIEW] scadaWidgets count: ${scadaWidgets.length}');
+      for (final sw in scadaWidgets) {
+        debugPrint('[SCADA-VIEW] Widget keys: ${sw.keys.toList()}');
+        debugPrint('[SCADA-VIEW] Widget bindings raw: ${sw['bindings']}');
+        debugPrint('[SCADA-VIEW] Widget dataBindings raw: ${sw['dataBindings']}');
+      }
     }
     
     // Parse background (can be string, JSON object, or null)
@@ -78,12 +88,35 @@ class ScadaView {
     // Build screenDefinition from scadaWidgets, canvasSize, background
     Map<String, dynamic>? screenDefinition;
     
-    // Check if screenDefinition is directly provided
+    // Check if screenDefinition is directly provided (full project export)
     if (json['screenDefinition'] != null) {
-      screenDefinition = json['screenDefinition'] as Map<String, dynamic>;
+      screenDefinition = json['screenDefinition'] is Map 
+          ? Map<String, dynamic>.from(json['screenDefinition'] as Map)
+          : null;
     }
-    // Or build it from scadaWidgets if available
-    else if (scadaWidgets != null && scadaWidgets.isNotEmpty) {
+    // Check for multi-page project structure (pages array at root level)
+    else if (json['pages'] is List && (json['pages'] as List).isNotEmpty) {
+      // This is a full project export - pass through as screenDefinition
+      screenDefinition = Map<String, dynamic>.from(json);
+    }
+    
+    // Check for _projectData inside layout field
+    // (web frontend stores full multi-page project in layout._projectData)
+    if (screenDefinition == null && json['layout'] is Map) {
+      final layout = Map<String, dynamic>.from(json['layout'] as Map);
+      if (layout['_projectData'] is Map) {
+        final projectData = Map<String, dynamic>.from(layout['_projectData'] as Map);
+        debugPrint('[SCADA-VIEW] Found _projectData in layout!');
+        debugPrint('[SCADA-VIEW] _projectData keys: ${projectData.keys.toList()}');
+        if (projectData['pages'] is List && (projectData['pages'] as List).isNotEmpty) {
+          debugPrint('[SCADA-VIEW] Multi-page project with ${(projectData['pages'] as List).length} pages');
+          screenDefinition = projectData;
+        }
+      }
+    }
+    
+    // Fallback: build from scadaWidgets if available
+    if (screenDefinition == null && scadaWidgets != null && scadaWidgets.isNotEmpty) {
       screenDefinition = _buildScreenDefinition(
         canvasSize: canvasSize,
         background: background,
@@ -118,14 +151,19 @@ class ScadaView {
     String? background,
     required List<Map<String, dynamic>> scadaWidgets,
   }) {
+    debugPrint('[SCADA-VIEW] Building screenDefinition from ${scadaWidgets.length} scadaWidgets');
+    
     // Transform scadaWidgets to widget instances
     final widgetInstances = scadaWidgets.map((sw) {
+      debugPrint('[SCADA-VIEW] Processing scadaWidget: ${sw['id']}');
+      
       // Get widget info (from related Widget model) - safe cast
       Map<String, dynamic>? widget;
       if (sw['widget'] is Map) {
         widget = Map<String, dynamic>.from(sw['widget'] as Map);
       }
       final widgetType = widget?['type'] as String? ?? 'valueDisplay';
+      debugPrint('[SCADA-VIEW] Widget type: $widgetType');
       
       // Get position data - safe cast
       Map<String, dynamic> position = {};
@@ -144,16 +182,45 @@ class ScadaView {
         properties = Map<String, dynamic>.from(sw['properties'] as Map);
       }
       
-      Map<String, dynamic> bindings = {};
-      if (sw['bindings'] is Map) {
-        bindings = Map<String, dynamic>.from(sw['bindings'] as Map);
+      // Backend returns dataBindings, but also support bindings for backwards compat
+      List<Map<String, dynamic>> bindings = [];
+      final rawBindings = sw['dataBindings'] ?? sw['bindings'];
+      debugPrint('[SCADA-VIEW] rawBindings type: ${rawBindings.runtimeType}, value: $rawBindings');
+      if (rawBindings is List) {
+        bindings = rawBindings
+            .whereType<Map>()
+            .map((b) => Map<String, dynamic>.from(b))
+            .toList();
+      } else if (rawBindings is Map) {
+        // Legacy format: convert Map to List
+        int index = 0;
+        rawBindings.forEach((key, value) {
+          if (value is Map) {
+            bindings.add({
+              'id': 'binding-$index',
+              'targetProperty': key,
+              'source': Map<String, dynamic>.from(value),
+            });
+            index++;
+          }
+        });
       }
+      debugPrint('[SCADA-VIEW] Parsed bindings: $bindings');
       
       List<Map<String, dynamic>> actions = [];
       if (sw['actions'] is List) {
         actions = (sw['actions'] as List)
             .whereType<Map>()
             .map((a) => Map<String, dynamic>.from(a))
+            .toList();
+      }
+      
+      // Parse events (new format)
+      List<Map<String, dynamic>> events = [];
+      if (sw['events'] is List) {
+        events = (sw['events'] as List)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
             .toList();
       }
       
@@ -176,9 +243,10 @@ class ScadaView {
           'opacity': 1.0,
         },
         'properties': mergedProperties,
-        'bindings': _transformBindings(bindings),
+        'bindings': bindings,  // Already in correct format from API
         'actions': _transformActions(actions),
-        'visible': sw['isVisible'] as bool? ?? true,
+        'events': events,  // Pass events directly
+        'visible': sw['isVisible'] as bool? ?? sw['visible'] as bool? ?? true,
       };
     }).toList();
     
@@ -204,39 +272,6 @@ class ScadaView {
       ],
       'variables': [],
     };
-  }
-  
-  /// Transform bindings from backend format to mobile format
-  /// Backend: { "value": { "deviceId": "xxx", "dataKey": "temperature", ... } }
-  /// Mobile: List of { id, targetProperty, source: { type, deviceId, key } }
-  static List<Map<String, dynamic>> _transformBindings(Map<String, dynamic> bindings) {
-    final transformed = <Map<String, dynamic>>[];
-    int index = 0;
-    
-    bindings.forEach((targetProperty, value) {
-      if (value is Map) {
-        final bindingMap = Map<String, dynamic>.from(value);
-        transformed.add({
-          'id': 'binding-$index',
-          'targetProperty': targetProperty,
-          'source': {
-            'type': bindingMap['type'] ?? 'telemetry',
-            'deviceId': bindingMap['deviceId'],
-            'key': bindingMap['dataKey'] ?? bindingMap['key'],
-          },
-          'format': bindingMap['multiplier'] != null || bindingMap['offset'] != null 
-            ? {
-                'multiplier': bindingMap['multiplier'] ?? 1.0,
-                'offset': bindingMap['offset'] ?? 0.0,
-                'decimalPlaces': bindingMap['decimalPlaces'] ?? 1,
-              }
-            : null,
-        });
-        index++;
-      }
-    });
-    
-    return transformed;
   }
   
   /// Transform actions from backend format to mobile format

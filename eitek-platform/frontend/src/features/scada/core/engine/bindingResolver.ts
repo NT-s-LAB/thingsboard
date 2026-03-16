@@ -160,16 +160,34 @@ function applyFormat(
   if (value === undefined || value === null) return undefined;
   if (!format) return value;
 
+  let current: DataValue = value;
+
+  // Apply multiplier first (shared with mobile)
+  if (format.multiplier !== undefined && typeof current === 'number') {
+    current = current * format.multiplier;
+  } else if (format.multiplier !== undefined) {
+    const num = Number(current);
+    if (!isNaN(num)) current = num * format.multiplier;
+  }
+
+  // Apply offset (shared with mobile)
+  if (format.offset !== undefined && typeof current === 'number') {
+    current = current + format.offset;
+  } else if (format.offset !== undefined) {
+    const num = Number(current);
+    if (!isNaN(num)) current = num + format.offset;
+  }
+
   // Value map (e.g. 0→"OFF", 1→"ON")
   if (format.valueMap) {
-    const mapped = format.valueMap[String(value)];
+    const mapped = format.valueMap[String(current)];
     if (mapped !== undefined) return mapped;
   }
 
   // Numeric formatting
   if (format.type === 'number') {
-    const num = Number(value);
-    if (isNaN(num)) return value;
+    const num = Number(current);
+    if (isNaN(num)) return current;
 
     let formatted = format.decimals !== undefined ? num.toFixed(format.decimals) : String(num);
     const prefix = format.prefix ?? '';
@@ -178,5 +196,5 @@ function applyFormat(
     return `${prefix}${formatted}${suffix}${unit}`;
   }
 
-  return value;
+  return current;
 }

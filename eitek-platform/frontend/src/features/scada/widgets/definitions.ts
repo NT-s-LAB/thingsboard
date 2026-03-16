@@ -14,7 +14,7 @@ import type { WidgetDefinition } from '../core/types';
 import { widgetRegistry } from '../core/registry';
 
 import { ValueDisplayRenderer } from './renderers/ValueDisplayRenderer';
-import { GaugeRenderer } from './renderers/GaugeRenderer';
+import { GaugeWidgetRenderer } from './gauge';
 import { TankRenderer } from './renderers/TankRenderer';
 import { PumpRenderer } from './renderers/PumpRenderer';
 import { ValveRenderer } from './renderers/ValveRenderer';
@@ -78,17 +78,44 @@ const gauge: WidgetDefinition = {
   defaultSize: { width: 160, height: 160 },
   supportsSvg: false,
   propSchema: [
+    // Variant
+    { key: 'variant', label: 'Variant', type: 'select', defaultValue: 'radial', options: [
+      { value: 'radial', label: 'Radial (270°)' },
+      { value: 'semicircle', label: 'Semicircle (180°)' },
+      { value: 'arc', label: 'Arc (240°)' },
+      { value: 'linear', label: 'Linear Bar' },
+    ]},
+    // Data
     { key: 'min', label: 'Min', type: 'number', defaultValue: 0 },
     { key: 'max', label: 'Max', type: 'number', defaultValue: 100 },
     { key: 'value', label: 'Value', type: 'number', defaultValue: 0 },
     { key: 'unit', label: 'Unit', type: 'string', defaultValue: '' },
-    { key: 'label', label: 'Label', type: 'string', defaultValue: '' },
-    { key: 'decimals', label: 'Decimals', type: 'number', defaultValue: 0, min: 0, max: 4, group: 'Display' },
-    { key: 'showValue', label: 'Show Value', type: 'boolean', defaultValue: true },
-    { key: 'showMinMax', label: 'Show Min/Max', type: 'boolean', defaultValue: true },
-    { key: 'gaugeType', label: 'Gauge Type', type: 'select', defaultValue: 'circular', options: [{ value: 'circular', label: 'Circular' }, { value: 'linear', label: 'Linear' }] },
-    { key: 'needleColor', label: 'Needle Color', type: 'color', defaultValue: '#1F2937', group: 'Appearance' },
-    { key: 'ranges', label: 'Ranges', type: 'json', defaultValue: [{ from: 0, to: 50, color: '#22C55E' }, { from: 50, to: 80, color: '#F59E0B' }, { from: 80, to: 100, color: '#EF4444' }], description: '[{ from, to, color }]' },
+    { key: 'precision', label: 'Decimals', type: 'number', defaultValue: 0, min: 0, max: 6 },
+    // Display
+    { key: 'title', label: 'Title', type: 'string', defaultValue: '', group: 'Display' },
+    { key: 'showTitle', label: 'Show Title', type: 'boolean', defaultValue: false, group: 'Display' },
+    { key: 'showValue', label: 'Show Value', type: 'boolean', defaultValue: true, group: 'Display' },
+    { key: 'showUnit', label: 'Show Unit', type: 'boolean', defaultValue: true, group: 'Display' },
+    { key: 'showMinMax', label: 'Show Min/Max', type: 'boolean', defaultValue: true, group: 'Display' },
+    { key: 'showNeedle', label: 'Show Needle', type: 'boolean', defaultValue: true, group: 'Display' },
+    // Geometry
+    { key: 'thickness', label: 'Thickness', type: 'number', defaultValue: 12, min: 4, max: 40, group: 'Geometry' },
+    { key: 'startAngle', label: 'Start Angle', type: 'number', defaultValue: 135, min: 0, max: 360, group: 'Geometry' },
+    { key: 'endAngle', label: 'End Angle', type: 'number', defaultValue: 405, min: 0, max: 720, group: 'Geometry' },
+    // Colors
+    { key: 'trackColor', label: 'Track Color', type: 'color', defaultValue: '#E5E7EB', group: 'Appearance' },
+    { key: 'fillColor', label: 'Fill Color', type: 'color', defaultValue: '#3B82F6', group: 'Appearance' },
+    { key: 'needleColor', label: 'Needle Color', type: 'color', defaultValue: '#374151', group: 'Appearance' },
+    { key: 'textColor', label: 'Text Color', type: 'color', defaultValue: '#1F2937', group: 'Appearance' },
+    { key: 'titleColor', label: 'Title Color', type: 'color', defaultValue: '#6B7280', group: 'Appearance' },
+    { key: 'backgroundColor', label: 'Background', type: 'color', defaultValue: 'transparent', group: 'Appearance' },
+    // Thresholds
+    { key: 'thresholdEnabled', label: 'Enable Thresholds', type: 'boolean', defaultValue: true, group: 'Thresholds' },
+    { key: 'thresholds', label: 'Thresholds', type: 'json', defaultValue: [
+      { value: 0, color: '#22C55E', label: 'Normal' },
+      { value: 60, color: '#F59E0B', label: 'Warning' },
+      { value: 80, color: '#EF4444', label: 'Critical' },
+    ], group: 'Thresholds', description: '[{ value, color, label }]' },
   ],
   bindingSchema: [
     { key: 'value', label: 'Value', valueType: 'number', suggestedKey: 'temperature' },
@@ -98,7 +125,7 @@ const gauge: WidgetDefinition = {
   actionSchema: [
     { trigger: 'click', label: 'On Click' },
   ],
-  renderer: GaugeRenderer,
+  renderer: GaugeWidgetRenderer,
 };
 
 // ─── TANK ────────────────────────────────────────────────────────────────────

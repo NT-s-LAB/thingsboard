@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "scada-action",
+  "title": "SCADA Action",
+  "description": "Discriminated-union action types. Keyed on 'type'.",
+  "type": "object",
+  "required": ["id", "type"],
+  "properties": {
+    "id": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "navigateToPage",
+        "goBack",
+        "goHome",
+        "openPopup",
+        "closePopup",
+        "rpcCall",
+        "setAttribute",
+        "setVariable",
+        "showNotification",
+        "customScript"
+      ]
+    },
+    "requireConfirm": { "type": "boolean", "default": false },
+    "confirmMessage": { "type": "string" },
+    "targetPageId": { "type": "string", "description": "For navigateToPage" },
+    "transition": { "type": "string", "enum": ["none", "fade", "slide"], "description": "For navigateToPage" },
+    "popupPageId": { "type": "string", "description": "For openPopup / closePopup" },
+    "params": { "type": "object", "description": "Optional params to pass to popup" },
+    "deviceId": { "type": "string", "description": "For rpcCall / setAttribute" },
+    "rpcMethod": { "type": "string", "description": "For rpcCall" },
+    "rpcParams": { "type": "object", "description": "For rpcCall" },
+    "rpcOneWay": { "type": "boolean", "default": true },
+    "rpcTimeout": { "type": "integer" },
+    "attributeScope": {
+      "type": "string",
+      "enum": ["SERVER_SCOPE", "CLIENT_SCOPE", "SHARED_SCOPE"],
+      "description": "For setAttribute"
+    },
+    "attributeKey": { "type": "string", "description": "For setAttribute" },
+    "attributeValue": { "description": "For setAttribute" },
+    "variableName": { "type": "string", "description": "For setVariable" },
+    "variableValue": { "description": "For setVariable" },
+    "scope": {
+      "type": "string",
+      "enum": ["page", "global"],
+      "description": "For setVariable"
+    },
+    "message": { "type": "string", "description": "For showNotification" },
+    "level": {
+      "type": "string",
+      "enum": ["success", "info", "warning", "error"],
+      "description": "For showNotification"
+    },
+    "durationMs": { "type": "integer", "description": "For showNotification" },
+    "script": { "type": "string", "description": "For customScript" }
+  }
+}

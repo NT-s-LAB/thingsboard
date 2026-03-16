@@ -1,0 +1,90 @@
+{
+  "$schema": "../widget.schema.json",
+  "_description": "Button with RPC action: click sends 'toggle' RPC to device",
+  "id": "btn_pump_toggle",
+  "type": "button",
+  "name": "Pump Toggle",
+  "layerId": "layer_main",
+  "transform": {
+    "position": { "x": 50, "y": 400 },
+    "size": { "width": 160, "height": 48 },
+    "rotation": 0,
+    "zIndex": 10
+  },
+  "properties": {
+    "text": "Toggle Pump",
+    "icon": "power",
+    "buttonColor": "#3B82F6",
+    "textColor": "#FFFFFF",
+    "borderRadius": 8
+  },
+  "bindings": [
+    {
+      "id": "bind_btn_text",
+      "targetProperty": "text",
+      "source": {
+        "type": "calculated",
+        "expression": "${pumpState}"
+      },
+      "format": {
+        "type": "string",
+        "valueMap": {
+          "true": "Stop Pump",
+          "false": "Start Pump",
+          "1": "Stop Pump",
+          "0": "Start Pump"
+        }
+      },
+      "defaultValue": "Toggle Pump"
+    },
+    {
+      "id": "bind_btn_color",
+      "targetProperty": "buttonColor",
+      "source": {
+        "type": "telemetry",
+        "entityType": "DEVICE",
+        "entityId": "device-pump-001",
+        "key": "pumpState"
+      },
+      "format": {
+        "type": "string",
+        "valueMap": {
+          "true": "#EF4444",
+          "false": "#22C55E",
+          "1": "#EF4444",
+          "0": "#22C55E"
+        }
+      },
+      "defaultValue": "#3B82F6"
+    }
+  ],
+  "events": [
+    {
+      "id": "evt_click",
+      "trigger": "onClick",
+      "enabled": true,
+      "actions": [
+        {
+          "id": "act_rpc_toggle",
+          "type": "rpcCall",
+          "deviceId": "device-pump-001",
+          "rpcMethod": "togglePump",
+          "rpcParams": {},
+          "rpcOneWay": true,
+          "requireConfirm": true,
+          "confirmMessage": "Are you sure you want to toggle the pump?"
+        },
+        {
+          "id": "act_notify",
+          "type": "showNotification",
+          "message": "Pump toggle command sent",
+          "level": "info",
+          "durationMs": 3000
+        }
+      ]
+    }
+  ],
+  "actions": [],
+  "visible": true,
+  "locked": false
+}

@@ -1,11 +1,21 @@
 // SCADA Renderer Engine
 //
 // Renders SCADA screens from JSON definitions using native Flutter widgets.
-// Handles widget positioning, binding resolution, and actions.
+// Handles widget positioning, binding resolution, and actions/events.
 
 import 'package:flutter/material.dart';
 import '../models/scada_screen.dart';
 import 'widget_registry.dart';
+
+/// Helper class for recursive descent arithmetic parser
+class _ParseResult {
+  final double value;
+  final int pos;
+  const _ParseResult(this.value, this.pos);
+}
+
+/// Event action callback - for navigation, popups, notifications
+typedef OnEventAction = void Function(ScadaEventAction action, Map<String, dynamic> context);
 
 /// SCADA Renderer - Main rendering engine
 class ScadaRenderer extends StatefulWidget {
@@ -15,11 +25,14 @@ class ScadaRenderer extends StatefulWidget {
   /// Telemetry data keyed by variable name
   final Map<String, dynamic> telemetryData;
 
-  /// Callback when action is triggered
+  /// Callback when action is triggered (legacy)
   final void Function(ScadaWidgetInstance widget, String trigger, Map<String, dynamic> params)? onAction;
 
   /// Callback to send command to device
   final void Function(String deviceId, String key, dynamic value)? onSendCommand;
+
+  /// Callback for event actions (navigation, popups, etc.)
+  final OnEventAction? onEventAction;
 
   /// Whether to show debug overlay
   final bool showDebug;
@@ -30,6 +43,7 @@ class ScadaRenderer extends StatefulWidget {
     this.telemetryData = const {},
     this.onAction,
     this.onSendCommand,
+    this.onEventAction,
     this.showDebug = false,
   });
 
@@ -183,87 +197,270 @@ class _ScadaRendererState extends State<ScadaRenderer> {
     final source = binding.source;
     dynamic rawValue;
 
-    // Get raw value from source
+    // Get raw value from source (match web bindingResolver.resolveRawValue logic)
     switch (source.type) {
       case 'telemetry':
+      case 'attribute':
         rawValue = _getTelemetryValue(source.deviceId, source.key ?? '');
         break;
-      case 'attribute':
-        rawValue = _getTelemetryValue(source.deviceId, 'attr_${source.key}');
-        break;
       case 'variable':
-        rawValue = widget.screen.variables
-            .firstWhere(
-              (v) => v.name == source.key,
-              orElse: () => ScadaVariable(name: '', type: '', defaultValue: null),
-            )
-            .defaultValue;
+        rawValue = _getVariableValue(source.key ?? '');
+        break;
+      case 'static':
+        rawValue = source.staticValue;
+        break;
+      case 'calculated':
+        rawValue = _evaluateExpression(source.expression);
         break;
       case 'constant':
-        rawValue = source.key; // Key is the constant value
+        rawValue = source.staticValue ?? source.key;
         break;
       default:
         rawValue = null;
     }
 
-    // Apply format transformations
+    // Apply format transformations (matching web applyFormat exactly)
     if (rawValue != null && binding.format != null) {
       rawValue = _applyFormat(rawValue, binding.format!);
+    }
+
+    // Fallback to default value if raw is still null
+    if (rawValue == null && binding.defaultValue != null) {
+      return binding.defaultValue;
     }
 
     return rawValue;
   }
 
   dynamic _getTelemetryValue(String? deviceId, String key) {
-    // Try exact key match
-    if (widget.telemetryData.containsKey(key)) {
-      return widget.telemetryData[key];
-    }
-
-    // Try with device prefix
-    if (deviceId != null) {
-      final prefixedKey = '${deviceId}_$key';
-      if (widget.telemetryData.containsKey(prefixedKey)) {
-        return widget.telemetryData[prefixedKey];
+    debugPrint('[SCADA] _getTelemetryValue: deviceId=$deviceId, key=$key');
+    debugPrint('[SCADA] Available keys: ${widget.telemetryData.keys.toList()}');
+    
+    // Match web format: entityId::key (SubscriptionManager cache key format)
+    if (deviceId != null && deviceId.isNotEmpty) {
+      final entityKey = '$deviceId::$key';
+      debugPrint('[SCADA] Looking for: $entityKey');
+      if (widget.telemetryData.containsKey(entityKey)) {
+        final value = widget.telemetryData[entityKey];
+        debugPrint('[SCADA] Found value: $value');
+        return value;
       }
     }
 
+    // Fallback: try exact key match
+    if (widget.telemetryData.containsKey(key)) {
+      final value = widget.telemetryData[key];
+      debugPrint('[SCADA] Found by key: $value');
+      return value;
+    }
+
+    debugPrint('[SCADA] Value not found!');
     return null;
   }
 
   dynamic _applyFormat(dynamic value, ScadaBindingFormat format) {
     if (value == null) return null;
 
-    // Apply decimals
-    if (value is num && format.decimals != null) {
-      value = double.parse(value.toStringAsFixed(format.decimals!));
-    }
+    dynamic current = value;
 
-    // Apply multiplier
-    if (value is num && format.multiplier != null) {
-      value = value * format.multiplier!;
+    // Apply multiplier first (matches web applyFormat order)
+    if (format.multiplier != null && current is num) {
+      current = current * format.multiplier!;
     }
 
     // Apply offset
-    if (value is num && format.offset != null) {
-      value = value + format.offset!;
+    if (format.offset != null && current is num) {
+      current = current + format.offset!;
     }
 
-    // Apply mapping
-    if (format.mapping != null && format.mapping!.containsKey(value.toString())) {
-      value = format.mapping![value.toString()];
+    // Value map (e.g. "0" → "OFF", "1" → "ON") — matches web format.valueMap
+    if (format.valueMap != null && format.valueMap!.isNotEmpty) {
+      final mapped = format.valueMap![current.toString()];
+      if (mapped != null) return mapped;
     }
 
-    return value;
+    // Numeric formatting (matches web format.type === 'number')
+    if (format.type == 'number' && current is num) {
+      String formatted;
+      if (format.decimals != null) {
+        formatted = current.toStringAsFixed(format.decimals!);
+      } else {
+        formatted = current.toString();
+      }
+      final prefix = format.prefix ?? '';
+      final suffix = format.suffix ?? '';
+      final unit = format.unit != null ? ' ${format.unit}' : '';
+      return '$prefix$formatted$suffix$unit';
+    }
+
+    // Apply decimals only (legacy path)
+    if (current is num && format.decimals != null) {
+      current = double.parse(current.toStringAsFixed(format.decimals!));
+    }
+
+    return current;
+  }
+
+  /// Get variable value from screen variables (matches web resolveRawValue for 'variable' type)
+  dynamic _getVariableValue(String variableName) {
+    for (final variable in widget.screen.variables) {
+      if (variable.name == variableName) {
+        // Check telemetry for runtime-updated variables
+        if (widget.telemetryData.containsKey('var::$variableName')) {
+          return widget.telemetryData['var::$variableName'];
+        }
+        return variable.defaultValue;
+      }
+    }
+    return null;
+  }
+
+  /// Evaluate calculated expression (matches web evaluateExpression)
+  /// Supports: ${entityId::key} and ${variableName} references
+  dynamic _evaluateExpression(String? expression) {
+    if (expression == null || expression.isEmpty) return null;
+
+    try {
+      String expr = expression;
+
+      // Replace ${entityId::key} references with actual values
+      final entityPattern = RegExp(r'\$\{([^:}]+)::([^}]+)\}');
+      expr = expr.replaceAllMapped(entityPattern, (match) {
+        final entityId = match.group(1)?.trim() ?? '';
+        final key = match.group(2)?.trim() ?? '';
+        final val = _getTelemetryValue(entityId, key);
+        return val?.toString() ?? '0';
+      });
+
+      // Replace ${variableName} references
+      final varPattern = RegExp(r'\$\{(\w+)\}');
+      expr = expr.replaceAllMapped(varPattern, (match) {
+        final name = match.group(1) ?? '';
+        // Try telemetry data first, then variables
+        if (widget.telemetryData.containsKey(name)) {
+          return widget.telemetryData[name]?.toString() ?? '0';
+        }
+        final val = _getVariableValue(name);
+        return val?.toString() ?? '0';
+      });
+
+      // Simple arithmetic evaluation (safe: only numbers and operators)
+      if (RegExp(r'^[\d\s+\-*/().]+$').hasMatch(expr)) {
+        return _evalArithmetic(expr);
+      }
+
+      return expr;
+    } catch (e) {
+      debugPrint('[SCADA] Expression eval error: $e');
+      return null;
+    }
+  }
+
+  /// Simple safe arithmetic evaluator (no dart eval, just basic ops)
+  double? _evalArithmetic(String expr) {
+    try {
+      // Remove whitespace
+      expr = expr.replaceAll(' ', '');
+      // Simple single-operation parsing for common cases
+      // For complex expressions, we'd need a proper parser
+      // This handles: "value * 1.8 + 32" patterns from the expression substitution
+      final num result = _parseExpression(expr, 0).value;
+      return result.toDouble();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Recursive descent parser for arithmetic expressions
+  _ParseResult _parseExpression(String expr, int pos) {
+    var result = _parseFactor(expr, pos);
+    
+    while (result.pos < expr.length) {
+      final op = expr[result.pos];
+      if (op == '+' || op == '-') {
+        final right = _parseFactor(expr, result.pos + 1);
+        result = _ParseResult(
+          op == '+' ? result.value + right.value : result.value - right.value,
+          right.pos,
+        );
+      } else if (op == '*' || op == '/') {
+        final right = _parseFactor(expr, result.pos + 1);
+        result = _ParseResult(
+          op == '*' ? result.value * right.value : result.value / right.value,
+          right.pos,
+        );
+      } else {
+        break;
+      }
+    }
+    return result;
+  }
+
+  _ParseResult _parseFactor(String expr, int pos) {
+    if (pos >= expr.length) return _ParseResult(0, pos);
+    
+    if (expr[pos] == '(') {
+      final result = _parseExpression(expr, pos + 1);
+      final endPos = result.pos < expr.length && expr[result.pos] == ')' ? result.pos + 1 : result.pos;
+      return _ParseResult(result.value, endPos);
+    }
+
+    // Parse number (including negative and decimal)
+    int end = pos;
+    if (end < expr.length && expr[end] == '-') end++;
+    while (end < expr.length && (expr.codeUnitAt(end) >= 48 && expr.codeUnitAt(end) <= 57 || expr[end] == '.')) {
+      end++;
+    }
+    if (end == pos) return _ParseResult(0, pos);
+    return _ParseResult(double.parse(expr.substring(pos, end)), end);
+  }
+
+  /// Normalize trigger name (click → onClick, change → onValueChange)
+  String _normalizeTrigger(String trigger) {
+    // Map from widget registry trigger to event trigger
+    switch (trigger) {
+      case 'click':
+        return 'onClick';
+      case 'doubleClick':
+        return 'onDoubleClick';
+      case 'change':
+        return 'onValueChange';
+      case 'toggle':
+        return 'onClick';
+      default:
+        // Already normalized or custom trigger
+        return trigger.startsWith('on') ? trigger : 'on${trigger[0].toUpperCase()}${trigger.substring(1)}';
+    }
   }
 
   void _handleAction(
-    ScadaWidgetInstance widget,
+    ScadaWidgetInstance widgetDef,
     String trigger,
-    Map<String, dynamic> params,
+    Map<String, dynamic> payload,
   ) {
-    // Find matching action
-    final action = widget.actions.firstWhere(
+    debugPrint('[SCADA-RENDERER] _handleAction: widget=${widgetDef.type}, trigger=$trigger');
+    debugPrint('[SCADA-RENDERER] Widget has ${widgetDef.events.length} events, ${widgetDef.actions.length} legacy actions');
+    
+    // First: Check for event-based actions (new format)
+    final normalizedTrigger = _normalizeTrigger(trigger);
+    debugPrint('[SCADA-RENDERER] Normalized trigger: $normalizedTrigger');
+    
+    for (final evt in widgetDef.events) {
+      debugPrint('[SCADA-RENDERER] Event: trigger=${evt.trigger}, enabled=${evt.enabled}, actions=${evt.actions.length}');
+    }
+    
+    final matchingEvent = widgetDef.events.where((e) => 
+        e.enabled && (e.trigger == trigger || e.trigger == normalizedTrigger)
+    ).firstOrNull;
+
+    if (matchingEvent != null && matchingEvent.actions.isNotEmpty) {
+      debugPrint('[SCADA-RENDERER] Found matching event! Executing ${matchingEvent.actions.length} actions');
+      _executeEventActions(widgetDef, matchingEvent.actions, payload);
+      return;
+    }
+
+    // Second: Fall back to legacy action format
+    final action = widgetDef.actions.firstWhere(
       (a) => a.trigger == trigger,
       orElse: () => ScadaAction(
         trigger: trigger,
@@ -274,27 +471,173 @@ class _ScadaRendererState extends State<ScadaRenderer> {
 
     if (action.type == 'none') {
       // No action defined, call general callback
-      this.widget.onAction?.call(widget, trigger, params);
+      widget.onAction?.call(widgetDef, trigger, payload);
       return;
     }
 
+    _executeLegacyAction(widgetDef, action, payload);
+  }
+
+  /// Execute event actions (new format from frontend)
+  void _executeEventActions(
+    ScadaWidgetInstance widgetDef,
+    List<ScadaEventAction> actions,
+    Map<String, dynamic> payload,
+  ) {
+    for (final action in actions) {
+      switch (action.type) {
+        case ActionTypes.navigateToPage:
+          widget.onEventAction?.call(action, {
+            'widgetId': widgetDef.id,
+            'targetPageId': action.targetPageId,
+          });
+          break;
+
+        case ActionTypes.goBack:
+          widget.onEventAction?.call(action, {'widgetId': widgetDef.id});
+          break;
+
+        case ActionTypes.goHome:
+          widget.onEventAction?.call(action, {'widgetId': widgetDef.id});
+          break;
+
+        case ActionTypes.openPopup:
+          widget.onEventAction?.call(action, {
+            'widgetId': widgetDef.id,
+            'popupPageId': action.popupPageId,
+          });
+          break;
+
+        case ActionTypes.closePopup:
+          widget.onEventAction?.call(action, {
+            'widgetId': widgetDef.id,
+            'popupPageId': action.popupPageId,
+          });
+          break;
+
+        case ActionTypes.rpcCall:
+          if (action.deviceId != null && action.rpcMethod != null) {
+            final params = <String, dynamic>{
+              ...?action.rpcParams,
+              ...payload,
+            };
+            widget.onSendCommand?.call(action.deviceId!, action.rpcMethod!, params);
+          }
+          break;
+
+        case ActionTypes.setAttribute:
+          if (action.deviceId != null && action.attributeKey != null) {
+            widget.onSendCommand?.call(action.deviceId!, 'setAttribute', {
+              'key': action.attributeKey,
+              'value': action.attributeValue ?? payload['value'],
+              'scope': action.attributeScope ?? 'SHARED_SCOPE',
+            });
+          }
+          break;
+
+        case ActionTypes.setVariable:
+          if (action.variableName != null) {
+            widget.onEventAction?.call(action, {
+              'widgetId': widgetDef.id,
+              'variableName': action.variableName,
+              'variableValue': action.variableValue ?? payload['value'],
+              'scope': action.variableScope ?? 'page',
+            });
+          }
+          break;
+
+        case ActionTypes.showNotification:
+          widget.onEventAction?.call(action, {
+            'widgetId': widgetDef.id,
+            'message': action.notificationMessage,
+            'level': action.notificationLevel ?? 'info',
+            'durationMs': action.notificationDurationMs ?? 3000,
+          });
+          break;
+
+        default:
+          // Pass to generic handler
+          widget.onEventAction?.call(action, payload);
+      }
+    }
+  }
+
+  /// Execute legacy action format
+  void _executeLegacyAction(
+    ScadaWidgetInstance widgetDef,
+    ScadaAction action,
+    Map<String, dynamic> payload,
+  ) {
+    final config = action.params;
+
+    // Match web RuntimeRenderer.handleAction switch cases
     switch (action.type) {
-      case 'sendCommand':
-        final deviceId = action.params['deviceId'] as String?;
-        final key = action.params['key'] as String?;
-        final value = action.params['value'] ?? params['value'];
-        if (deviceId != null && key != null) {
-          this.widget.onSendCommand?.call(deviceId, key, value);
+      case 'rpcCall':
+        // RPC call to device
+        final deviceId = config['deviceId'] as String?;
+        final rpcMethod = config['rpcMethod'] as String?;
+        final rpcParams = <String, dynamic>{
+          ...?config['rpcParams'] as Map<String, dynamic>?,
+          ...payload,
+        };
+        if (deviceId != null && rpcMethod != null) {
+          widget.onSendCommand?.call(deviceId, rpcMethod, rpcParams);
         }
         break;
-      case 'setValue':
-        // Setting local variable - would need state management
+        
+      case 'setAttribute':
+        // Set device attribute
+        final deviceId = config['deviceId'] as String?;
+        final attributeKey = config['attributeKey'] as String?;
+        final attributeValue = payload['value'] ?? config['attributeValue'];
+        if (deviceId != null && attributeKey != null) {
+          widget.onSendCommand?.call(deviceId, 'setAttribute', {
+            'key': attributeKey,
+            'value': attributeValue,
+            'scope': config['attributeScope'] ?? 'SHARED_SCOPE',
+          });
+        }
         break;
+        
+      case 'setVariable':
+        // Set screen variable (handled by onAction callback)
+        final variableName = config['variableName'] as String?;
+        final variableValue = payload['value'] ?? config['variableValue'];
+        if (variableName != null) {
+          widget.onAction?.call(widgetDef, 'setVariable', {
+            'name': variableName,
+            'value': variableValue,
+          });
+        }
+        break;
+        
       case 'navigate':
-        // Navigation to another screen
+        // Navigate to another screen/window
+        final targetWindowId = config['targetWindowId'] as String?;
+        if (targetWindowId != null) {
+          widget.onAction?.call(widgetDef, 'navigate', {
+            'windowId': targetWindowId,
+          });
+        }
         break;
+
+      // Legacy support
+      case 'sendCommand':
+        final deviceId = config['deviceId'] as String?;
+        final key = config['key'] as String?;
+        final value = payload['value'] ?? config['value'];
+        if (deviceId != null && key != null) {
+          widget.onSendCommand?.call(deviceId, key, value);
+        }
+        break;
+        
+      case 'setValue':
+        // Legacy: same as setVariable
+        widget.onAction?.call(widgetDef, action.trigger, {...config, ...payload});
+        break;
+        
       default:
-        this.widget.onAction?.call(widget, trigger, params);
+        widget.onAction?.call(widgetDef, action.trigger, payload);
     }
   }
 
@@ -364,12 +707,61 @@ class _ScadaRendererState extends State<ScadaRenderer> {
 /// Extension to parse screen definition from JSON
 extension ScadaScreenParser on ScadaScreenDefinition {
   static ScadaScreenDefinition fromJson(Map<String, dynamic> json) {
+    List<ScadaLayer> layers = _parseLayers(json['layers']);
+
+    // If layers exist but have zero widgets, check for root-level widgets
+    // (web frontend stores widgets at page level, not inside layers)
+    final totalWidgets = layers.fold<int>(0, (sum, l) => sum + l.widgets.length);
+    if (totalWidgets == 0 && json['widgets'] is List && (json['widgets'] as List).isNotEmpty) {
+      final rootWidgets = _parseWidgets(json['widgets']);
+      if (layers.isEmpty) {
+        layers = [
+          ScadaLayer(id: 'default', name: 'Default', widgets: rootWidgets, visible: true, locked: false),
+        ];
+      } else {
+        // Distribute widgets to layers by layerId
+        final layerMap = {for (final l in layers) l.id: <ScadaWidgetInstance>[]};
+        final orphans = <ScadaWidgetInstance>[];
+        for (final w in rootWidgets) {
+          // Get layerId from the raw JSON
+          final rawWidget = (json['widgets'] as List).firstWhere(
+            (raw) => raw is Map && raw['id'] == w.id,
+            orElse: () => null,
+          );
+          final layerId = rawWidget is Map ? rawWidget['layerId'] as String? : null;
+          if (layerId != null && layerMap.containsKey(layerId)) {
+            layerMap[layerId]!.add(w);
+          } else {
+            orphans.add(w);
+          }
+        }
+        // Rebuild layers with their widgets
+        layers = layers.map((l) {
+          final widgets = layerMap[l.id] ?? [];
+          return ScadaLayer(
+            id: l.id, name: l.name,
+            widgets: widgets,
+            visible: l.visible, locked: l.locked,
+          );
+        }).toList();
+        // Add orphans to first layer
+        if (orphans.isNotEmpty && layers.isNotEmpty) {
+          final first = layers.first;
+          layers[0] = ScadaLayer(
+            id: first.id, name: first.name,
+            widgets: [...first.widgets, ...orphans],
+            visible: first.visible, locked: first.locked,
+          );
+        }
+      }
+    }
+
     return ScadaScreenDefinition(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? 'Untitled',
       canvas: _parseSize(json['canvas']),
       background: _parseBackground(json['background']),
-      layers: _parseLayers(json['layers']),
+      layers: layers,
       variables: _parseVariables(json['variables']),
     );
   }
@@ -441,6 +833,7 @@ extension ScadaScreenParser on ScadaScreenDefinition {
           properties: item['properties'] as Map<String, dynamic>? ?? {},
           bindings: _parseBindings(item['bindings']),
           actions: _parseActions(item['actions']),
+          events: _parseEvents(item['events']),
           visible: item['visible'] as bool? ?? true,
           locked: item['locked'] as bool? ?? false,
         );
@@ -448,9 +841,19 @@ extension ScadaScreenParser on ScadaScreenDefinition {
       return ScadaWidgetInstance(
         id: '', type: 'unknown', name: '',
         transform: ScadaTransform.defaultTransform(),
-        properties: {}, bindings: [], actions: [],
+        properties: {}, bindings: [], actions: [], events: [],
         visible: true, locked: false,
       );
+    }).toList();
+  }
+
+  static List<WidgetEvent> _parseEvents(dynamic json) {
+    if (json == null || json is! List) return [];
+    return json.map<WidgetEvent>((item) {
+      if (item is Map<String, dynamic>) {
+        return WidgetEvent.fromJson(item);
+      }
+      return WidgetEvent(id: '', trigger: 'onClick', actions: [], enabled: true);
     }).toList();
   }
 
@@ -499,38 +902,38 @@ extension ScadaScreenParser on ScadaScreenDefinition {
           targetProperty: item['targetProperty'] as String? ?? '',
           source: _parseBindingSource(item['source']),
           format: _parseBindingFormat(item['format']),
+          transform: item['transform'] as String?,
+          defaultValue: item['defaultValue'],
         );
       }
       return ScadaBinding(
         id: '', targetProperty: '',
-        source: const ScadaBindingSource(type: 'constant'),
+        source: const ScadaBindingSource(type: 'static'),
         format: null,
       );
     }).toList();
   }
 
   static ScadaBindingSource _parseBindingSource(dynamic json) {
-    if (json == null) return const ScadaBindingSource(type: 'constant');
+    if (json == null) return const ScadaBindingSource(type: 'static');
     if (json is Map<String, dynamic>) {
       return ScadaBindingSource(
-        type: json['type'] as String? ?? 'constant',
-        deviceId: json['deviceId'] as String?,
-        key: json['key'] as String?,
+        type: json['type'] as String? ?? 'static',
+        entityType: json['entityType'] as String?,
+        deviceId: json['deviceId'] as String? ?? json['entityId'] as String?,
+        key: json['key'] as String? ?? json['dataKey'] as String?,
+        attributeScope: json['attributeScope'] as String?,
+        staticValue: json['staticValue'],
+        expression: json['expression'] as String?,
       );
     }
-    return const ScadaBindingSource(type: 'constant');
+    return const ScadaBindingSource(type: 'static');
   }
 
   static ScadaBindingFormat? _parseBindingFormat(dynamic json) {
     if (json == null) return null;
     if (json is Map<String, dynamic>) {
-      return ScadaBindingFormat(
-        decimals: json['decimals'] as int?,
-        unit: json['unit'] as String?,
-        multiplier: (json['multiplier'] as num?)?.toDouble(),
-        offset: (json['offset'] as num?)?.toDouble(),
-        mapping: json['mapping'] as Map<String, dynamic>?,
-      );
+      return ScadaBindingFormat.fromJson(json);
     }
     return null;
   }

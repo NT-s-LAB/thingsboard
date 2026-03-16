@@ -142,19 +142,61 @@ class ScadaScreenDefinition {
       layers = (json['layers'] as List)
           .map((e) => ScadaLayer.fromJson(e as Map<String, dynamic>))
           .toList();
-    } else if (json['widgets'] != null && json['widgets'] is List) {
-      // Create default layer with widgets from root
-      layers = [
-        ScadaLayer(
-          id: 'default',
-          name: 'Default',
-          widgets: (json['widgets'] as List)
-              .map((e) => ScadaWidgetInstance.fromJson(e as Map<String, dynamic>))
-              .toList(),
-          visible: true,
-          locked: false,
-        ),
-      ];
+    }
+    
+    // Check if layers have zero widgets but root-level widgets exist
+    // (web frontend stores widgets at page level with layerId references)
+    final totalLayerWidgets = layers.fold<int>(0, (sum, l) => sum + l.widgets.length);
+    if (totalLayerWidgets == 0 && json['widgets'] != null && json['widgets'] is List) {
+      final rootWidgets = (json['widgets'] as List)
+          .whereType<Map>()
+          .map((e) => ScadaWidgetInstance.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      
+      if (layers.isEmpty) {
+        layers = [
+          ScadaLayer(
+            id: 'default',
+            name: 'Default',
+            widgets: rootWidgets,
+            visible: true,
+            locked: false,
+          ),
+        ];
+      } else {
+        // Distribute widgets into layers by layerId
+        final rawWidgets = (json['widgets'] as List).whereType<Map>().toList();
+        final layerIds = layers.map((l) => l.id).toSet();
+        final layerWidgetsMap = <String, List<ScadaWidgetInstance>>{};
+        final orphans = <ScadaWidgetInstance>[];
+        
+        for (int i = 0; i < rootWidgets.length; i++) {
+          final rawW = rawWidgets[i];
+          final layerId = rawW['layerId'] as String?;
+          if (layerId != null && layerIds.contains(layerId)) {
+            layerWidgetsMap.putIfAbsent(layerId, () => []).add(rootWidgets[i]);
+          } else {
+            orphans.add(rootWidgets[i]);
+          }
+        }
+        
+        layers = layers.map((l) => ScadaLayer(
+          id: l.id,
+          name: l.name,
+          widgets: layerWidgetsMap[l.id] ?? [],
+          visible: l.visible,
+          locked: l.locked,
+        )).toList();
+        
+        if (orphans.isNotEmpty && layers.isNotEmpty) {
+          final first = layers.first;
+          layers[0] = ScadaLayer(
+            id: first.id, name: first.name,
+            widgets: [...first.widgets, ...orphans],
+            visible: first.visible, locked: first.locked,
+          );
+        }
+      }
     }
 
     return ScadaScreenDefinition(
@@ -236,6 +278,7 @@ class ScadaWidgetInstance {
   final Map<String, dynamic> properties;
   final List<ScadaBinding> bindings;
   final List<ScadaAction> actions;
+  final List<WidgetEvent> events;  // New: event-driven actions
   final bool visible;
   final bool locked;
 
@@ -247,6 +290,7 @@ class ScadaWidgetInstance {
     required this.properties,
     required this.bindings,
     required this.actions,
+    required this.events,
     this.visible = true,
     this.locked = false,
   });
@@ -276,13 +320,23 @@ class ScadaWidgetInstance {
       });
     }
     
-    // Parse actions
+    // Parse legacy actions
     List<ScadaAction> actions = [];
     final actionsRaw = json['actions'];
     if (actionsRaw is List) {
       actions = actionsRaw
           .whereType<Map>()
           .map((e) => ScadaAction.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+    
+    // Parse events (new format)
+    List<WidgetEvent> events = [];
+    final eventsRaw = json['events'];
+    if (eventsRaw is List) {
+      events = eventsRaw
+          .whereType<Map>()
+          .map((e) => WidgetEvent.fromJson(Map<String, dynamic>.from(e)))
           .toList();
     }
     
@@ -296,6 +350,7 @@ class ScadaWidgetInstance {
           : {},
       bindings: bindings,
       actions: actions,
+      events: events,
       visible: json['visible'] as bool? ?? true,
       locked: json['locked'] as bool? ?? false,
     );
@@ -320,12 +375,16 @@ class ScadaBinding {
   final String targetProperty;
   final ScadaBindingSource source;
   final ScadaBindingFormat? format;
+  final String? transform; // Post-processing expression
+  final dynamic defaultValue; // Fallback when source is unavailable
 
   const ScadaBinding({
     required this.id,
     required this.targetProperty,
     required this.source,
     this.format,
+    this.transform,
+    this.defaultValue,
   });
 
   factory ScadaBinding.fromJson(Map<String, dynamic> json) {
@@ -336,62 +395,224 @@ class ScadaBinding {
       format: json['format'] != null && json['format'] is Map
           ? ScadaBindingFormat.fromJson(Map<String, dynamic>.from(json['format'] as Map))
           : null,
+      transform: json['transform'] as String?,
+      defaultValue: json['defaultValue'],
     );
   }
 }
 
 class ScadaBindingSource {
-  final String type; // 'telemetry', 'attribute', 'variable', 'constant'
+  final String type; // 'telemetry', 'attribute', 'variable', 'static', 'calculated', 'alarm'
+  final String? entityType; // 'DEVICE', 'ASSET'
   final String? deviceId;
   final String? key;
+  final String? attributeScope; // 'SERVER_SCOPE', 'CLIENT_SCOPE', 'SHARED_SCOPE'
+  final dynamic staticValue;
+  final String? expression; // For calculated bindings
 
   const ScadaBindingSource({
     required this.type,
+    this.entityType,
     this.deviceId,
     this.key,
+    this.attributeScope,
+    this.staticValue,
+    this.expression,
   });
 
   factory ScadaBindingSource.fromJson(dynamic json) {
     if (json is! Map) {
-      return const ScadaBindingSource(type: 'constant');
+      return const ScadaBindingSource(type: 'static');
     }
     final map = Map<String, dynamic>.from(json);
     return ScadaBindingSource(
-      type: map['type'] as String? ?? 'constant',
+      type: map['type'] as String? ?? 'static',
+      entityType: map['entityType'] as String?,
       deviceId: map['deviceId'] as String? ?? map['entityId'] as String?,
       key: map['key'] as String? ?? map['dataKey'] as String?,
+      attributeScope: map['attributeScope'] as String?,
+      staticValue: map['staticValue'],
+      expression: map['expression'] as String?,
     );
   }
 }
 
 class ScadaBindingFormat {
+  final String? type; // 'number', 'string', 'date', 'boolean'
   final int? decimals;
   final String? unit;
+  final String? prefix;
+  final String? suffix;
+  final String? dateFormat;
   final double? multiplier;
   final double? offset;
-  final Map<String, dynamic>? mapping;
+  final Map<String, String>? valueMap;
 
   const ScadaBindingFormat({
+    this.type,
     this.decimals,
     this.unit,
+    this.prefix,
+    this.suffix,
+    this.dateFormat,
     this.multiplier,
     this.offset,
-    this.mapping,
+    this.valueMap,
   });
 
   factory ScadaBindingFormat.fromJson(Map<String, dynamic> json) {
+    // Parse valueMap 
+    Map<String, String>? valueMap;
+    if (json['valueMap'] is Map) {
+      valueMap = (json['valueMap'] as Map).map(
+        (k, v) => MapEntry(k.toString(), v.toString()),
+      );
+    }
+    // Also support old 'mapping' key
+    if (valueMap == null && json['mapping'] is Map) {
+      valueMap = (json['mapping'] as Map).map(
+        (k, v) => MapEntry(k.toString(), v.toString()),
+      );
+    }
+
     return ScadaBindingFormat(
+      type: json['type'] as String?,
       decimals: json['decimals'] as int?,
       unit: json['unit'] as String?,
+      prefix: json['prefix'] as String?,
+      suffix: json['suffix'] as String?,
+      dateFormat: json['dateFormat'] as String?,
       multiplier: (json['multiplier'] as num?)?.toDouble(),
       offset: (json['offset'] as num?)?.toDouble(),
-      mapping: json['mapping'] as Map<String, dynamic>?,
+      valueMap: valueMap,
     );
   }
 }
 
 // ─── Action ──────────────────────────────────────────────────────────────────
 
+/// Action types supported by SCADA (matches frontend ACTION_TYPES)
+class ActionTypes {
+  static const navigateToPage = 'navigateToPage';
+  static const goBack = 'goBack';
+  static const goHome = 'goHome';
+  static const openPopup = 'openPopup';
+  static const closePopup = 'closePopup';
+  static const rpcCall = 'rpcCall';
+  static const setAttribute = 'setAttribute';
+  static const setVariable = 'setVariable';
+  static const showNotification = 'showNotification';
+  static const customScript = 'customScript';
+}
+
+/// Event action that can be executed
+class ScadaEventAction {
+  final String id;
+  final String type;
+  final String? targetPageId;      // for navigateToPage
+  final String? popupPageId;       // for openPopup/closePopup
+  final String? deviceId;          // for rpcCall/setAttribute
+  final String? rpcMethod;         // for rpcCall
+  final Map<String, dynamic>? rpcParams;
+  final bool rpcOneWay;
+  final int? rpcTimeout;
+  final String? attributeScope;    // for setAttribute
+  final String? attributeKey;
+  final dynamic attributeValue;
+  final String? variableName;      // for setVariable
+  final dynamic variableValue;
+  final String? variableScope;     // 'page' | 'global'
+  final String? notificationMessage;  // for showNotification
+  final String? notificationLevel; // 'success' | 'info' | 'warning' | 'error'
+  final int? notificationDurationMs;
+  final bool requireConfirm;
+  final String? confirmMessage;
+
+  const ScadaEventAction({
+    required this.id,
+    required this.type,
+    this.targetPageId,
+    this.popupPageId,
+    this.deviceId,
+    this.rpcMethod,
+    this.rpcParams,
+    this.rpcOneWay = true,
+    this.rpcTimeout,
+    this.attributeScope,
+    this.attributeKey,
+    this.attributeValue,
+    this.variableName,
+    this.variableValue,
+    this.variableScope,
+    this.notificationMessage,
+    this.notificationLevel,
+    this.notificationDurationMs,
+    this.requireConfirm = false,
+    this.confirmMessage,
+  });
+
+  factory ScadaEventAction.fromJson(Map<String, dynamic> json) {
+    return ScadaEventAction(
+      id: json['id'] as String? ?? '',
+      type: json['type'] as String? ?? 'none',
+      targetPageId: json['targetPageId'] as String?,
+      popupPageId: json['popupPageId'] as String?,
+      deviceId: json['deviceId'] as String?,
+      rpcMethod: json['rpcMethod'] as String?,
+      rpcParams: json['rpcParams'] is Map 
+          ? Map<String, dynamic>.from(json['rpcParams'] as Map) 
+          : null,
+      rpcOneWay: json['rpcOneWay'] as bool? ?? true,
+      rpcTimeout: json['rpcTimeout'] as int?,
+      attributeScope: json['attributeScope'] as String?,
+      attributeKey: json['attributeKey'] as String?,
+      attributeValue: json['attributeValue'],
+      variableName: json['variableName'] as String?,
+      variableValue: json['variableValue'],
+      variableScope: json['scope'] as String? ?? json['variableScope'] as String?,
+      notificationMessage: json['message'] as String?,
+      notificationLevel: json['level'] as String?,
+      notificationDurationMs: json['durationMs'] as int?,
+      requireConfirm: json['requireConfirm'] as bool? ?? false,
+      confirmMessage: json['confirmMessage'] as String?,
+    );
+  }
+}
+
+/// Widget event that contains trigger and actions
+class WidgetEvent {
+  final String id;
+  final String trigger;  // 'onClick', 'onDoubleClick', 'onValueChange', etc.
+  final List<ScadaEventAction> actions;
+  final bool enabled;
+
+  const WidgetEvent({
+    required this.id,
+    required this.trigger,
+    required this.actions,
+    this.enabled = true,
+  });
+
+  factory WidgetEvent.fromJson(Map<String, dynamic> json) {
+    final actionsRaw = json['actions'];
+    List<ScadaEventAction> actions = [];
+    if (actionsRaw is List) {
+      actions = actionsRaw
+          .whereType<Map>()
+          .map((e) => ScadaEventAction.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+
+    return WidgetEvent(
+      id: json['id'] as String? ?? '',
+      trigger: json['trigger'] as String? ?? 'onClick',
+      actions: actions,
+      enabled: json['enabled'] as bool? ?? true,
+    );
+  }
+}
+
+/// Legacy action format (for backward compatibility)
 class ScadaAction {
   final String trigger; // 'click', 'toggle', 'change', etc.
   final String type; // 'sendCommand', 'setValue', 'navigate', 'none'

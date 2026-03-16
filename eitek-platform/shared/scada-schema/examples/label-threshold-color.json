@@ -1,0 +1,67 @@
+{
+  "$schema": "../widget.schema.json",
+  "_description": "Label/text that changes color based on temperature thresholds",
+  "id": "label_temp_status",
+  "type": "text",
+  "name": "Temperature Status",
+  "layerId": "layer_main",
+  "transform": {
+    "position": { "x": 300, "y": 50 },
+    "size": { "width": 200, "height": 40 },
+    "rotation": 0,
+    "zIndex": 5
+  },
+  "properties": {
+    "text": "Loading...",
+    "fontSize": 18,
+    "fontWeight": "bold",
+    "color": "#6B7280",
+    "alignment": "center"
+  },
+  "bindings": [
+    {
+      "id": "bind_label_text",
+      "targetProperty": "text",
+      "source": {
+        "type": "telemetry",
+        "entityType": "DEVICE",
+        "entityId": "device-sensor-001",
+        "key": "temperature"
+      },
+      "format": {
+        "type": "number",
+        "decimals": 1,
+        "suffix": " °C",
+        "prefix": "Temp: "
+      },
+      "defaultValue": "N/A"
+    },
+    {
+      "id": "bind_label_color",
+      "targetProperty": "color",
+      "source": {
+        "type": "telemetry",
+        "entityType": "DEVICE",
+        "entityId": "device-sensor-001",
+        "key": "temperature"
+      },
+      "transform": "threshold",
+      "format": {
+        "type": "string",
+        "valueMap": {}
+      },
+      "defaultValue": "#6B7280",
+      "_thresholdConfig": {
+        "thresholds": [
+          { "maxValue": 60, "color": "#22C55E" },
+          { "maxValue": 80, "color": "#F59E0B" },
+          { "maxValue": 999, "color": "#EF4444" }
+        ]
+      }
+    }
+  ],
+  "events": [],
+  "actions": [],
+  "visible": true,
+  "locked": false
+}

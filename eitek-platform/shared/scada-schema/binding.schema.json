@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "scada-binding",
+  "title": "SCADA Widget Binding",
+  "description": "Connects a data source to a widget property.",
+  "type": "object",
+  "required": ["id", "targetProperty", "source"],
+  "properties": {
+    "id": { "type": "string" },
+    "targetProperty": {
+      "type": "string",
+      "description": "Widget property this binding writes to (e.g. 'value', 'text', 'color', 'visible', 'enabled', 'state', 'level')"
+    },
+    "source": { "$ref": "#/definitions/BindingSource" },
+    "transform": {
+      "type": "string",
+      "description": "Post-processing expression (e.g. '${value} * 1.8 + 32')"
+    },
+    "format": { "$ref": "#/definitions/BindingFormat" },
+    "defaultValue": {
+      "description": "Fallback value when source is unavailable"
+    }
+  },
+  "definitions": {
+    "BindingSource": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["telemetry", "attribute", "variable", "static", "calculated", "alarm"],
+          "description": "Source type"
+        },
+        "entityType": {
+          "type": "string",
+          "enum": ["DEVICE", "ASSET"]
+        },
+        "entityId": { "type": "string" },
+        "entityName": { "type": "string" },
+        "key": { "type": "string", "description": "Telemetry key, attribute key, or variable name" },
+        "attributeScope": {
+          "type": "string",
+          "enum": ["SERVER_SCOPE", "CLIENT_SCOPE", "SHARED_SCOPE"]
+        },
+        "staticValue": { "description": "Literal value for static bindings" },
+        "expression": { "type": "string", "description": "Expression for calculated bindings (e.g. '${deviceId::temp} * 1.8 + 32')" }
+      }
+    },
+    "BindingFormat": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["number", "string", "date", "boolean"]
+        },
+        "decimals": { "type": "integer" },
+        "unit": { "type": "string" },
+        "prefix": { "type": "string" },
+        "suffix": { "type": "string" },
+        "dateFormat": { "type": "string" },
+        "valueMap": {
+          "type": "object",
+          "description": "Map value → display string (e.g. { \"0\": \"OFF\", \"1\": \"ON\" })"
+        },
+        "multiplier": { "type": "number", "description": "Multiply numeric value" },
+        "offset": { "type": "number", "description": "Add offset to numeric value" }
+      }
+    }
+  }
+}

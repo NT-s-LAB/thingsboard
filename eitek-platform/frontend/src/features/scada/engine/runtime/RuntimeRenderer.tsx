@@ -18,6 +18,8 @@ import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
 import { AlarmOverlay } from './AlarmOverlay';
 import type { ScreenDefinition, WidgetInstance } from '../../core/types';
 import type { CommandRequest } from '../../core/types/command.types';
+import type { WidgetEvent } from '../../core/types/project.types';
+import { executeActions } from './actionEngine';
 import '../../styles/scada.css';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -159,9 +161,29 @@ export const RuntimeRenderer: React.FC<RuntimeRendererProps> = ({
   }, [screen?.id, screen?.version, connected]);
 
   // ── Action handler ──
+  // Normalize trigger name: 'click' → 'onClick', 'doubleClick' → 'onDoubleClick'
+  const normalizeToEventTrigger = (trigger: string): string => {
+    if (trigger.startsWith('on')) return trigger;
+    return `on${trigger.charAt(0).toUpperCase()}${trigger.slice(1)}`;
+  };
+
   const handleAction = useCallback(
     (widget: WidgetInstance, trigger: string, payload?: Record<string, unknown>) => {
-      const action = widget.actions.find((a) => a.trigger === trigger);
+      // 1. Try new event system first (WidgetEvent[])
+      const widgetWithEvents = widget as WidgetInstance & { events?: WidgetEvent[] };
+      const events = widgetWithEvents.events ?? [];
+      const normalizedTrigger = normalizeToEventTrigger(trigger);
+      const matchingEvent = events.find(
+        (e) => e.enabled && (e.trigger === normalizedTrigger || e.trigger === trigger),
+      );
+
+      if (matchingEvent && matchingEvent.actions.length > 0) {
+        executeActions(matchingEvent.actions, { widgetId: widget.id, payload: payload ?? {} });
+        return;
+      }
+
+      // 2. Fall back to legacy action system (WidgetActionInstance[])
+      const action = widget.actions.find((a) => a.trigger === trigger || a.trigger === normalizedTrigger);
       if (!action) return;
 
       const config = action.config;

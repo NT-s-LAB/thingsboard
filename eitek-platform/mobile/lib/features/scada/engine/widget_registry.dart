@@ -117,16 +117,42 @@ class ScadaWidgetRegistry {
     });
 
     register('gauge', (widget, props, onAction) {
+      // Match web: showTitle defaults to true if title or label is present
+      final title = props['title'] as String? ?? '';
+      final label = props['label'] as String? ?? '';
+      final hasTitle = title.isNotEmpty || label.isNotEmpty;
+      final showTitle = props['showTitle'] as bool? ?? hasTitle;
+      
       return GaugeWidget(
+        variant: _parseGaugeVariant(props['variant']),
         value: (props['value'] as num?)?.toDouble() ?? 0,
         minValue: (props['min'] as num?)?.toDouble() ?? 0,
         maxValue: (props['max'] as num?)?.toDouble() ?? 100,
         unit: props['unit'] as String? ?? '',
-        label: props['label'] as String? ?? '',
-        decimals: props['decimals'] as int? ?? 0,
+        title: title.isNotEmpty ? title : label,
+        precision: props['precision'] as int? ?? 0,
+        showTitle: showTitle,
         showValue: props['showValue'] as bool? ?? true,
+        showUnit: props['showUnit'] as bool? ?? true,
         showMinMax: props['showMinMax'] as bool? ?? true,
+        showNeedle: props['showNeedle'] as bool? ?? true,
+        thickness: (props['thickness'] as num?)?.toDouble() ?? 12,
+        startAngle: (props['startAngle'] as num?)?.toDouble() ?? 135,
+        endAngle: (props['endAngle'] as num?)?.toDouble() ?? 405,
+        trackColor: _parseColor(props['trackColor'], Colors.grey[300]!),
+        fillColor: _parseColor(props['fillColor'], Colors.blue),
+        backgroundColor: props['backgroundColor'] != null
+            ? _parseColor(props['backgroundColor'], Colors.transparent)
+            : null,
         needleColor: _parseColor(props['needleColor'], Colors.grey[800]!),
+        textColor: _parseColor(props['textColor'], Colors.grey[800]!),
+        titleColor: _parseColor(props['titleColor'], Colors.grey[600]!),
+        thresholdEnabled: props['thresholdEnabled'] as bool? ?? true,
+        thresholds: _parseGaugeThresholds(props['thresholds']),
+        needleWidth: (props['needleWidth'] as num?)?.toDouble() ?? 3,
+        // Legacy support
+        label: label,
+        decimals: props['decimals'] as int?,
         ranges: _parseGaugeRanges(props['ranges']),
         onTap: onAction != null ? () => onAction('click', {}) : null,
       );
@@ -351,6 +377,32 @@ class ScadaWidgetRegistry {
         );
       }
       return GaugeRange(from: 0, to: 100, color: Colors.grey);
+    }).toList();
+  }
+
+  GaugeVariant _parseGaugeVariant(dynamic value) {
+    switch (value) {
+      case 'semicircle':
+        return GaugeVariant.semicircle;
+      case 'arc':
+        return GaugeVariant.arc;
+      case 'linear':
+        return GaugeVariant.linear;
+      case 'radial':
+      default:
+        return GaugeVariant.radial;
+    }
+  }
+
+  List<GaugeThreshold> _parseGaugeThresholds(dynamic value) {
+    if (value == null || value is! List) {
+      return defaultThresholds;
+    }
+    return value.map<GaugeThreshold>((item) {
+      if (item is Map<String, dynamic>) {
+        return GaugeThreshold.fromJson(item);
+      }
+      return const GaugeThreshold(value: 0, color: Color(0xFF22C55E));
     }).toList();
   }
 
