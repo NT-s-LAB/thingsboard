@@ -57,9 +57,9 @@ class SwitchWidgetScada extends StatelessWidget {
                   height: 28,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
-                    color: state ? onColor : offColor.withOpacity(0.4),
+                    color: state ? onColor : offColor.withValues(alpha: 0.4),
                     border: Border.all(
-                      color: state ? onColor.withOpacity(0.8) : offColor,
+                      color: state ? onColor.withValues(alpha: 0.8) : offColor,
                       width: 2,
                     ),
                   ),
@@ -78,7 +78,7 @@ class SwitchWidgetScada extends StatelessWidget {
                             color: Colors.white,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
+                                color: Colors.black.withValues(alpha: 0.2),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2),
                               ),

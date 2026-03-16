@@ -78,7 +78,7 @@ class TankWidget extends StatelessWidget {
                         alignment: Alignment.bottomCenter,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: currentFillColor.withOpacity(0.7),
+                            color: currentFillColor.withValues(alpha: 0.7),
                             borderRadius: const BorderRadius.only(
                               bottomLeft: Radius.circular(2),
                               bottomRight: Radius.circular(2),
@@ -97,7 +97,7 @@ class TankWidget extends StatelessWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.85),
+                              color: Colors.white.withValues(alpha: 0.85),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -141,7 +141,7 @@ class TankWidget extends StatelessWidget {
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: Colors.grey.withOpacity(0.3),
+                      color: Colors.grey.withValues(alpha: 0.3),
                       width: 1,
                     ),
                   ),

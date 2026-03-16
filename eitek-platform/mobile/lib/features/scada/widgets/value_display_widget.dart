@@ -61,7 +61,7 @@ class ValueDisplayWidget extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 11,
-                  color: textColor.withOpacity(0.7),
+                  color: textColor.withValues(alpha: 0.7),
                   fontWeight: FontWeight.w500,
                 ),
                 maxLines: 1,
@@ -86,7 +86,7 @@ class ValueDisplayWidget extends StatelessWidget {
                 unit,
                 style: TextStyle(
                   fontSize: 10,
-                  color: textColor.withOpacity(0.6),
+                  color: textColor.withValues(alpha: 0.6),
                 ),
               ),
             ],

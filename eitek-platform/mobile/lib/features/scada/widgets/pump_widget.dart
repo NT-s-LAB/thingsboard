@@ -106,7 +106,7 @@ class _PumpWidgetState extends State<PumpWidget>
                       height: size * 0.8,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _currentColor.withOpacity(0.2),
+                        color: _currentColor.withValues(alpha: 0.2),
                         border: Border.all(
                           color: _currentColor,
                           width: 3,
@@ -163,7 +163,7 @@ class _PumpWidgetState extends State<PumpWidget>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: _currentColor.withOpacity(0.15),
+              color: _currentColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(

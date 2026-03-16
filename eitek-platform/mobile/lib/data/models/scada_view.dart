@@ -1,7 +1,7 @@
-/// SCADA View Model
-/// 
-/// Represents a SCADA view/screen from the backend.
-/// Contains screen definition for native rendering.
+// SCADA View Model
+// 
+// Represents a SCADA view/screen from the backend.
+// Contains screen definition for native rendering.
 
 class ScadaView {
   final String id;
@@ -152,8 +152,8 @@ class ScadaView {
       List<Map<String, dynamic>> actions = [];
       if (sw['actions'] is List) {
         actions = (sw['actions'] as List)
-            .where((a) => a is Map)
-            .map((a) => Map<String, dynamic>.from(a as Map))
+            .whereType<Map>()
+            .map((a) => Map<String, dynamic>.from(a))
             .toList();
       }
       

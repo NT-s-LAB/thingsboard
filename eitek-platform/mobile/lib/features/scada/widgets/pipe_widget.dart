@@ -103,7 +103,7 @@ class _PipePainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final borderPaint = Paint()
-      ..color = pipeColor.withOpacity(0.8)
+      ..color = pipeColor.withValues(alpha: 0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 
@@ -150,7 +150,7 @@ class _PipePainter extends CustomPainter {
 
   void _drawFlowIndicators(Canvas canvas, Size size, double pipeTop, double pipeHeight) {
     final fluidPaint = Paint()
-      ..color = fluidColor.withOpacity(0.6)
+      ..color = fluidColor.withValues(alpha: 0.6)
       ..style = PaintingStyle.fill;
 
     final indicatorWidth = 8.0;
@@ -176,7 +176,7 @@ class _PipePainter extends CustomPainter {
 
   void _drawVerticalFlowIndicators(Canvas canvas, Size size, double pipeLeft, double pipeWidth) {
     final fluidPaint = Paint()
-      ..color = fluidColor.withOpacity(0.6)
+      ..color = fluidColor.withValues(alpha: 0.6)
       ..style = PaintingStyle.fill;
 
     final indicatorHeight = 8.0;

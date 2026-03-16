@@ -11,8 +11,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final themeState = ref.watch(themeProvider);
-    final isDark = ref.watch(themeProvider.notifier).isDarkMode;
+    final isDark = ref.watch(isDarkModeProvider);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -113,7 +112,7 @@ class SettingsScreen extends ConsumerWidget {
                         value ? AppThemeMode.dark : AppThemeMode.light,
                       );
                     },
-                    activeColor: colorScheme.primary,
+                    activeTrackColor: colorScheme.primary,
                   ),
                 ),
               ],

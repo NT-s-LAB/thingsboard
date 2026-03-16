@@ -65,9 +65,9 @@ class ScadaSliderWidget extends StatelessWidget {
               child: SliderTheme(
                 data: SliderThemeData(
                   activeTrackColor: activeColor,
-                  inactiveTrackColor: activeColor.withOpacity(0.2),
+                  inactiveTrackColor: activeColor.withValues(alpha: 0.2),
                   thumbColor: activeColor,
-                  overlayColor: activeColor.withOpacity(0.2),
+                  overlayColor: activeColor.withValues(alpha: 0.2),
                   trackHeight: 6,
                   thumbShape: const RoundSliderThumbShape(
                     enabledThumbRadius: 10,

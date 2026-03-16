@@ -63,18 +63,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<bool> login(String email, String password) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
-    print('🔐 [AUTH] Login attempt: $email');
     developer.log('🔐 Login attempt: $email', name: 'AUTH');
 
     try {
       final response = await _repository.login(email, password);
-      print('✅ [AUTH] Login success: ${response.user.email}');
       developer.log('✅ Login success: ${response.user.email}', name: 'AUTH');
       state = AuthState(status: AuthStatus.authenticated, user: response.user);
       return true;
     } catch (e, stackTrace) {
-      print('❌ [AUTH] Login error: $e');
-      print('❌ [AUTH] Stack trace: $stackTrace');
       developer.log('❌ Login error: $e', name: 'AUTH', error: e, stackTrace: stackTrace);
       String message = 'Đăng nhập thất bại: $e';
       if (e.toString().contains('401')) {

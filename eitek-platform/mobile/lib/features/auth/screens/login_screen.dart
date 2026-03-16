@@ -110,6 +110,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             onPressed: () async {
               final host = hostController.text.trim();
               final port = int.tryParse(portController.text.trim()) ?? 3001;
+              final nav = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
               
               if (host.isNotEmpty) {
                 await storage.saveServerHost(host);
@@ -118,15 +120,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 // Update API client base URL
                 ref.read(apiClientProvider).updateBaseUrl();
                 
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Đã cập nhật: http://$host:$port'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                }
+                nav.pop();
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Đã cập nhật: http://$host:$port'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
               }
             },
             child: const Text('Lưu'),

@@ -1,7 +1,7 @@
-/// SCADA Widget Registry
-///
-/// Maps widget type strings to Flutter widget builders.
-/// This enables dynamic rendering of SCADA screens from JSON definitions.
+// SCADA Widget Registry
+//
+// Maps widget type strings to Flutter widget builders.
+// This enables dynamic rendering of SCADA screens from JSON definitions.
 
 import 'package:flutter/material.dart';
 import '../models/scada_screen.dart';

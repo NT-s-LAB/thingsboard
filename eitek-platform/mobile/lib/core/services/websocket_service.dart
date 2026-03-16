@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../constants/app_constants.dart';
 import 'storage_service.dart';
 
 /// WebSocket Service for realtime data
 class WebSocketService {
-  IO.Socket? _socket;
+  io.Socket? _socket;
   final StorageService _storage;
   bool _connected = false;
 
@@ -19,9 +19,9 @@ class WebSocketService {
     final token = await _storage.getAccessToken();
     if (token == null) return;
 
-    _socket = IO.io(
+    _socket = io.io(
       AppConstants.wsBaseUrl,
-      IO.OptionBuilder()
+      io.OptionBuilder()
           .setTransports(['websocket'])
           .setAuth({'token': token})
           .enableAutoConnect()
@@ -33,16 +33,16 @@ class WebSocketService {
 
     _socket!.onConnect((_) {
       _connected = true;
-      print('WebSocket connected');
+      // WebSocket connected
     });
 
     _socket!.onDisconnect((_) {
       _connected = false;
-      print('WebSocket disconnected');
+      // WebSocket disconnected
     });
 
     _socket!.onError((error) {
-      print('WebSocket error: $error');
+      // WebSocket error: $error
     });
 
     // Handle telemetry updates

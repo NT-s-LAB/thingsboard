@@ -1,7 +1,7 @@
-/// SCADA Screen Definition Models
-///
-/// Dart models for native Flutter SCADA renderer.
-/// Matches the ScadaRenderer expectations.
+// SCADA Screen Definition Models
+//
+// Dart models for native Flutter SCADA renderer.
+// Matches the ScadaRenderer expectations.
 
 // ─── Geometry ────────────────────────────────────────────────────────────────
 
@@ -257,8 +257,8 @@ class ScadaWidgetInstance {
     final bindingsRaw = json['bindings'];
     if (bindingsRaw is List) {
       bindings = bindingsRaw
-          .where((e) => e is Map)
-          .map((e) => ScadaBinding.fromJson(Map<String, dynamic>.from(e as Map)))
+          .whereType<Map>()
+          .map((e) => ScadaBinding.fromJson(Map<String, dynamic>.from(e)))
           .toList();
     } else if (bindingsRaw is Map) {
       // Convert Map format { "value": {...} } to List format
@@ -281,8 +281,8 @@ class ScadaWidgetInstance {
     final actionsRaw = json['actions'];
     if (actionsRaw is List) {
       actions = actionsRaw
-          .where((e) => e is Map)
-          .map((e) => ScadaAction.fromJson(Map<String, dynamic>.from(e as Map)))
+          .whereType<Map>()
+          .map((e) => ScadaAction.fromJson(Map<String, dynamic>.from(e)))
           .toList();
     }
     

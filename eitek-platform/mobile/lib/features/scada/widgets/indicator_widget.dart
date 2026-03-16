@@ -117,13 +117,13 @@ class _IndicatorWidgetState extends State<IndicatorWidget>
                       width: size,
                       height: size,
                       decoration: BoxDecoration(
-                        color: _currentColor.withOpacity(0.2),
+                        color: _currentColor.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                         border: Border.all(color: _currentColor, width: 2),
                         boxShadow: widget.state == 'alarm'
                             ? [
                                 BoxShadow(
-                                  color: _currentColor.withOpacity(0.4),
+                                  color: _currentColor.withValues(alpha: 0.4),
                                   blurRadius: 10,
                                   spreadRadius: 2,
                                 ),
@@ -157,7 +157,7 @@ class _IndicatorWidgetState extends State<IndicatorWidget>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: _currentColor.withOpacity(0.15),
+              color: _currentColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(

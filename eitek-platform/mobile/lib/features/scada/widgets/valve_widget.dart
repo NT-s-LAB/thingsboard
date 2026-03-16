@@ -86,7 +86,7 @@ class ValveWidget extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: _currentColor.withOpacity(0.15),
+              color: _currentColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -168,7 +168,7 @@ class _ValvePainter extends CustomPainter {
 
     // Draw center circle
     final centerPaint = Paint()
-      ..color = state == 'closed' ? Colors.white : color.withOpacity(0.5)
+      ..color = state == 'closed' ? Colors.white : color.withValues(alpha: 0.5)
       ..style = PaintingStyle.fill;
     
     canvas.drawCircle(center, valveSize * 0.3, centerPaint);

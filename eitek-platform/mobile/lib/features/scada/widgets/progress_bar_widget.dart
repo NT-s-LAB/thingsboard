@@ -62,7 +62,7 @@ class ProgressBarWidget extends StatelessWidget {
         if (showValue) ...[
           const SizedBox(height: 4),
           Text(
-            '${value.toStringAsFixed(1)}',
+            value.toStringAsFixed(1),
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,

@@ -114,14 +114,14 @@ class _LedWidgetState extends State<LedWidget>
                       boxShadow: widget.state
                           ? [
                               BoxShadow(
-                                color: _currentColor.withOpacity(0.6),
+                                color: _currentColor.withValues(alpha: 0.6),
                                 blurRadius: 8,
                                 spreadRadius: 2,
                               ),
                             ]
                           : null,
                       border: Border.all(
-                        color: _currentColor.withOpacity(0.8),
+                        color: _currentColor.withValues(alpha: 0.8),
                         width: 2,
                       ),
                     ),

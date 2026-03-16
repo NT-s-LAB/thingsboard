@@ -1,7 +1,6 @@
-/// SCADA Feature Module Exports
-/// 
-/// Native Flutter SCADA Renderer for realtime industrial monitoring.
-library scada;
+// SCADA Feature Module Exports
+// 
+// Native Flutter SCADA Renderer for realtime industrial monitoring.
 
 // Models
 export 'models/scada_screen.dart';

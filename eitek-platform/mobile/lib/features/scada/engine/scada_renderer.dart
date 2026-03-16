@@ -1,7 +1,7 @@
-/// SCADA Renderer Engine
-///
-/// Renders SCADA screens from JSON definitions using native Flutter widgets.
-/// Handles widget positioning, binding resolution, and actions.
+// SCADA Renderer Engine
+//
+// Renders SCADA screens from JSON definitions using native Flutter widgets.
+// Handles widget positioning, binding resolution, and actions.
 
 import 'package:flutter/material.dart';
 import '../models/scada_screen.dart';
@@ -145,7 +145,7 @@ class _ScadaRendererState extends State<ScadaRenderer> {
         alignment: Alignment.center,
         transform: Matrix4.identity()
           ..rotateZ(transform.rotation * 3.14159 / 180)
-          ..scale(transform.scale.x, transform.scale.y),
+          ..multiply(Matrix4.diagonal3Values(transform.scale.x, transform.scale.y, 1.0)),
         child: Visibility(
           visible: widgetDef.visible,
           child: Opacity(
@@ -302,7 +302,7 @@ class _ScadaRendererState extends State<ScadaRenderer> {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -401,7 +401,7 @@ extension ScadaScreenParser on ScadaScreenDefinition {
     if (json == null || json is! List) {
       return [ScadaLayer(id: 'default', name: 'Default', widgets: [], visible: true, locked: false)];
     }
-    return (json as List).map((item) {
+    return json.map<ScadaLayer>((item) {
       if (item is Map<String, dynamic>) {
         return ScadaLayer(
           id: item['id'] as String? ?? '',
@@ -417,7 +417,7 @@ extension ScadaScreenParser on ScadaScreenDefinition {
 
   static List<ScadaVariable> _parseVariables(dynamic json) {
     if (json == null || json is! List) return [];
-    return (json as List).map((item) {
+    return json.map<ScadaVariable>((item) {
       if (item is Map<String, dynamic>) {
         return ScadaVariable(
           name: item['name'] as String? ?? '',
@@ -431,7 +431,7 @@ extension ScadaScreenParser on ScadaScreenDefinition {
 
   static List<ScadaWidgetInstance> _parseWidgets(dynamic json) {
     if (json == null || json is! List) return [];
-    return (json as List).map((item) {
+    return json.map<ScadaWidgetInstance>((item) {
       if (item is Map<String, dynamic>) {
         return ScadaWidgetInstance(
           id: item['id'] as String? ?? '',
@@ -492,7 +492,7 @@ extension ScadaScreenParser on ScadaScreenDefinition {
 
   static List<ScadaBinding> _parseBindings(dynamic json) {
     if (json == null || json is! List) return [];
-    return (json as List).map((item) {
+    return json.map<ScadaBinding>((item) {
       if (item is Map<String, dynamic>) {
         return ScadaBinding(
           id: item['id'] as String? ?? '',
@@ -537,7 +537,7 @@ extension ScadaScreenParser on ScadaScreenDefinition {
 
   static List<ScadaAction> _parseActions(dynamic json) {
     if (json == null || json is! List) return [];
-    return (json as List).map((item) {
+    return json.map<ScadaAction>((item) {
       if (item is Map<String, dynamic>) {
         return ScadaAction(
           trigger: item['trigger'] as String? ?? '',

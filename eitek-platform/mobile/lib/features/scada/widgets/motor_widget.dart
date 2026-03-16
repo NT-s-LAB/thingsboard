@@ -99,7 +99,7 @@ class _MotorWidgetState extends State<MotorWidget>
                     width: size * 0.85,
                     height: size * 0.65,
                     decoration: BoxDecoration(
-                      color: _currentColor.withOpacity(0.2),
+                      color: _currentColor.withValues(alpha: 0.2),
                       border: Border.all(color: _currentColor, width: 2),
                       borderRadius: BorderRadius.circular(4),
                     ),
@@ -113,7 +113,7 @@ class _MotorWidgetState extends State<MotorWidget>
                             width: size * 0.55,
                             height: size * 0.5,
                             decoration: BoxDecoration(
-                              color: _currentColor.withOpacity(0.3),
+                              color: _currentColor.withValues(alpha: 0.3),
                               border: Border.all(color: _currentColor, width: 2),
                               borderRadius: BorderRadius.circular(4),
                             ),
@@ -183,7 +183,7 @@ class _MotorWidgetState extends State<MotorWidget>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _currentColor.withOpacity(0.15),
+                  color: _currentColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(

@@ -14,8 +14,6 @@ class AuthRepository {
   AuthRepository(this._apiClient, this._storage);
 
   Future<AuthResponse> login(String email, String password) async {
-    print('📡 [API] Base URL: ${AppConstants.apiBaseUrl}');
-    print('📡 [API] Calling: ${ApiEndpoints.login}');
     developer.log('📡 API Base URL: ${AppConstants.apiBaseUrl}', name: 'AUTH');
     developer.log('📡 Calling: ${ApiEndpoints.login}', name: 'AUTH');
     
@@ -24,8 +22,6 @@ class AuthRepository {
       data: {'email': email, 'password': password},
     );
 
-    print('📡 [API] Response status: ${response.statusCode}');
-    print('📡 [API] Response data: ${response.data}');
     developer.log('📡 Response status: ${response.statusCode}', name: 'AUTH');
     developer.log('📡 Response data: ${response.data}', name: 'AUTH');
 

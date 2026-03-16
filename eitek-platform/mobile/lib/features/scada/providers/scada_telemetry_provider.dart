@@ -1,13 +1,12 @@
-/// SCADA Telemetry Provider
-///
-/// Manages realtime telemetry data for SCADA screens.
-/// Subscribes to device updates and provides data to the renderer.
+// SCADA Telemetry Provider
+//
+// Manages realtime telemetry data for SCADA screens.
+// Subscribes to device updates and provides data to the renderer.
 
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/websocket_service.dart';
 import '../models/scada_screen.dart';
-import '../engine/scada_renderer.dart';
 
 /// State for SCADA telemetry
 class ScadaTelemetryState {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/storage_service.dart';
-import '../constants/app_constants.dart';
 
 /// Theme mode state
 enum AppThemeMode {
@@ -110,7 +109,7 @@ final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeState>((ref) {
 
 /// Convenience provider to check if dark mode is active
 final isDarkModeProvider = Provider<bool>((ref) {
-  final themeState = ref.watch(themeProvider);
-  final themeNotifier = ref.read(themeProvider.notifier);
-  return themeNotifier.isDarkMode;
+  // Watch the theme state to trigger rebuild on changes
+  ref.watch(themeProvider);
+  return ref.read(themeProvider.notifier).isDarkMode;
 });
