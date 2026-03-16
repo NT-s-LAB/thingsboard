@@ -8,6 +8,7 @@ class ScadaButtonWidget extends StatelessWidget {
   final String? icon;
   final Color buttonColor;
   final Color textColor;
+  final double fontSize;
   final double borderRadius;
   final bool disabled;
   final VoidCallback? onPressed;
@@ -18,7 +19,8 @@ class ScadaButtonWidget extends StatelessWidget {
     this.icon,
     this.buttonColor = Colors.blue,
     this.textColor = Colors.white,
-    this.borderRadius = 8,
+    this.fontSize = 12,
+    this.borderRadius = 6,
     this.disabled = false,
     this.onPressed,
   });
@@ -63,37 +65,37 @@ class ScadaButtonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Opacity(
-        opacity: disabled ? 0.5 : 1.0,
-        child: Material(
-          color: buttonColor,
+    return Opacity(
+      opacity: disabled ? 0.5 : 1.0,
+      child: Material(
+        color: buttonColor,
+        borderRadius: BorderRadius.circular(borderRadius),
+        elevation: disabled ? 0 : 2,
+        child: InkWell(
+          onTap: disabled ? null : onPressed,
           borderRadius: BorderRadius.circular(borderRadius),
-          elevation: disabled ? 0 : 2,
-          child: InkWell(
-            onTap: disabled ? null : onPressed,
-            borderRadius: BorderRadius.circular(borderRadius),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (_iconData != null) ...[
-                    Icon(_iconData, color: textColor, size: 18),
-                    if (text.isNotEmpty) const SizedBox(width: 8),
-                  ],
-                  if (text.isNotEmpty)
-                    Text(
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_iconData != null) ...[
+                  Icon(_iconData, color: textColor, size: fontSize * 1.5),
+                  if (text.isNotEmpty) const SizedBox(width: 8),
+                ],
+                if (text.isNotEmpty)
+                  Flexible(
+                    child: Text(
                       text,
                       style: TextStyle(
                         color: textColor,
                         fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                        fontSize: fontSize,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),

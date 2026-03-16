@@ -249,19 +249,24 @@ class ScadaWidgetRegistry {
         text: props['text'] as String? ?? '',
         fontSize: (props['fontSize'] as num?)?.toDouble() ?? 14,
         fontWeight: _parseFontWeight(props['fontWeight']),
-        color: _parseColor(props['color'], Colors.black87),
-        alignment: _parseAlignment(props['alignment']),
+        color: _parseColor(props['textColor'] ?? props['color'], Colors.black87),
+        alignment: _parseAlignment(props['align'] ?? props['alignment']),
+        bgColor: _parseColor(props['bgColor'], Colors.transparent),
+        borderColor: _parseColor(props['borderColor'], Colors.transparent),
+        borderWidth: (props['borderWidth'] as num?)?.toDouble() ?? 0,
+        padding: (props['padding'] as num?)?.toDouble() ?? 4,
         onTap: onAction != null ? () => onAction('click', {}) : null,
       );
     });
 
     register('button', (widget, props, onAction) {
       return ScadaButtonWidget(
-        text: props['text'] as String? ?? 'Button',
+        text: (props['label'] ?? props['text']) as String? ?? 'Button',
         icon: props['icon'] as String?,
-        buttonColor: _parseColor(props['buttonColor'], Colors.blue),
+        buttonColor: _parseColor(props['bgColor'] ?? props['buttonColor'], Colors.blue),
         textColor: _parseColor(props['textColor'], Colors.white),
-        borderRadius: (props['borderRadius'] as num?)?.toDouble() ?? 8,
+        fontSize: (props['fontSize'] as num?)?.toDouble() ?? 12,
+        borderRadius: (props['borderRadius'] as num?)?.toDouble() ?? 6,
         disabled: props['disabled'] as bool? ?? false,
         onPressed: onAction != null ? () => onAction('click', {}) : null,
       );
@@ -273,21 +278,29 @@ class ScadaWidgetRegistry {
         min: (props['min'] as num?)?.toDouble() ?? 0,
         max: (props['max'] as num?)?.toDouble() ?? 100,
         label: props['label'] as String? ?? '',
+        unit: props['unit'] as String? ?? '%',
+        decimals: props['decimals'] as int? ?? 0,
         showValue: props['showValue'] as bool? ?? true,
-        fillColor: _parseColor(props['fillColor'], Colors.blue),
-        backgroundColor: _parseColor(props['backgroundColor'], Colors.grey[200]!),
+        showMinMax: props['showMinMax'] as bool? ?? false,
+        fillColor: _parseColor(props['barColor'] ?? props['fillColor'], Colors.blue),
+        backgroundColor: _parseColor(props['trackColor'] ?? props['backgroundColor'], Colors.grey[200]!),
         orientation: props['orientation'] as String? ?? 'horizontal',
+        barRadius: (props['barRadius'] as num?)?.toDouble() ?? 4,
+        barHeight: (props['barHeight'] as num?)?.toDouble() ?? 12,
       );
     });
 
     register('indicator', (widget, props, onAction) {
       return IndicatorWidget(
-        state: props['state'] as String? ?? 'normal',
+        state: (props['value'] ?? props['state']) as String? ?? 'normal',
         label: props['label'] as String? ?? '',
-        showLabel: props['showLabel'] as bool? ?? true,
+        showLabel: props['showValue'] as bool? ?? props['showLabel'] as bool? ?? true,
         normalColor: _parseColor(props['normalColor'], Colors.green),
         warningColor: _parseColor(props['warningColor'], Colors.orange),
         alarmColor: _parseColor(props['alarmColor'], Colors.red),
+        states: _parseIndicatorStates(props['states']),
+        shape: props['shape'] as String? ?? 'circle',
+        blinkWhenActive: props['blinkWhenActive'] as bool? ?? false,
         onTap: onAction != null ? () => onAction('click', {}) : null,
       );
     });
@@ -296,9 +309,11 @@ class ScadaWidgetRegistry {
       return PipeWidget(
         orientation: props['orientation'] as String? ?? 'horizontal',
         flowDirection: props['flowDirection'] as String? ?? 'left-right',
-        flowing: props['flowing'] as bool? ?? false,
+        flowing: (props['flowActive'] ?? props['flowing']) as bool? ?? false,
         pipeColor: _parseColor(props['pipeColor'], Colors.grey[400]!),
-        fluidColor: _parseColor(props['fluidColor'], Colors.blue),
+        fluidColor: _parseColor(props['flowColor'] ?? props['fluidColor'], Colors.blue),
+        pipeWidth: (props['pipeWidth'] as num?)?.toDouble() ?? 12,
+        flowSpeed: (props['flowSpeed'] as num?)?.toDouble() ?? 1,
       );
     });
 
@@ -307,9 +322,13 @@ class ScadaWidgetRegistry {
         value: (props['value'] as num?)?.toDouble() ?? 0,
         min: (props['min'] as num?)?.toDouble() ?? 0,
         max: (props['max'] as num?)?.toDouble() ?? 100,
+        step: (props['step'] as num?)?.toDouble() ?? 1,
         label: props['label'] as String? ?? '',
+        unit: props['unit'] as String? ?? '',
         showValue: props['showValue'] as bool? ?? true,
-        activeColor: _parseColor(props['activeColor'], Colors.blue),
+        showMinMax: props['showMinMax'] as bool? ?? false,
+        activeColor: _parseColor(props['fillColor'] ?? props['activeColor'], Colors.blue),
+        trackColor: _parseColor(props['trackColor'], Colors.grey[300]!),
         disabled: props['disabled'] as bool? ?? false,
         onChanged: onAction != null 
             ? (value) => onAction('change', {'value': value}) 
@@ -320,7 +339,12 @@ class ScadaWidgetRegistry {
     register('imageWidget', (widget, props, onAction) {
       return ScadaImageWidget(
         imageUrl: props['imageUrl'] as String? ?? '',
-        fit: _parseBoxFit(props['fit']),
+        fit: _parseBoxFit(props['objectFit'] ?? props['fit']),
+        borderRadius: (props['borderRadius'] as num?)?.toDouble() ?? 0,
+        borderWidth: (props['borderWidth'] as num?)?.toDouble() ?? 0,
+        borderColor: _parseColor(props['borderColor'], Colors.grey[300]!),
+        opacity: (props['opacity'] as num?)?.toDouble() ?? 1.0,
+        bgColor: _parseColor(props['bgColor'], Colors.transparent),
         onTap: onAction != null ? () => onAction('click', {}) : null,
       );
     });
@@ -434,6 +458,18 @@ class ScadaWidgetRegistry {
     }
   }
 
+  List<IndicatorState> _parseIndicatorStates(dynamic value) {
+    if (value == null || value is! List) return [];
+    return value.whereType<Map>().map<IndicatorState>((item) {
+      final m = Map<String, dynamic>.from(item);
+      return IndicatorState(
+        value: m['value'] as String? ?? '',
+        color: _parseColor(m['color'], Colors.green),
+        label: m['label'] as String? ?? '',
+      );
+    }).toList();
+  }
+
   BoxFit _parseBoxFit(dynamic value) {
     switch (value) {
       case 'contain':
@@ -465,4 +501,11 @@ class GaugeRange {
   final double to;
   final Color color;
   const GaugeRange({required this.from, required this.to, required this.color});
+}
+
+class IndicatorState {
+  final String value;
+  final Color color;
+  final String label;
+  const IndicatorState({required this.value, required this.color, this.label = ''});
 }

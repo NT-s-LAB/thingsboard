@@ -49,6 +49,12 @@ class _ScadaNativeRuntimeScreenState extends ConsumerState<ScadaNativeRuntimeScr
                 error: (_, __) => const Text('SCADA Runtime'),
               ),
               actions: [
+                // Info button - show screen/canvas dimensions
+                IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  tooltip: 'Thông tin kích thước',
+                  onPressed: () => _showScreenInfo(context),
+                ),
                 // Debug toggle
                 IconButton(
                   icon: Icon(
@@ -437,6 +443,96 @@ class _ScadaNativeRuntimeScreenState extends ConsumerState<ScadaNativeRuntimeScr
         content: Text(message),
         backgroundColor: backgroundColor,
         behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Show screen dimension info dialog
+  void _showScreenInfo(BuildContext context) {
+    final viewAsync = ref.read(scadaViewProvider(widget.viewId));
+    final mediaQuery = MediaQuery.of(context);
+    final screenSize = mediaQuery.size;
+    final statusBarHeight = mediaQuery.padding.top;
+    final appBarHeight = kToolbarHeight;
+    final availableHeight = screenSize.height - statusBarHeight - appBarHeight;
+
+    // Get canvas dimensions from current page or view
+    Map<String, dynamic>? canvasSize;
+    String? currentPageName;
+    
+    viewAsync.whenData((view) {
+      if (view.hasScreenDefinition) {
+        final screenDef = view.screenDefinition!;
+        if (screenDef['pages'] is List && _currentPageId != null) {
+          final currentPage = _pages.firstWhere(
+            (p) => p['id'] == _currentPageId,
+            orElse: () => {},
+          );
+          currentPageName = currentPage['name'] as String?;
+          canvasSize = currentPage['canvasSize'] as Map<String, dynamic>? 
+              ?? screenDef['settings']?['defaultCanvasSize'] as Map<String, dynamic>?;
+        }
+        canvasSize ??= screenDef['canvas'] as Map<String, dynamic>?;
+      }
+    });
+
+    final canvasW = canvasSize?['width'] ?? 398;
+    final canvasH = canvasSize?['height'] ?? 844;
+    final scaleX = screenSize.width / (canvasW as num);
+    final scaleY = availableHeight / (canvasH as num);
+    final scale = scaleX < scaleY ? scaleX : scaleY;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, size: 20),
+            SizedBox(width: 8),
+            Text('Thông tin kích thước', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (currentPageName != null)
+              _infoRow('Trang hiện tại', currentPageName!),
+            if (_pages.length > 1)
+              _infoRow('Tổng số trang', '${_pages.length}'),
+            const Divider(),
+            _infoRow('Canvas (thiết kế)', '$canvasW × $canvasH'),
+            _infoRow('Màn hình', '${screenSize.width.toStringAsFixed(0)} × ${screenSize.height.toStringAsFixed(0)}'),
+            _infoRow('Vùng hiển thị', '${screenSize.width.toStringAsFixed(0)} × ${availableHeight.toStringAsFixed(0)}'),
+            const Divider(),
+            _infoRow('Tỉ lệ Scale', scale.toStringAsFixed(3)),
+            _infoRow('Scale X', scaleX.toStringAsFixed(3)),
+            _infoRow('Scale Y', scaleY.toStringAsFixed(3)),
+            const Divider(),
+            _infoRow('Kích thước thực', 
+              '${(canvasW * scale).toStringAsFixed(0)} × ${(canvasH * scale).toStringAsFixed(0)}'),
+            _infoRow('DPR', mediaQuery.devicePixelRatio.toStringAsFixed(1)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import '../engine/widget_registry.dart' show IndicatorState;
 
 /// SCADA Indicator Widget
 /// 
-/// Multi-state indicator (normal, warning, alarm).
+/// Multi-state indicator with configurable states from web.
 class IndicatorWidget extends StatefulWidget {
-  final String state; // 'normal', 'warning', 'alarm'
+  final String state;
   final String label;
   final bool showLabel;
   final Color normalColor;
   final Color warningColor;
   final Color alarmColor;
+  final List<IndicatorState> states;
+  final String shape;
+  final bool blinkWhenActive;
   final VoidCallback? onTap;
 
   const IndicatorWidget({
@@ -20,6 +24,9 @@ class IndicatorWidget extends StatefulWidget {
     this.normalColor = Colors.green,
     this.warningColor = Colors.orange,
     this.alarmColor = Colors.red,
+    this.states = const [],
+    this.shape = 'circle',
+    this.blinkWhenActive = false,
     this.onTap,
   });
 
@@ -69,6 +76,15 @@ class _IndicatorWidgetState extends State<IndicatorWidget>
   }
 
   Color get _currentColor {
+    // Use states config from web if available
+    if (widget.states.isNotEmpty) {
+      for (final s in widget.states) {
+        if (s.value == widget.state) return s.color;
+      }
+      // No match - use first state color or default
+      return widget.states.first.color;
+    }
+    // Legacy fallback
     switch (widget.state) {
       case 'warning':
         return widget.warningColor;
@@ -77,6 +93,15 @@ class _IndicatorWidgetState extends State<IndicatorWidget>
       default:
         return widget.normalColor;
     }
+  }
+
+  String get _displayLabel {
+    if (widget.states.isNotEmpty) {
+      for (final s in widget.states) {
+        if (s.value == widget.state && s.label.isNotEmpty) return s.label;
+      }
+    }
+    return widget.state.toUpperCase();
   }
 
   IconData get _icon {
@@ -118,7 +143,8 @@ class _IndicatorWidgetState extends State<IndicatorWidget>
                       height: size,
                       decoration: BoxDecoration(
                         color: _currentColor.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
+                        shape: widget.shape == 'square' ? BoxShape.rectangle : BoxShape.circle,
+                        borderRadius: widget.shape == 'square' ? BorderRadius.circular(4) : null,
                         border: Border.all(color: _currentColor, width: 2),
                         boxShadow: widget.state == 'alarm'
                             ? [
@@ -161,7 +187,7 @@ class _IndicatorWidgetState extends State<IndicatorWidget>
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
-              widget.state.toUpperCase(),
+              _displayLabel,
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.bold,

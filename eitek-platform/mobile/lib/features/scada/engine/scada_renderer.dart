@@ -71,11 +71,11 @@ class _ScadaRendererState extends State<ScadaRenderer> {
         return ClipRect(
           child: Stack(
             children: [
-              // Background
+              // Background covers full available area
               Positioned.fill(
-                child: _buildBackground(),
+                child: Container(color: _parseColor(widget.screen.background.color)),
               ),
-              // Widgets canvas
+              // Canvas area with background and widgets
               Positioned(
                 left: offsetX,
                 top: offsetY,
@@ -89,7 +89,13 @@ class _ScadaRendererState extends State<ScadaRenderer> {
                     height: screenSize.height,
                     child: Stack(
                       clipBehavior: Clip.none,
-                      children: _buildWidgets(),
+                      children: [
+                        // Canvas background (color or image)
+                        Positioned.fill(
+                          child: _buildBackground(),
+                        ),
+                        ..._buildWidgets(),
+                      ],
                     ),
                   ),
                 ),
@@ -111,17 +117,36 @@ class _ScadaRendererState extends State<ScadaRenderer> {
   Widget _buildBackground() {
     final bg = widget.screen.background;
 
+    Widget bgWidget;
     if (bg.image != null && bg.image!.isNotEmpty) {
-      return Image.network(
+      BoxFit imageFit;
+      switch (bg.fit) {
+        case 'contain':
+          imageFit = BoxFit.contain;
+          break;
+        case 'fill':
+          imageFit = BoxFit.fill;
+          break;
+        case 'none':
+          imageFit = BoxFit.none;
+          break;
+        case 'cover':
+        default:
+          imageFit = BoxFit.cover;
+      }
+      bgWidget = Image.network(
         bg.image!,
-        fit: BoxFit.cover,
+        fit: imageFit,
         errorBuilder: (_, __, ___) => Container(color: _parseColor(bg.color)),
       );
+    } else {
+      bgWidget = Container(color: _parseColor(bg.color));
     }
 
-    return Container(
-      color: _parseColor(bg.color),
-    );
+    if (bg.opacity < 1.0) {
+      return Opacity(opacity: bg.opacity.clamp(0.0, 1.0), child: bgWidget);
+    }
+    return bgWidget;
   }
 
   List<Widget> _buildWidgets() {
@@ -692,12 +717,29 @@ class _ScadaRendererState extends State<ScadaRenderer> {
 
   Color _parseColor(String? color) {
     if (color == null || color.isEmpty) return Colors.white;
+    if (color == 'transparent') return Colors.transparent;
     if (color.startsWith('#')) {
       final hex = color.replaceFirst('#', '');
       if (hex.length == 6) {
         return Color(int.parse('FF$hex', radix: 16));
       } else if (hex.length == 8) {
         return Color(int.parse(hex, radix: 16));
+      }
+    }
+    if (color.startsWith('rgba')) {
+      final match = RegExp(r'rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)').firstMatch(color);
+      if (match != null) {
+        final r = int.parse(match.group(1)!);
+        final g = int.parse(match.group(2)!);
+        final b = int.parse(match.group(3)!);
+        final a = match.group(4) != null ? (double.parse(match.group(4)!) * 255).round() : 255;
+        return Color.fromARGB(a, r, g, b);
+      }
+    }
+    if (color.startsWith('rgb')) {
+      final match = RegExp(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)').firstMatch(color);
+      if (match != null) {
+        return Color.fromARGB(255, int.parse(match.group(1)!), int.parse(match.group(2)!), int.parse(match.group(3)!));
       }
     }
     return Colors.white;

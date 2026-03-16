@@ -9,6 +9,8 @@ class PipeWidget extends StatefulWidget {
   final bool flowing;
   final Color pipeColor;
   final Color fluidColor;
+  final double pipeWidth;
+  final double flowSpeed;
 
   const PipeWidget({
     super.key,
@@ -17,6 +19,8 @@ class PipeWidget extends StatefulWidget {
     this.flowing = false,
     this.pipeColor = const Color(0xFFBDBDBD),
     this.fluidColor = Colors.blue,
+    this.pipeWidth = 12,
+    this.flowSpeed = 1,
   });
 
   @override
@@ -32,7 +36,7 @@ class _PipeWidgetState extends State<PipeWidget>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: Duration(milliseconds: (1000 / widget.flowSpeed).round()),
     );
     if (widget.flowing) {
       _animationController.repeat();

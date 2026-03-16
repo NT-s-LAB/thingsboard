@@ -90,11 +90,15 @@ class ScadaBackground {
   final String color;
   final String? image;
   final String? svg;
+  final String? fit;
+  final double opacity;
 
   const ScadaBackground({
     this.color = '#FFFFFF',
     this.image,
     this.svg,
+    this.fit,
+    this.opacity = 1.0,
   });
 
   factory ScadaBackground.fromJson(dynamic json) {
@@ -109,6 +113,8 @@ class ScadaBackground {
         color: map['color'] as String? ?? '#FFFFFF',
         image: map['image'] as String? ?? map['imageUrl'] as String?,
         svg: map['svg'] as String? ?? map['svgAssetId'] as String?,
+        fit: map['fit'] as String?,
+        opacity: (map['opacity'] as num?)?.toDouble() ?? 1.0,
       );
     }
     return const ScadaBackground();

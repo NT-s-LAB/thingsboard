@@ -9,6 +9,10 @@ class ScadaTextWidget extends StatelessWidget {
   final FontWeight fontWeight;
   final Color color;
   final TextAlign alignment;
+  final Color bgColor;
+  final Color borderColor;
+  final double borderWidth;
+  final double padding;
   final VoidCallback? onTap;
 
   const ScadaTextWidget({
@@ -18,6 +22,10 @@ class ScadaTextWidget extends StatelessWidget {
     this.fontWeight = FontWeight.normal,
     this.color = Colors.black87,
     this.alignment = TextAlign.left,
+    this.bgColor = Colors.transparent,
+    this.borderColor = Colors.transparent,
+    this.borderWidth = 0,
+    this.padding = 4,
     this.onTap,
   });
 
@@ -25,7 +33,15 @@ class ScadaTextWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Center(
+      child: Container(
+        decoration: BoxDecoration(
+          color: bgColor,
+          border: borderWidth > 0
+              ? Border.all(color: borderColor, width: borderWidth)
+              : null,
+        ),
+        padding: EdgeInsets.all(padding),
+        alignment: Alignment.center,
         child: Text(
           text,
           style: TextStyle(

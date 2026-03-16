@@ -7,9 +7,13 @@ class ScadaSliderWidget extends StatelessWidget {
   final double value;
   final double min;
   final double max;
+  final double step;
   final String label;
+  final String unit;
   final bool showValue;
+  final bool showMinMax;
   final Color activeColor;
+  final Color trackColor;
   final bool disabled;
   final ValueChanged<double>? onChanged;
 
@@ -18,9 +22,13 @@ class ScadaSliderWidget extends StatelessWidget {
     required this.value,
     this.min = 0,
     this.max = 100,
+    this.step = 1,
     this.label = '',
+    this.unit = '',
     this.showValue = true,
+    this.showMinMax = false,
     this.activeColor = Colors.blue,
+    this.trackColor = const Color(0xFFE5E7EB),
     this.disabled = false,
     this.onChanged,
   });
@@ -65,7 +73,7 @@ class ScadaSliderWidget extends StatelessWidget {
               child: SliderTheme(
                 data: SliderThemeData(
                   activeTrackColor: activeColor,
-                  inactiveTrackColor: activeColor.withValues(alpha: 0.2),
+                  inactiveTrackColor: trackColor,
                   thumbColor: activeColor,
                   overlayColor: activeColor.withValues(alpha: 0.2),
                   trackHeight: 6,
@@ -77,6 +85,7 @@ class ScadaSliderWidget extends StatelessWidget {
                   value: clampedValue,
                   min: min,
                   max: max,
+                  divisions: step > 0 ? ((max - min) / step).round() : null,
                   onChanged: disabled || onChanged == null
                       ? null
                       : (newValue) => onChanged!(newValue),
@@ -85,6 +94,7 @@ class ScadaSliderWidget extends StatelessWidget {
             ),
           ),
         ),
+        if (showMinMax)
         // Min / Max labels
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

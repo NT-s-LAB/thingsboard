@@ -8,10 +8,15 @@ class ProgressBarWidget extends StatelessWidget {
   final double min;
   final double max;
   final String label;
+  final String unit;
+  final int decimals;
   final bool showValue;
+  final bool showMinMax;
   final Color fillColor;
   final Color backgroundColor;
   final String orientation; // 'horizontal', 'vertical'
+  final double barRadius;
+  final double barHeight;
 
   const ProgressBarWidget({
     super.key,
@@ -19,10 +24,15 @@ class ProgressBarWidget extends StatelessWidget {
     this.min = 0,
     this.max = 100,
     this.label = '',
+    this.unit = '%',
+    this.decimals = 0,
     this.showValue = true,
+    this.showMinMax = false,
     this.fillColor = Colors.blue,
     this.backgroundColor = const Color(0xFFE0E0E0),
     this.orientation = 'horizontal',
+    this.barRadius = 4,
+    this.barHeight = 12,
   });
 
   double get _normalizedValue => ((value - min) / (max - min)).clamp(0.0, 1.0);
@@ -62,7 +72,7 @@ class ProgressBarWidget extends StatelessWidget {
         if (showValue) ...[
           const SizedBox(height: 4),
           Text(
-            value.toStringAsFixed(1),
+            '${value.toStringAsFixed(decimals)}${unit.isNotEmpty ? ' $unit' : ''}',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -77,10 +87,10 @@ class ProgressBarWidget extends StatelessWidget {
 
   Widget _buildHorizontalBar(BoxConstraints constraints) {
     return Container(
-      height: 12,
+      height: barHeight,
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(barRadius),
       ),
       child: Stack(
         children: [
@@ -91,7 +101,7 @@ class ProgressBarWidget extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 color: fillColor,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(barRadius),
               ),
             ),
           ),
