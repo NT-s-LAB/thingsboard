@@ -56,26 +56,79 @@ class _ScadaRendererState extends State<ScadaRenderer> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Calculate scale factor based on screen dimensions vs canvas size
+        // Scale to fit width — if canvas is taller than screen, allow vertical scroll
         final screenSize = widget.screen.canvas;
         final scaleX = constraints.maxWidth / screenSize.width;
         final scaleY = constraints.maxHeight / screenSize.height;
-        final scale = scaleX < scaleY ? scaleX : scaleY;
 
-        // Calculate offset to center the canvas
+        // If canvas fits within screen, center it (no scroll needed)
+        // If canvas is taller, use width-based scale and enable scrolling
+        final needsScroll = scaleY < scaleX; // canvas is taller relative to screen
+        final scale = needsScroll ? scaleX : scaleY;
+
         final scaledWidth = screenSize.width * scale;
         final scaledHeight = screenSize.height * scale;
         final offsetX = (constraints.maxWidth - scaledWidth) / 2;
-        final offsetY = (constraints.maxHeight - scaledHeight) / 2;
 
-        return ClipRect(
-          child: Stack(
+        Widget canvasWidget = SizedBox(
+          width: scaledWidth,
+          height: scaledHeight,
+          child: Transform.scale(
+            scale: scale,
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: screenSize.width,
+              height: screenSize.height,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Canvas background (color or image)
+                  Positioned.fill(
+                    child: _buildBackground(),
+                  ),
+                  ..._buildWidgets(),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        if (needsScroll) {
+          // Canvas taller than screen — scrollable vertically
+          return Stack(
             children: [
-              // Background covers full available area
               Positioned.fill(
                 child: Container(color: _parseColor(widget.screen.background.color)),
               ),
-              // Canvas area with background and widgets
+              ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: Padding(
+                    padding: EdgeInsets.only(left: offsetX > 0 ? offsetX : 0),
+                    child: canvasWidget,
+                  ),
+                ),
+              ),
+              // Debug overlay
+              if (widget.showDebug)
+                Positioned(
+                  left: 8,
+                  top: 8,
+                  child: _buildDebugOverlay(scale),
+                ),
+            ],
+          );
+        }
+
+        // Canvas fits — center it, no scroll
+        final offsetY = (constraints.maxHeight - scaledHeight) / 2;
+        return ClipRect(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Container(color: _parseColor(widget.screen.background.color)),
+              ),
               Positioned(
                 left: offsetX,
                 top: offsetY,
@@ -90,7 +143,6 @@ class _ScadaRendererState extends State<ScadaRenderer> {
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        // Canvas background (color or image)
                         Positioned.fill(
                           child: _buildBackground(),
                         ),
