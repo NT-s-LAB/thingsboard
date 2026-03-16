@@ -42,6 +42,12 @@ class AppConstants {
   static const String userDataKey = 'user_data';
   static const String themeKey = 'theme_mode';
   static const String languageKey = 'language';
+  static const String serverHostKey = 'server_host';
+  static const String serverPortKey = 'server_port';
+
+  // Default server settings
+  static const String defaultServerHost = 'localhost';
+  static const int defaultServerPort = 3001;
 
   // Pagination
   static const int defaultPageSize = 20;

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_colors.dart';
 
 /// Individual statistics card widget
 class StatsCard extends StatelessWidget {
@@ -22,6 +21,10 @@ class StatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -30,12 +33,18 @@ class StatsCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(
+              color: isDark 
+                  ? colorScheme.outline.withValues(alpha: 0.2)
+                  : colorScheme.outline.withValues(alpha: 0.1),
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.2)
+                    : Colors.black.withValues(alpha: 0.04),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -78,19 +87,16 @@ class StatsCard extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: const TextStyle(
-                      fontSize: 14,
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w500,
-                      color: AppColors.textPrimary,
                     ),
                   ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ],
@@ -110,12 +116,20 @@ class StatsCardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.outline.withValues(alpha: 0.2)
+              : colorScheme.outline.withValues(alpha: 0.1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,17 +138,17 @@ class StatsCardSkeleton extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildShimmer(40, 40, borderRadius: 10),
-              _buildShimmer(60, 32),
+              _buildShimmer(context, 40, 40, borderRadius: 10),
+              _buildShimmer(context, 60, 32),
             ],
           ),
           const SizedBox(height: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildShimmer(80, 16),
+              _buildShimmer(context, 80, 16),
               const SizedBox(height: 4),
-              _buildShimmer(60, 12),
+              _buildShimmer(context, 60, 12),
             ],
           ),
         ],
@@ -142,12 +156,14 @@ class StatsCardSkeleton extends StatelessWidget {
     );
   }
 
-  Widget _buildShimmer(double width, double height, {double borderRadius = 4}) {
+  Widget _buildShimmer(BuildContext context, double width, double height, {double borderRadius = 4}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return Container(
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: AppColors.border,
+        color: colorScheme.outline.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(borderRadius),
       ),
     );

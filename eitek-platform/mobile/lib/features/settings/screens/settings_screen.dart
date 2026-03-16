@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/providers/theme_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -10,6 +11,10 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    final themeState = ref.watch(themeProvider);
+    final isDark = ref.watch(themeProvider.notifier).isDarkMode;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -29,15 +34,15 @@ class SettingsScreen extends ConsumerWidget {
                   children: [
                     CircleAvatar(
                       radius: 32,
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: colorScheme.primary,
                       child: Text(
                         (user?.firstName != null && user!.firstName.isNotEmpty)
                             ? user.firstName.substring(0, 1).toUpperCase()
                             : 'U',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: colorScheme.onPrimary,
                         ),
                       ),
                     ),
@@ -48,16 +53,15 @@ class SettingsScreen extends ConsumerWidget {
                         children: [
                           Text(
                             user?.fullName ?? 'Người dùng',
-                            style: const TextStyle(
-                              fontSize: 18,
+                            style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             user?.email ?? '',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurface.withValues(alpha: 0.7),
                             ),
                           ),
                         ],
@@ -65,7 +69,7 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                     Icon(
                       Icons.chevron_right,
-                      color: AppColors.textLight,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ],
                 ),
@@ -75,12 +79,11 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // Settings Groups
-          const Text(
+          Text(
             'Ứng dụng',
-            style: TextStyle(
-              fontSize: 14,
+            style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 8),
@@ -101,11 +104,16 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const Divider(height: 1),
                 _SettingsTile(
-                  icon: Icons.dark_mode_outlined,
+                  icon: isDark ? Icons.dark_mode : Icons.light_mode,
                   title: 'Giao diện tối',
-                  trailing: Switch(
-                    value: false,
-                    onChanged: (value) {},
+                  trailing: Switch.adaptive(
+                    value: isDark,
+                    onChanged: (value) {
+                      ref.read(themeProvider.notifier).setThemeMode(
+                        value ? AppThemeMode.dark : AppThemeMode.light,
+                      );
+                    },
+                    activeColor: colorScheme.primary,
                   ),
                 ),
               ],
@@ -113,12 +121,11 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          const Text(
+          Text(
             'Tài khoản',
-            style: TextStyle(
-              fontSize: 14,
+            style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 8),
@@ -141,12 +148,11 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          const Text(
+          Text(
             'Hỗ trợ',
-            style: TextStyle(
-              fontSize: 14,
+            style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 8),
@@ -239,14 +245,17 @@ class _SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return ListTile(
-      leading: Icon(icon, color: AppColors.primary),
+      leading: Icon(icon, color: colorScheme.primary),
       title: Text(title),
       subtitle: subtitle != null ? Text(subtitle!) : null,
       trailing: trailing ??
           Icon(
             Icons.chevron_right,
-            color: AppColors.textLight,
+            color: colorScheme.onSurface.withValues(alpha: 0.5),
           ),
       onTap: onTap,
     );

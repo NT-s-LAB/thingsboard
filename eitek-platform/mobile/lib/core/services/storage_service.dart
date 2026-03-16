@@ -78,6 +78,35 @@ class StorageService {
     return _prefs.getString(key);
   }
 
+  // Server Host Settings
+  Future<void> saveServerHost(String host) async {
+    await _prefs.setString(AppConstants.serverHostKey, host);
+  }
+
+  String getServerHost() {
+    return _prefs.getString(AppConstants.serverHostKey) ?? AppConstants.defaultServerHost;
+  }
+
+  Future<void> saveServerPort(int port) async {
+    await _prefs.setInt(AppConstants.serverPortKey, port);
+  }
+
+  int getServerPort() {
+    return _prefs.getInt(AppConstants.serverPortKey) ?? AppConstants.defaultServerPort;
+  }
+
+  String getApiBaseUrl() {
+    final host = getServerHost();
+    final port = getServerPort();
+    return 'http://$host:$port';
+  }
+
+  String getWsBaseUrl() {
+    final host = getServerHost();
+    final port = getServerPort();
+    return 'ws://$host:$port';
+  }
+
   Future<void> setBool(String key, bool value) async {
     await _prefs.setBool(key, value);
   }

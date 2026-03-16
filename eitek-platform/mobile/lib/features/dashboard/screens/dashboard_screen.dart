@@ -17,32 +17,31 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final dashboardState = ref.watch(dashboardProvider);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
         elevation: 0,
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
+                color: colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.hub,
-                color: AppColors.primary,
+                color: colorScheme.primary,
                 size: 20,
               ),
             ),
             const SizedBox(width: 10),
-            const Text(
+            Text(
               'EITEK IoT',
-              style: TextStyle(
+              style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                fontSize: 18,
               ),
             ),
           ],
@@ -132,9 +131,8 @@ class DashboardScreen extends ConsumerWidget {
                 Center(
                   child: Text(
                     'Cập nhật: ${_formatLastUpdated(dashboardState.lastUpdated!)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textLight,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
                 ),

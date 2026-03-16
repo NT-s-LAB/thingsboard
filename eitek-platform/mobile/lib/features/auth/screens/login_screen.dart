@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/storage_service.dart';
+import '../../../core/services/api_client.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -38,55 +40,153 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  void _showServerSettingsDialog() {
+    final storage = ref.read(storageServiceProvider);
+    final hostController = TextEditingController(text: storage.getServerHost());
+    final portController = TextEditingController(text: storage.getServerPort().toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.settings, color: AppColors.primary),
+            const SizedBox(width: 8),
+            const Text('Cài đặt Server'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: hostController,
+              decoration: const InputDecoration(
+                labelText: 'Host / IP',
+                hintText: 'Ví dụ: 192.168.1.100',
+                prefixIcon: Icon(Icons.dns_outlined),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: portController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Port',
+                hintText: 'Ví dụ: 3001',
+                prefixIcon: Icon(Icons.numbers),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.info.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.info, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Nhập IP của máy tính đang chạy server.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.info,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final host = hostController.text.trim();
+              final port = int.tryParse(portController.text.trim()) ?? 3001;
+              
+              if (host.isNotEmpty) {
+                await storage.saveServerHost(host);
+                await storage.saveServerPort(port);
+                
+                // Update API client base URL
+                ref.read(apiClientProvider).updateBaseUrl();
+                
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Đã cập nhật: http://$host:$port'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 60),
-                // Logo
-                Center(
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.factory_outlined,
-                      size: 60,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Title
-                Text(
-                  'EITEK IoT',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 60),
+                    // Logo
+                    Center(
+                      child: Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(
+                          Icons.factory_outlined,
+                          size: 60,
+                          color: Colors.white,
+                        ),
                       ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Đăng nhập vào tài khoản của bạn',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
+                    ),
+                    const SizedBox(height: 24),
+                    // Title
+                    Text(
+                      'EITEK IoT',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Đăng nhập vào tài khoản của bạn',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 48),
                 
                 // Error Message
                 if (authState.errorMessage != null) ...[
@@ -227,6 +327,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ],
             ),
           ),
+        ),
+        // Settings icon at top right
+        Positioned(
+          top: 8,
+          right: 8,
+          child: IconButton(
+            icon: Icon(
+              Icons.settings_outlined,
+              color: AppColors.textSecondary,
+            ),
+            tooltip: 'Cài đặt server',
+            onPressed: _showServerSettingsDialog,
+          ),
+        ),
+          ],
         ),
       ),
     );

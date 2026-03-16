@@ -17,18 +17,18 @@ class RecentDevicesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Thiết bị gần đây',
-              style: TextStyle(
-                fontSize: 18,
+              style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
               ),
             ),
             TextButton(
@@ -39,16 +39,20 @@ class RecentDevicesSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         if (isLoading)
-          _buildLoadingSkeleton()
+          _buildLoadingSkeleton(context)
         else if (devices.isEmpty)
-          _buildEmptyState()
+          _buildEmptyState(context)
         else
           _buildDeviceList(context),
       ],
     );
   }
 
-  Widget _buildLoadingSkeleton() {
+  Widget _buildLoadingSkeleton(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Column(
       children: List.generate(
         3,
@@ -56,9 +60,13 @@ class RecentDevicesSection extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(
+              color: isDark
+                  ? colorScheme.outline.withValues(alpha: 0.2)
+                  : colorScheme.outline.withValues(alpha: 0.1),
+            ),
           ),
           child: Row(
             children: [
@@ -66,7 +74,7 @@ class RecentDevicesSection extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: colorScheme.outline.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -78,13 +86,13 @@ class RecentDevicesSection extends StatelessWidget {
                     Container(
                       width: 120,
                       height: 16,
-                      color: AppColors.border,
+                      color: colorScheme.outline.withValues(alpha: 0.2),
                     ),
                     const SizedBox(height: 4),
                     Container(
                       width: 80,
                       height: 12,
-                      color: AppColors.border,
+                      color: colorScheme.outline.withValues(alpha: 0.2),
                     ),
                   ],
                 ),
@@ -93,7 +101,7 @@ class RecentDevicesSection extends StatelessWidget {
                 width: 60,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: colorScheme.outline.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
@@ -104,13 +112,21 @@ class RecentDevicesSection extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.outline.withValues(alpha: 0.2)
+              : colorScheme.outline.withValues(alpha: 0.1),
+        ),
       ),
       child: Center(
         child: Column(
@@ -119,23 +135,21 @@ class RecentDevicesSection extends StatelessWidget {
             Icon(
               Icons.devices_other,
               size: 48,
-              color: AppColors.textLight,
+              color: colorScheme.onSurface.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Chưa có thiết bị nào',
-              style: TextStyle(
-                fontSize: 16,
+              style: theme.textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+                color: colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Thêm thiết bị mới để bắt đầu',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textLight,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
           ],
@@ -167,6 +181,9 @@ class _DeviceListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final statusColor = device.isOnline ? AppColors.online : AppColors.offline;
 
     return Container(
@@ -179,12 +196,18 @@ class _DeviceListItem extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(
+                color: isDark
+                    ? colorScheme.outline.withValues(alpha: 0.2)
+                    : colorScheme.outline.withValues(alpha: 0.1),
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.1)
+                      : Colors.black.withValues(alpha: 0.02),
                   blurRadius: 4,
                   offset: const Offset(0, 1),
                 ),
@@ -214,10 +237,8 @@ class _DeviceListItem extends StatelessWidget {
                     children: [
                       Text(
                         device.name,
-                        style: const TextStyle(
-                          fontSize: 15,
+                        style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -228,15 +249,14 @@ class _DeviceListItem extends StatelessWidget {
                           Icon(
                             Icons.label_outline,
                             size: 12,
-                            color: AppColors.textLight,
+                            color: colorScheme.onSurface.withValues(alpha: 0.4),
                           ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               device.areaName ?? device.type,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurface.withValues(alpha: 0.6),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

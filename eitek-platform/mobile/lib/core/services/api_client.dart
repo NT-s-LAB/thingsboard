@@ -10,7 +10,7 @@ class ApiClient {
 
   ApiClient(this._storage) {
     _dio = Dio(BaseOptions(
-      baseUrl: AppConstants.apiBaseUrl,
+      baseUrl: _storage.getApiBaseUrl(),
       connectTimeout: AppConstants.connectionTimeout,
       receiveTimeout: AppConstants.receiveTimeout,
       headers: {
@@ -21,6 +21,13 @@ class ApiClient {
 
     _setupInterceptors();
   }
+
+  /// Update base URL when server settings change
+  void updateBaseUrl() {
+    _dio.options.baseUrl = _storage.getApiBaseUrl();
+  }
+
+  String get currentBaseUrl => _dio.options.baseUrl;
 
   void _setupInterceptors() {
     _dio.interceptors.add(InterceptorsWrapper(

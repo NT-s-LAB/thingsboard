@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
 
 /// Quick actions panel widget
 /// Shows quick action buttons for common tasks
@@ -9,15 +8,15 @@ class QuickActionsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Truy cập nhanh',
-          style: TextStyle(
-            fontSize: 18,
+          style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 12),
@@ -74,6 +73,10 @@ class _QuickActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -82,12 +85,18 @@ class _QuickActionButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(
+              color: isDark
+                  ? colorScheme.outline.withValues(alpha: 0.2)
+                  : colorScheme.outline.withValues(alpha: 0.1),
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.2)
+                    : Colors.black.withValues(alpha: 0.03),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -99,22 +108,21 @@ class _QuickActionButton extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
+                  color: colorScheme.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   icon,
-                  color: AppColors.primary,
+                  color: colorScheme.primary,
                   size: 24,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 12,
+                style: theme.textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
+                  color: colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
                 textAlign: TextAlign.center,
               ),
