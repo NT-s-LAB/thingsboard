@@ -12,6 +12,7 @@ import { STROKE_DASH_ARRAYS, type StrokeStyle } from '../types';
 export const RectangleRenderer: React.FC<WidgetRendererProps> = memo(
   ({ properties: p, width, height }) => {
     // Extract style properties with defaults
+    const fillEnabled = (p.fillEnabled as boolean) ?? true;
     const fillColor = (p.fillColor as string) || '#ffffff';
     const strokeColor = (p.strokeColor as string) || '#1f2937';
     const strokeWidth = (p.strokeWidth as number) ?? 2;
@@ -40,7 +41,7 @@ export const RectangleRenderer: React.FC<WidgetRendererProps> = memo(
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ opacity }}
+        style={{ overflow: 'visible', opacity }}
       >
         {shadow && (
           <defs>
@@ -68,7 +69,7 @@ export const RectangleRenderer: React.FC<WidgetRendererProps> = memo(
           height={height - strokeWidth}
           rx={cornerRadius}
           ry={cornerRadius}
-          fill={fillColor}
+          fill={fillEnabled ? fillColor : 'none'}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
           strokeDasharray={STROKE_DASH_ARRAYS[strokeStyle]}

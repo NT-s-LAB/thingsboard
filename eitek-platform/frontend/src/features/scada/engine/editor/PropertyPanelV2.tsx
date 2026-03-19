@@ -354,6 +354,10 @@ export const PropertyPanelV2: React.FC = () => {
     groups.set(group, arr);
   }
 
+  // Shape widgets manage fill/stroke/radius/opacity via their own SVG propSchema.
+  // Hiding the CSS-wrapper-based Appearance fields prevents conflicts.
+  const isShapeWidget = selectedWidget.type.startsWith('shape-');
+
   return (
     <div className="scada-panel" style={{ width: 260, flexShrink: 0 }}>
       <div className="scada-panel__header">
@@ -393,84 +397,103 @@ export const PropertyPanelV2: React.FC = () => {
         </FieldGroup>
 
         {/* Appearance section */}
+        {/* Shape widgets manage opacity/border/radius/bg via their own SVG propSchema (Style/Shape groups). */}
+        {/* Only show CSS-wrapper Appearance fields for non-shape widgets to avoid visual conflicts. */}
         <FieldGroup label="Appearance">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Opacity</label>
-            <input
-              type="range"
-              value={Number(selectedWidget.properties._opacity ?? 1)}
-              min={0} max={1} step={0.05}
-              onChange={(e) => handlePropertyChange('_opacity', Number(e.target.value))}
-              style={{ flex: 1 }}
-            />
-            <span style={{ fontSize: 10, color: '#9CA3AF', width: 28, textAlign: 'right' }}>
-              {Math.round(Number(selectedWidget.properties._opacity ?? 1) * 100)}%
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Border W</label>
-            <input
-              type="number"
-              value={Number(selectedWidget.properties._borderWidth ?? 0)}
-              min={0} max={20} step={1}
-              onChange={(e) => handlePropertyChange('_borderWidth', Number(e.target.value))}
-              style={{ ...inputStyle, flex: 1 }}
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Border C</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+          {!isShapeWidget && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Opacity</label>
               <input
-                type="color"
-                value={toColorHex(selectedWidget.properties._borderColor)}
-                onChange={(e) => handlePropertyChange('_borderColor', e.target.value)}
-                style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
+                type="range"
+                value={Number(selectedWidget.properties._opacity ?? 1)}
+                min={0} max={1} step={0.05}
+                onChange={(e) => handlePropertyChange('_opacity', Number(e.target.value))}
+                style={{ flex: 1 }}
               />
+              <span style={{ fontSize: 10, color: '#9CA3AF', width: 28, textAlign: 'right' }}>
+                {Math.round(Number(selectedWidget.properties._opacity ?? 1) * 100)}%
+              </span>
+            </div>
+          )}
+          {!isShapeWidget && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Border W</label>
               <input
-                type="text"
-                value={String(selectedWidget.properties._borderColor ?? '')}
-                onChange={(e) => handlePropertyChange('_borderColor', e.target.value)}
+                type="number"
+                value={Number(selectedWidget.properties._borderWidth ?? 0)}
+                min={0} max={20} step={1}
+                onChange={(e) => handlePropertyChange('_borderWidth', Number(e.target.value))}
                 style={{ ...inputStyle, flex: 1 }}
               />
             </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Radius</label>
-            <input
-              type="number"
-              value={Number(selectedWidget.properties._borderRadius ?? 0)}
-              min={0} max={999} step={1}
-              onChange={(e) => handlePropertyChange('_borderRadius', Number(e.target.value))}
-              style={{ ...inputStyle, flex: 1 }}
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Bg Color</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+          )}
+          {!isShapeWidget && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Border C</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                <input
+                  type="color"
+                  value={toColorHex(selectedWidget.properties._borderColor)}
+                  onChange={(e) => handlePropertyChange('_borderColor', e.target.value)}
+                  style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
+                />
+                <input
+                  type="text"
+                  value={String(selectedWidget.properties._borderColor ?? '')}
+                  onChange={(e) => handlePropertyChange('_borderColor', e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+              </div>
+            </div>
+          )}
+          {!isShapeWidget && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Radius</label>
               <input
-                type="color"
-                value={toColorHex(selectedWidget.properties._bgColor || '#ffffff')}
-                onChange={(e) => handlePropertyChange('_bgColor', e.target.value)}
-                style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
-              />
-              <input
-                type="text"
-                value={String(selectedWidget.properties._bgColor ?? '')}
-                onChange={(e) => handlePropertyChange('_bgColor', e.target.value)}
-                placeholder="transparent"
+                type="number"
+                value={Number(selectedWidget.properties._borderRadius ?? 0)}
+                min={0} max={999} step={1}
+                onChange={(e) => handlePropertyChange('_borderRadius', Number(e.target.value))}
                 style={{ ...inputStyle, flex: 1 }}
               />
             </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Bg Image</label>
-            <div style={{ flex: 1 }}>
-              <ImagePicker
-                value={String(selectedWidget.properties._bgImage ?? '')}
-                onChange={(url) => handlePropertyChange('_bgImage', url)}
-              />
+          )}
+          {!isShapeWidget && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Bg Color</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                <input
+                  type="color"
+                  value={toColorHex(selectedWidget.properties._bgColor || '#ffffff')}
+                  onChange={(e) => handlePropertyChange('_bgColor', e.target.value)}
+                  style={{ width: 28, height: 24, border: 'none', cursor: 'pointer', padding: 0 }}
+                />
+                <input
+                  type="text"
+                  value={String(selectedWidget.properties._bgColor ?? '')}
+                  onChange={(e) => handlePropertyChange('_bgColor', e.target.value)}
+                  placeholder="transparent"
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+              </div>
             </div>
-          </div>
+          )}
+          {!isShapeWidget && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Bg Image</label>
+              <div style={{ flex: 1 }}>
+                <ImagePicker
+                  value={String(selectedWidget.properties._bgImage ?? '')}
+                  onChange={(url) => handlePropertyChange('_bgImage', url)}
+                />
+              </div>
+            </div>
+          )}
+          {isShapeWidget && (
+            <div style={{ fontSize: 11, color: '#9CA3AF', fontStyle: 'italic', padding: '4px 0' }}>
+              Fill, stroke &amp; radius are in the Style / Shape groups below.
+            </div>
+          )}
         </FieldGroup>
 
         {/* Property fields by group */}

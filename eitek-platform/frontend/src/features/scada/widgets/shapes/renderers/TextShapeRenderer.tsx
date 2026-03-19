@@ -76,7 +76,7 @@ export const TextShapeRenderer: React.FC<WidgetRendererProps> = memo(
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ opacity }}
+        style={{ overflow: 'visible', opacity }}
       >
         {shadow && (
           <defs>

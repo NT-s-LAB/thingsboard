@@ -11,6 +11,7 @@ import { STROKE_DASH_ARRAYS, type StrokeStyle, calculatePolygonPoints } from '..
 export const PolygonRenderer: React.FC<WidgetRendererProps> = memo(
   ({ properties: p, width, height }) => {
     // Extract style properties with defaults
+    const fillEnabled = (p.fillEnabled as boolean) ?? true;
     const fillColor = (p.fillColor as string) || '#ffffff';
     const strokeColor = (p.strokeColor as string) || '#1f2937';
     const strokeWidth = (p.strokeWidth as number) ?? 2;
@@ -47,7 +48,7 @@ export const PolygonRenderer: React.FC<WidgetRendererProps> = memo(
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ opacity }}
+        style={{ overflow: 'visible', opacity }}
       >
         {shadow && (
           <defs>
@@ -70,7 +71,7 @@ export const PolygonRenderer: React.FC<WidgetRendererProps> = memo(
 
         <polygon
           points={points}
-          fill={fillColor}
+          fill={fillEnabled ? fillColor : 'none'}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
           strokeLinejoin="round"

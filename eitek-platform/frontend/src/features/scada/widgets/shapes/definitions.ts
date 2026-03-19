@@ -32,6 +32,13 @@ import {
  */
 const baseStyleProps: PropField[] = [
   {
+    key: 'fillEnabled',
+    label: 'Enable Fill',
+    type: 'boolean',
+    defaultValue: true,
+    group: 'Style',
+  },
+  {
     key: 'fillColor',
     label: 'Fill Color',
     type: 'color',
@@ -336,6 +343,13 @@ const arrowShape: WidgetDefinition = {
   defaultSize: { width: 120, height: 40 },
   supportsSvg: false,
   propSchema: [
+    {
+      key: 'fillEnabled',
+      label: 'Enable Fill',
+      type: 'boolean',
+      defaultValue: true,
+      group: 'Style',
+    },
     {
       key: 'fillColor',
       label: 'Fill Color',
