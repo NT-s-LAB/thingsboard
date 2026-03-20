@@ -30,13 +30,22 @@ export const ValueDisplayRenderer: React.FC<WidgetRendererProps> = ({
   const trendDownColor = (p.trendDownColor as string) || '#EF4444';
   const thresholds = (p.thresholds as Array<{ value: number; color: string }>) || [];
 
+  // Appearance — driven by propSchema (bgColor, bgImage, borderColor, borderWidth, borderRadius)
+  const bgColor = (p.bgColor as string) || '#F9FAFB';
+  const bgImage = (p.bgImage as string) || '';
+  const bgImageSize = (p.bgImageSize as string) || 'cover';
+  const borderColor = (p.borderColor as string) || '#E5E7EB';
+  const borderWidth = (p.borderWidth as number) ?? 1;
+  const borderRadius = (p.borderRadius as number) ?? 8;
+  const textColor = (p.textColor as string) || '#1F2937';
+
   // Format display value
   const rawVal = value ?? (isRuntime ? '---' : '0');
   const num = Number(rawVal);
   const displayVal = isNaN(num) ? String(rawVal) : num.toFixed(decimals);
 
   // Threshold colour
-  let valueColor = '#1F2937';
+  let valueColor = textColor;
   if (!isNaN(num) && thresholds.length > 0) {
     const sorted = [...thresholds].sort((a, b) => b.value - a.value);
     for (const t of sorted) {
@@ -47,13 +56,13 @@ export const ValueDisplayRenderer: React.FC<WidgetRendererProps> = ({
     }
   }
 
-  // Alarm flash
+  // Alarm border overrides propSchema border
   const alarmBorder =
     alarmState?.active && alarmState.severity === 'CRITICAL'
       ? '2px solid #EF4444'
       : alarmState?.active
         ? '2px solid #F59E0B'
-        : undefined;
+        : `${borderWidth}px solid ${borderColor}`;
 
   const fontSize = Math.max(16, height * 0.32);
 
@@ -66,12 +75,17 @@ export const ValueDisplayRenderer: React.FC<WidgetRendererProps> = ({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#F9FAFB',
-        border: alarmBorder || '1px solid #E5E7EB',
-        borderRadius: 8,
+        background: bgColor,
+        backgroundImage: bgImage ? `url(${bgImage})` : undefined,
+        backgroundSize: bgImage ? bgImageSize : undefined,
+        backgroundPosition: bgImage ? 'center' : undefined,
+        backgroundRepeat: 'no-repeat',
+        border: alarmBorder,
+        borderRadius,
         fontFamily: 'Arial, sans-serif',
         overflow: 'hidden',
         boxShadow: isRuntime ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
+        boxSizing: 'border-box',
       }}
       className={alarmState?.active ? 'scada-alarm-blink' : undefined}
     >

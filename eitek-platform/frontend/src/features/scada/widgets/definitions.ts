@@ -22,7 +22,6 @@ import { MotorRenderer } from './renderers/MotorRenderer';
 import { LedRenderer } from './renderers/LedRenderer';
 import { SwitchRenderer } from './renderers/SwitchRenderer';
 import { SliderRenderer } from './renderers/SliderRenderer';
-import { TextRenderer } from './renderers/TextRenderer';
 import { ButtonRenderer } from './renderers/ButtonRenderer';
 import { PipeRenderer } from './renderers/PipeRenderer';
 import { SvgSymbolRenderer } from './renderers/SvgSymbolRenderer';
@@ -51,7 +50,14 @@ const valueDisplay: WidgetDefinition = {
     { key: 'icon', label: 'Icon', type: 'image', defaultValue: '', group: 'Appearance' },
     { key: 'showTrend', label: 'Show Trend', type: 'boolean', defaultValue: false, group: 'Appearance' },
     { key: 'thresholds', label: 'Thresholds', type: 'json', defaultValue: [], group: 'Thresholds', description: '[{ value: 80, color: "#EF4444" }]' },
-    { key: 'bgColor', label: 'Background', type: 'color', defaultValue: '#FFFFFF', group: 'Appearance' },
+    { key: 'bgColor', label: 'Background Color', type: 'color', defaultValue: '#FFFFFF', group: 'Appearance' },
+    { key: 'bgImage', label: 'Background Image', type: 'image', defaultValue: '', group: 'Appearance' },
+    { key: 'bgImageSize', label: 'Image Fit', type: 'select', defaultValue: 'cover', options: [
+      { value: 'cover', label: 'Cover' },
+      { value: 'contain', label: 'Contain' },
+      { value: 'fill', label: 'Fill' },
+      { value: '100% 100%', label: 'Stretch' },
+    ], group: 'Appearance' },
     { key: 'textColor', label: 'Text Color', type: 'color', defaultValue: '#1F2937', group: 'Appearance' },
     { key: 'borderRadius', label: 'Border Radius', type: 'number', defaultValue: 6, min: 0, max: 30, group: 'Appearance' },
     { key: 'borderColor', label: 'Border Color', type: 'color', defaultValue: '#E5E7EB', group: 'Appearance' },
@@ -367,39 +373,6 @@ const slider: WidgetDefinition = {
   renderer: SliderRenderer,
 };
 
-// ─── TEXT ────────────────────────────────────────────────────────────────────
-
-const text: WidgetDefinition = {
-  type: 'text',
-  name: 'Text',
-  icon: '📝',
-  category: 'display',
-  defaultSize: { width: 150, height: 40 },
-  supportsSvg: false,
-  propSchema: [
-    { key: 'text', label: 'Text', type: 'string', defaultValue: 'Label' },
-    { key: 'fontSize', label: 'Font Size', type: 'number', defaultValue: 14, min: 8, max: 72 },
-    { key: 'fontWeight', label: 'Font Weight', type: 'select', defaultValue: 'normal', options: [{ value: 'normal', label: 'Normal' }, { value: 'bold', label: 'Bold' }, { value: '600', label: 'Semi Bold' }] },
-    { key: 'fontFamily', label: 'Font Family', type: 'string', defaultValue: 'Arial, sans-serif' },
-    { key: 'textColor', label: 'Text Color', type: 'color', defaultValue: '#1F2937' },
-    { key: 'align', label: 'Align', type: 'select', defaultValue: 'center', options: [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }] },
-    { key: 'verticalAlign', label: 'V-Align', type: 'select', defaultValue: 'center', options: [{ value: 'flex-start', label: 'Top' }, { value: 'center', label: 'Middle' }, { value: 'flex-end', label: 'Bottom' }], group: 'Layout' },
-    { key: 'bgColor', label: 'Background', type: 'color', defaultValue: 'transparent', group: 'Appearance' },
-    { key: 'borderColor', label: 'Border Color', type: 'color', defaultValue: 'transparent', group: 'Appearance' },
-    { key: 'borderWidth', label: 'Border Width', type: 'number', defaultValue: 0, min: 0, max: 10, group: 'Appearance' },
-    { key: 'padding', label: 'Padding', type: 'number', defaultValue: 4, min: 0, max: 20, group: 'Appearance' },
-  ],
-  bindingSchema: [
-    { key: 'text', label: 'Text', valueType: 'string' },
-    { key: 'textColor', label: 'Text Color', valueType: 'string' },
-    { key: 'bgColor', label: 'Background', valueType: 'string' },
-  ],
-  actionSchema: [
-    { trigger: 'click', label: 'On Click' },
-  ],
-  renderer: TextRenderer,
-};
-
 // ─── BUTTON ──────────────────────────────────────────────────────────────────
 
 const button: WidgetDefinition = {
@@ -656,7 +629,6 @@ const builtinWidgets: WidgetDefinition[] = [
   led,
   switchWidget,
   slider,
-  text,
   button,
   pipe,
   svgSymbol,

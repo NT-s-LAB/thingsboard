@@ -582,6 +582,13 @@ export const CanvasEditor: React.FC = () => {
           const isShapeWidget = widget.type.startsWith('shape-');
           const shapeCornerRadius = isShapeWidget ? Number(wp.cornerRadius ?? 0) : 0;
 
+          // Widgets that declare their own bgColor / borderWidth in propSchema render
+          // their border & background internally — skip CSS-wrapper appearance for them.
+          const hasOwnAppearance =
+            !isShapeWidget &&
+            !!def?.propSchema.some((f) => f.key === 'bgColor' || f.key === 'borderWidth');
+          const skipCssAppearance = isShapeWidget || hasOwnAppearance;
+
           return (
             <div
               key={widget.id}
@@ -593,16 +600,16 @@ export const CanvasEditor: React.FC = () => {
                 height: widget.transform.size.height,
                 transform: widget.transform.rotation ? `rotate(${widget.transform.rotation}deg)` : undefined,
                 zIndex: widget.transform.zIndex,
-                // --- Non-shape widgets: CSS wrapper styling ---
-                opacity: !isShapeWidget && wp._opacity != null ? Number(wp._opacity) : undefined,
-                border: !isShapeWidget && wp._borderWidth ? `${wp._borderWidth}px solid ${wp._borderColor ?? '#000'}` : undefined,
+                // --- CSS wrapper styling (only for widgets that don't manage own appearance) ---
+                opacity: !skipCssAppearance && wp._opacity != null ? Number(wp._opacity) : undefined,
+                border: !skipCssAppearance && wp._borderWidth ? `${wp._borderWidth}px solid ${wp._borderColor ?? '#000'}` : undefined,
                 borderRadius: isShapeWidget
                   ? (shapeCornerRadius > 0 ? `${shapeCornerRadius}px` : undefined)
-                  : (wp._borderRadius ? `${wp._borderRadius}px` : undefined),
-                backgroundColor: !isShapeWidget && wp._bgColor ? String(wp._bgColor) : undefined,
-                backgroundImage: !isShapeWidget && wp._bgImage ? `url(${wp._bgImage})` : undefined,
-                backgroundSize: !isShapeWidget && wp._bgImage ? 'cover' : undefined,
-                backgroundPosition: !isShapeWidget && wp._bgImage ? 'center' : undefined,
+                  : (!hasOwnAppearance && wp._borderRadius ? `${wp._borderRadius}px` : undefined),
+                backgroundColor: !skipCssAppearance && wp._bgColor ? String(wp._bgColor) : undefined,
+                backgroundImage: !skipCssAppearance && wp._bgImage ? `url(${wp._bgImage})` : undefined,
+                backgroundSize: !skipCssAppearance && wp._bgImage ? 'cover' : undefined,
+                backgroundPosition: !skipCssAppearance && wp._bgImage ? 'center' : undefined,
                 // Do NOT set overflow:hidden on shape widgets — it clips drop shadows
               }}
               onMouseDown={(e) => handleWidgetMouseDown(e, widget.id)}

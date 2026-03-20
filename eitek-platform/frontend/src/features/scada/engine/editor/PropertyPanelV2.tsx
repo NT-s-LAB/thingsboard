@@ -358,6 +358,17 @@ export const PropertyPanelV2: React.FC = () => {
   // Hiding the CSS-wrapper-based Appearance fields prevents conflicts.
   const isShapeWidget = selectedWidget.type.startsWith('shape-');
 
+  // Widgets that declare their own bgColor / borderWidth in propSchema render
+  // border & background internally. Showing the CSS-wrapper Appearance fields
+  // for these widgets would create a double-border / double-bg conflict.
+  const hasOwnAppearance =
+    !isShapeWidget &&
+    definition.propSchema.some((f) => f.key === 'bgColor' || f.key === 'borderWidth');
+
+  // Combined flag: hide CSS-wrapper Appearance fields when the widget manages
+  // its own appearance (shapes via SVG, others via own propSchema).
+  const hideCssAppearance = isShapeWidget || hasOwnAppearance;
+
   return (
     <div className="scada-panel" style={{ width: 260, flexShrink: 0 }}>
       <div className="scada-panel__header">
@@ -397,10 +408,10 @@ export const PropertyPanelV2: React.FC = () => {
         </FieldGroup>
 
         {/* Appearance section */}
-        {/* Shape widgets manage opacity/border/radius/bg via their own SVG propSchema (Style/Shape groups). */}
-        {/* Only show CSS-wrapper Appearance fields for non-shape widgets to avoid visual conflicts. */}
+        {/* Shape widgets and widgets with own bgColor/borderWidth in propSchema manage  */}
+        {/* appearance internally. CSS-wrapper fields are hidden for those to avoid conflict. */}
         <FieldGroup label="Appearance">
-          {!isShapeWidget && (
+          {!hideCssAppearance && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Opacity</label>
               <input
@@ -415,7 +426,7 @@ export const PropertyPanelV2: React.FC = () => {
               </span>
             </div>
           )}
-          {!isShapeWidget && (
+          {!hideCssAppearance && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Border W</label>
               <input
@@ -427,7 +438,7 @@ export const PropertyPanelV2: React.FC = () => {
               />
             </div>
           )}
-          {!isShapeWidget && (
+          {!hideCssAppearance && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Border C</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
@@ -446,7 +457,7 @@ export const PropertyPanelV2: React.FC = () => {
               </div>
             </div>
           )}
-          {!isShapeWidget && (
+          {!hideCssAppearance && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Radius</label>
               <input
@@ -458,7 +469,7 @@ export const PropertyPanelV2: React.FC = () => {
               />
             </div>
           )}
-          {!isShapeWidget && (
+          {!hideCssAppearance && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Bg Color</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
@@ -478,7 +489,7 @@ export const PropertyPanelV2: React.FC = () => {
               </div>
             </div>
           )}
-          {!isShapeWidget && (
+          {!hideCssAppearance && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Bg Image</label>
               <div style={{ flex: 1 }}>
@@ -489,9 +500,11 @@ export const PropertyPanelV2: React.FC = () => {
               </div>
             </div>
           )}
-          {isShapeWidget && (
+          {hideCssAppearance && (
             <div style={{ fontSize: 11, color: '#9CA3AF', fontStyle: 'italic', padding: '4px 0' }}>
-              Fill, stroke &amp; radius are in the Style / Shape groups below.
+              {isShapeWidget
+                ? 'Fill, stroke & radius are in the Style / Shape groups below.'
+                : 'Background & border are in the Appearance group below.'}
             </div>
           )}
         </FieldGroup>
