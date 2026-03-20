@@ -370,6 +370,11 @@ const RuntimeWidget: React.FC<RuntimeWidgetProps> = React.memo(
 
     const Renderer = definition.renderer;
     const props = resolvedProps ?? widget.properties;
+    const isShapeWidget = widget.type.startsWith('shape-');
+    const hasOwnAppearance =
+      !isShapeWidget &&
+      !!definition.propSchema.some((f) => f.key === 'bgColor' || f.key === 'borderWidth');
+    const skipCssAppearance = isShapeWidget || hasOwnAppearance;
 
     return (
       <div
@@ -381,6 +386,9 @@ const RuntimeWidget: React.FC<RuntimeWidgetProps> = React.memo(
           height: widget.transform.size.height,
           transform: widget.transform.rotation ? `rotate(${widget.transform.rotation}deg)` : undefined,
           zIndex: widget.transform.zIndex,
+          opacity: !skipCssAppearance && props._opacity != null ? Number(props._opacity) : undefined,
+          borderRadius: !skipCssAppearance && props._borderRadius ? `${props._borderRadius}px` : undefined,
+          backgroundColor: !skipCssAppearance && props._bgColor ? String(props._bgColor) : undefined,
         }}
       >
         <Renderer
@@ -391,6 +399,19 @@ const RuntimeWidget: React.FC<RuntimeWidgetProps> = React.memo(
           {...(alarmState ? { alarmState } : {})}
           onAction={onAction}
         />
+        {/* Border overlay — always on top so border is visible over SVG content */}
+        {!skipCssAppearance && !!props._borderWidth && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              border: `${props._borderWidth}px solid ${props._borderColor ?? '#000'}`,
+              borderRadius: props._borderRadius ? `${props._borderRadius}px` : undefined,
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          />
+        )}
         {alarmState?.active && <AlarmOverlay severity={alarmState.severity} />}
       </div>
     );

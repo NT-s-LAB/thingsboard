@@ -602,7 +602,6 @@ export const CanvasEditor: React.FC = () => {
                 zIndex: widget.transform.zIndex,
                 // --- CSS wrapper styling (only for widgets that don't manage own appearance) ---
                 opacity: !skipCssAppearance && wp._opacity != null ? Number(wp._opacity) : undefined,
-                border: !skipCssAppearance && wp._borderWidth ? `${wp._borderWidth}px solid ${wp._borderColor ?? '#000'}` : undefined,
                 borderRadius: isShapeWidget
                   ? (shapeCornerRadius > 0 ? `${shapeCornerRadius}px` : undefined)
                   : (!hasOwnAppearance && wp._borderRadius ? `${wp._borderRadius}px` : undefined),
@@ -627,6 +626,19 @@ export const CanvasEditor: React.FC = () => {
                 </div>
               )}
 
+              {/* Border overlay — rendered on top so border is always visible regardless of SVG content */}
+              {!skipCssAppearance && !!wp._borderWidth && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    border: `${wp._borderWidth}px solid ${wp._borderColor ?? '#000'}`,
+                    borderRadius: wp._borderRadius ? `${wp._borderRadius}px` : undefined,
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }}
+                />
+              )}
               {/* Resize handles (for selected widget) */}
               {isSelected && <ResizeHandles widgetId={widget.id} widget={widget} />}
             </div>

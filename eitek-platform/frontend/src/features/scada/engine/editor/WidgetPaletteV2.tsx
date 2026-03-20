@@ -105,7 +105,7 @@ export const WidgetPaletteV2: React.FC<WidgetPaletteV2Props> = ({
               cursor: 'pointer',
             }}
           >
-            🧩 Built-in
+            Built-in
           </button>
           <button
             onClick={() => setActiveTab('library')}
@@ -117,7 +117,7 @@ export const WidgetPaletteV2: React.FC<WidgetPaletteV2Props> = ({
               cursor: 'pointer',
             }}
           >
-            📦 Library
+            Library
           </button>
         </div>
       </div>
