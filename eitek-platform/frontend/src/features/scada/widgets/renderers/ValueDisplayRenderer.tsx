@@ -38,6 +38,7 @@ export const ValueDisplayRenderer: React.FC<WidgetRendererProps> = ({
   const borderWidth = (p.borderWidth as number) ?? 1;
   const borderRadius = (p.borderRadius as number) ?? 8;
   const textColor = (p.textColor as string) || '#1F2937';
+  const fontFamily = (p.fontFamily as string) || 'Arial, sans-serif';
 
   // Format display value
   const rawVal = value ?? (isRuntime ? '---' : '0');
@@ -82,7 +83,7 @@ export const ValueDisplayRenderer: React.FC<WidgetRendererProps> = ({
         backgroundRepeat: 'no-repeat',
         border: alarmBorder,
         borderRadius,
-        fontFamily: 'Arial, sans-serif',
+        fontFamily,
         overflow: 'hidden',
         boxShadow: isRuntime ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
         boxSizing: 'border-box',
