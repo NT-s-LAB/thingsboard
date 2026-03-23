@@ -83,17 +83,17 @@ export const DeviceListItem: React.FC<DeviceListItemProps> = ({
       )}
 
       {/* Device Name */}
-      <td className="px-6 py-4">
+      <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex items-center space-x-3">
           {profileImage && (
             <img src={profileImage} alt={device.name} className="w-7 h-7 rounded object-cover flex-shrink-0" />
           )}
-          <div>
-            <div className="font-semibold text-gray-900">
+          <div className="min-w-0">
+            <div className="font-semibold text-gray-900 whitespace-nowrap">
               {device.name}
             </div>
             {device.description && (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-500 truncate max-w-xs">
                 {device.description}
               </div>
             )}

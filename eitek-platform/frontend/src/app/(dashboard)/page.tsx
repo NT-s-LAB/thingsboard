@@ -564,9 +564,9 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* ── Footer info ─────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 pb-4">
-        <span>EITEK IoT Platform v1.0</span>
-        <span>Last refresh: {new Date().toLocaleTimeString()}</span>
+      <div className="flex flex-col items-center justify-center text-xs text-muted-foreground pt-2 pb-4 gap-0.5">
+        <span className="font-medium text-gray-600">EITEK IoT Platform v1.0</span>
+        <span>© {new Date().getFullYear()} EITEK Corporation. All rights reserved.</span>
       </div>
     </div>
   );
