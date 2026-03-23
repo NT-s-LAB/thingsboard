@@ -137,21 +137,39 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
           {!isCollapsed && (
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary-600 rounded flex items-center justify-center">
-                <span className="text-white font-bold text-sm">E</span>
-              </div>
-              <span className="font-semibold text-gray-900">EITEK Platform</span>
+            <div className="flex flex-1 items-center justify-center">
+              <a href="/" className="cursor-pointer">
+                <img
+                  src="/images/logo/logo.png"
+                  alt="EITEK Platform"
+                  className="h-20 w-auto object-contain"
+                />
+              </a>
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onToggle}
-            className="p-1"
-          >
-            {isCollapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
-          </Button>
+          {isCollapsed && (
+            <div className="flex flex-1 items-center justify-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onToggle}
+                className="p-2 w-10 h-10"
+                title="Mở rộng menu"
+              >
+                <Menu className="w-5 h-5 text-gray-600" />
+              </Button>
+            </div>
+          )}
+          {!isCollapsed && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggle}
+              className="p-1 flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </div>
 
