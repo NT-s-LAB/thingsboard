@@ -20,7 +20,7 @@ async function bootstrap() {
   // CORS (before static assets so headers apply to file responses too)
   const frontendUrl = configService.get('FRONTEND_URL') || 'http://localhost:3000';
   const corsOrigins = configService.get('CORS_ORIGINS');
-  const defaultOrigins = [frontendUrl, 'http://192.168.1.68'];
+  const defaultOrigins = [frontendUrl];
   
   // Allow all localhost ports in development (for Flutter web, etc.)
   const isDevMode = configService.get('NODE_ENV') !== 'production';

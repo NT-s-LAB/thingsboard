@@ -29,20 +29,22 @@ export class RedisIoAdapter extends IoAdapter {
       return;
     }
 
+    const pubClient = createClient({ url: redisUrl, socket: { reconnectStrategy: false } });
+    const subClient = pubClient.duplicate();
+
+    pubClient.on('error', (err) => this.logger.error('Redis Pub Client Error', (err as Error).message));
+    subClient.on('error', (err) => this.logger.error('Redis Sub Client Error', (err as Error).message));
+
     try {
-      const pubClient = createClient({ url: redisUrl });
-      const subClient = pubClient.duplicate();
-
-      pubClient.on('error', (err) => this.logger.error('Redis Pub Client Error', err));
-      subClient.on('error', (err) => this.logger.error('Redis Sub Client Error', err));
-
       await Promise.all([pubClient.connect(), subClient.connect()]);
-
       this.adapterConstructor = createAdapter(pubClient, subClient);
       this.logger.log('Connected to Redis for Socket.io clustering');
     } catch (error) {
-      this.logger.error(`Failed to connect to Redis: ${error.message}`);
-      this.logger.warn('Falling back to in-memory adapter');
+      this.logger.error(`Failed to connect to Redis: ${(error as Error).message}`);
+      this.logger.warn('Falling back to in-memory adapter (single instance mode)');
+      // Disconnect clients to stop retry spam
+      await pubClient.quit().catch(() => {});
+      await subClient.quit().catch(() => {});
     }
   }
 
