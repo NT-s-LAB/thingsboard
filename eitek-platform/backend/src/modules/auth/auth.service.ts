@@ -69,7 +69,7 @@ export class AuthService {
    * Register new user
    */
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    const { email, password, firstName, lastName, tenantId } = registerDto;
+    const { email, password, firstName, lastName } = registerDto;
 
     // Check if user already exists
     const existingUser = await this.prisma.user.findUnique({
@@ -80,31 +80,40 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    // Verify tenant exists
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-    });
-
-    if (!tenant) {
-      throw new UnauthorizedException('Invalid tenant');
-    }
-
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        firstName,
-        lastName,
-        tenantId,
-        role: 'VIEWER', // Default role
-      },
-      include: {
-        tenant: true,
-      },
+    // Create tenant + TENANT_ADMIN user in a single transaction
+    const tenantCode = `tenant-${Date.now()}`;
+    const tenantName = `${firstName} ${lastName}`;
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      // Find default profile to auto-assign
+      const defaultProfile = await tx.tenantProfile.findFirst({
+        where: { isDefault: true, isActive: true },
+      });
+
+      const tenant = await tx.tenant.create({
+        data: {
+          name: tenantName,
+          code: tenantCode,
+          profileId: defaultProfile?.id ?? undefined,
+        },
+      });
+
+      return tx.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          firstName,
+          lastName,
+          tenantId: tenant.id,
+          role: 'TENANT_ADMIN',
+        },
+        include: {
+          tenant: true,
+        },
+      });
     });
 
     // Generate tokens
@@ -165,7 +174,7 @@ export class AuthService {
   async validateUser(userId: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { id: userId, isActive: true },
-      include: { tenant: true },
+      include: { tenant: { include: { profile: true } } },
     });
   }
 

@@ -90,6 +90,14 @@ export class CreateTenantProfileDto {
   isDefault?: boolean;
 
   @ApiPropertyOptional({
+    description: 'Can tenants with this profile purchase add-ons',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  addonEligible?: boolean;
+
+  @ApiPropertyOptional({
     description: 'Is profile active',
     default: true,
   })

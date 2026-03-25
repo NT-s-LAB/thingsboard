@@ -164,6 +164,16 @@ export default function LoginPage() {
             </>
           )}
         </Button>
+
+        {/* Register Link */}
+        <div className="text-center pt-2">
+          <p className="text-sm text-gray-500">
+            Chưa có tài khoản?{' '}
+            <a href="/register" className="text-[#1e3a5f] hover:text-[#2a4a6f] font-medium transition-colors">
+              Đăng ký
+            </a>
+          </p>
+        </div>
       </form>
     </div>
   );

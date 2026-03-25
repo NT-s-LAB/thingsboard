@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
@@ -11,6 +11,8 @@ import { ROLE_HIERARCHY, UserRoleType } from '@/features/auth/hooks/useRoleGuard
 import { useProjectStore } from '@/features/projects/stores/projectStore';
 import { useDeviceStore } from '@/features/devices/stores/deviceStore';
 import { formatDistanceToNow } from '@/shared/utils/date';
+import { tenantAddonService } from '@/features/addons/services/addonService';
+import type { TenantQuotaInfo } from '@/shared/types';
 
 // ─── Icons (inline SVG for zero-dependency) ─────────────────────────────────
 
@@ -167,6 +169,109 @@ function HealthRing({ online, total }: { online: number; total: number }) {
 
 // ─── Main Dashboard ──────────────────────────────────────────────────────────
 
+// ─── Usage Bar ───────────────────────────────────────────────────────────────
+
+function UsageBar({ label, icon, used, limit, addon }: {
+  label: string;
+  icon: string;
+  used: number;
+  limit: number | null;
+  addon: number;
+}) {
+  const effective = limit;
+  const pct = effective != null && effective > 0 ? Math.min(100, Math.round((used / effective) * 100)) : 0;
+  const isWarning = pct >= 80 && pct < 95;
+  const isDanger = pct >= 95;
+
+  const barColor = isDanger
+    ? 'bg-red-500'
+    : isWarning
+    ? 'bg-amber-500'
+    : 'bg-blue-500';
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
+          <span>{icon}</span>
+          {label}
+        </span>
+        <span className="font-semibold tabular-nums">
+          {used} / {effective != null ? effective : '∞'}
+          {addon > 0 && (
+            <span className="text-emerald-600 dark:text-emerald-400 ml-1 text-[10px]">+{addon}</span>
+          )}
+        </span>
+      </div>
+      {effective != null ? (
+        <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      ) : (
+        <div className="h-2 rounded-full bg-emerald-100 dark:bg-emerald-950/30" />
+      )}
+    </div>
+  );
+}
+
+// ─── Quota Card ──────────────────────────────────────────────────────────────
+
+function QuotaCard({ quota }: { quota: TenantQuotaInfo }) {
+  const allFeatures = [...quota.features, ...quota.addonFeatures];
+
+  return (
+    <Card className="border border-blue-200/60 dark:border-blue-800/40 bg-gradient-to-r from-blue-50/50 to-white dark:from-blue-950/20 dark:to-background">
+      <CardContent className="p-5 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Gói dịch vụ</p>
+              <p className="text-lg font-bold text-blue-700 dark:text-blue-400">{quota.profileName}</p>
+            </div>
+          </div>
+
+          {quota.addons.length > 0 && (
+            <span className="text-xs font-medium px-2 py-1 rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
+              {quota.addons.length} add-on{quota.addons.length > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        {/* Usage Bars */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <UsageBar label="Users" icon="👥" used={quota.usage.users} limit={quota.effectiveLimits.maxUsers} addon={quota.addonExtras.users} />
+          <UsageBar label="Thiết bị" icon="📟" used={quota.usage.devices} limit={quota.effectiveLimits.maxDevices} addon={quota.addonExtras.devices} />
+          <UsageBar label="Dự án" icon="📁" used={quota.usage.projects} limit={quota.effectiveLimits.maxProjects} addon={quota.addonExtras.projects} />
+          <UsageBar label="Dashboard" icon="📊" used={quota.usage.dashboards} limit={quota.effectiveLimits.maxDashboards} addon={quota.addonExtras.dashboards} />
+        </div>
+
+        {/* Features */}
+        {allFeatures.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {allFeatures.map((f) => (
+              <span
+                key={f}
+                className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100/60 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+              >
+                ✓ {f}
+              </span>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 const DashboardPage: React.FC = () => {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -185,6 +290,8 @@ const DashboardPage: React.FC = () => {
     loading: deviceLoading,
   } = useDeviceStore();
 
+  const [quota, setQuota] = useState<TenantQuotaInfo | null>(null);
+
   useEffect(() => {
     // Only fetch data when auth is ready and authenticated
     if (!isReady || !isAuthenticated) {
@@ -193,6 +300,7 @@ const DashboardPage: React.FC = () => {
     fetchRecentProjects();
     fetchFavorites();
     fetchDevices({ pageSize: 10 });
+    tenantAddonService.getMyQuota().then(setQuota).catch(() => {});
   }, [isReady, isAuthenticated, fetchRecentProjects, fetchFavorites, fetchDevices]);
 
   const stats = useMemo(() => {
@@ -338,6 +446,27 @@ const DashboardPage: React.FC = () => {
           subtitleColor={stats.activeAlarms === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}
         />
       </div>
+
+      {/* ── Tenant Quota & Plan Info ───────────────────────────────── */}
+      {quota ? (
+        <QuotaCard quota={quota} />
+      ) : user?.tenant?.profile && (
+        <Card className="border border-blue-200/60 dark:border-blue-800/40 bg-gradient-to-r from-blue-50/50 to-white dark:from-blue-950/20 dark:to-background">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Gói dịch vụ</p>
+                <p className="text-lg font-bold text-blue-700 dark:text-blue-400">{user.tenant.profile.name}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Main grid ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

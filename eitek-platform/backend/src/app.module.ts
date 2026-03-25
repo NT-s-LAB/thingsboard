@@ -23,6 +23,7 @@ import { ImageLibraryModule } from './modules/image-library/image-library.module
 import { AdminModule } from './modules/admin/admin.module';
 import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { AddonsModule } from './modules/addons/addons.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import thingsBoardConfig from './config/thingsboard.config';
@@ -72,6 +73,7 @@ import thingsBoardConfig from './config/thingsboard.config';
     // Admin
     AdminModule,
     AdminSettingsModule,
+    AddonsModule,
   ],
 })
 export class AppModule {}

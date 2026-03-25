@@ -36,12 +36,27 @@ export interface Role extends BaseEntity {
   isActive: boolean;
 }
 
+export interface TenantProfile extends BaseEntity {
+  name: string;
+  description?: string;
+  maxUsers: number;
+  maxDevices: number;
+  maxProjects: number;
+  maxDashboards: number;
+  maxApiCalls?: number | null;
+  features: string[];
+  addonEligible: boolean;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
 export interface Tenant extends BaseEntity {
   name: string;
   code: string;
   description?: string;
   settings?: Record<string, any>;
   isActive: boolean;
+  profile?: TenantProfile | null;
 }
 
 // Organizational types
@@ -326,4 +341,68 @@ export interface ModalState {
   isOpen: boolean;
   type?: string;
   data?: any;
+}
+
+// ================================
+// ADDON SYSTEM
+// ================================
+
+export type AddonType = 'QUOTA' | 'FEATURE';
+export type AddonResourceType = 'DEVICES' | 'USERS' | 'PROJECTS' | 'DASHBOARDS' | 'API_CALLS' | 'STORAGE';
+
+export interface AddonCatalog extends BaseEntity {
+  code: string;
+  name: string;
+  description?: string;
+  type: AddonType;
+  resourceType?: AddonResourceType | null;
+  quantityPerUnit?: number | null;
+  featureFlag?: string | null;
+  priceMonthly: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface TenantAddon extends BaseEntity {
+  tenantId: string;
+  addonId: string;
+  quantity: number;
+  isActive: boolean;
+  note?: string | null;
+  addon: Pick<AddonCatalog, 'id' | 'code' | 'name' | 'type' | 'resourceType' | 'quantityPerUnit' | 'featureFlag' | 'priceMonthly'>;
+}
+
+export interface TenantQuotaInfo {
+  profileName: string;
+  baseLimits: {
+    maxUsers: number;
+    maxDevices: number;
+    maxProjects: number;
+    maxDashboards: number;
+    maxApiCalls: number | null;
+  };
+  addonExtras: {
+    users: number;
+    devices: number;
+    projects: number;
+    dashboards: number;
+    apiCalls: number;
+  };
+  effectiveLimits: {
+    maxUsers: number | null;
+    maxDevices: number | null;
+    maxProjects: number | null;
+    maxDashboards: number | null;
+    maxApiCalls: number | null;
+  };
+  usage: {
+    users: number;
+    devices: number;
+    projects: number;
+    dashboards: number;
+  };
+  features: string[];
+  addonFeatures: string[];
+  addonEligible: boolean;
+  addons: TenantAddon[];
 }

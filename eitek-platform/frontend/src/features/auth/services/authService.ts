@@ -68,6 +68,22 @@ class AuthService {
       return false;
     }
   }
+
+  async register(data: { email: string; firstName: string; lastName: string; password: string }): Promise<LoginResponse> {
+    const res = await apiClient.post<any>(`${this.basePath}/register`, data);
+    const loginResponse: LoginResponse = {
+      token: res.accessToken || res.token,
+      refreshToken: res.refreshToken,
+      user: res.user,
+    };
+    if (loginResponse.token) {
+      apiClient.setToken(loginResponse.token);
+    }
+    if (loginResponse.refreshToken) {
+      apiClient.setRefreshToken(loginResponse.refreshToken);
+    }
+    return loginResponse;
+  }
 }
 
 export const authService = new AuthService();

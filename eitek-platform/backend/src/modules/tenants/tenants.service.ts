@@ -193,4 +193,5 @@ export class TenantsService {
 
     await this.prisma.tenant.delete({ where: { id } });
   }
+
 }

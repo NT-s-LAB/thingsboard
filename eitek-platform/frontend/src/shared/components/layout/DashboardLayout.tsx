@@ -24,6 +24,7 @@ import {
   Shield,
   MapPin,
   Building2,
+  Package,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
@@ -142,6 +143,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       href: '/users',
       icon: <Users className="w-5 h-5" />,
       label: 'Users',
+      minRole: 'TENANT_ADMIN' as UserRoleEnum,
+    },
+    {
+      href: '/addons',
+      icon: <Package className="w-5 h-5" />,
+      label: 'Add-ons',
       minRole: 'TENANT_ADMIN' as UserRoleEnum,
     },
     {

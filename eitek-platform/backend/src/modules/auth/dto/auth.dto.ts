@@ -55,14 +55,6 @@ export class RegisterDto {
   @IsNotEmpty()
   @MinLength(6)
   password: string;
-
-  @ApiProperty({
-    description: 'Tenant ID',
-    example: 'tenant-uuid'
-  })
-  @IsString()
-  @IsNotEmpty()
-  tenantId: string;
 }
 
 export class RefreshTokenDto {

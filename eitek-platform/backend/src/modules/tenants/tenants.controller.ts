@@ -89,4 +89,5 @@ export class TenantsController {
       timestamp: new Date().toISOString(),
     };
   }
+
 }

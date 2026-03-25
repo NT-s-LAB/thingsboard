@@ -12,6 +12,7 @@ export interface TenantProfile {
   maxDashboards: number;
   maxApiCalls: number | null;
   features: string[];
+  addonEligible: boolean;
   isDefault: boolean;
   isActive: boolean;
   createdAt: string;
@@ -28,6 +29,7 @@ export interface CreateTenantProfileDto {
   maxDashboards?: number;
   maxApiCalls?: number | undefined;
   features?: string[];
+  addonEligible?: boolean;
   isDefault?: boolean;
   isActive?: boolean;
 }
@@ -41,6 +43,7 @@ export interface UpdateTenantProfileDto {
   maxDashboards?: number;
   maxApiCalls?: number | undefined;
   features?: string[];
+  addonEligible?: boolean;
   isDefault?: boolean;
   isActive?: boolean;
 }

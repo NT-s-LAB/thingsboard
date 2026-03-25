@@ -66,28 +66,84 @@ enum AuditAction {
   SYNC
 }
 
+enum AddonType {
+  QUOTA    // thêm số lượng (devices, users, projects...)
+  FEATURE  // unlock tính năng (SCADA Editor, White-label...)
+}
+
+enum AddonResourceType {
+  DEVICES
+  USERS
+  PROJECTS
+  DASHBOARDS
+  API_CALLS
+  STORAGE
+}
+
 // ================================
 // TENANT PROFILES
 // ================================
 
 model TenantProfile {
-  id           String   @id @default(uuid())
-  name         String   @unique
-  description  String?
-  maxUsers     Int      @default(10)
-  maxDevices   Int      @default(100)
-  maxProjects  Int      @default(5)
-  maxDashboards Int     @default(10)
-  maxApiCalls  Int?     // null = unlimited
-  features     String[] @default([])
-  isDefault    Boolean  @default(false)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(uuid())
+  name          String   @unique
+  description   String?
+  maxUsers      Int      @default(10)
+  maxDevices    Int      @default(100)
+  maxProjects   Int      @default(5)
+  maxDashboards Int      @default(10)
+  maxApiCalls   Int?     // null = unlimited
+  features      String[] @default([])
+  addonEligible Boolean  @default(false) // Starter = false → force upgrade
+  isDefault     Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   tenants Tenant[]
 
   @@map("tenant_profiles")
+}
+
+// ================================
+// ADDON SYSTEM
+// ================================
+
+model AddonCatalog {
+  id              String            @id @default(uuid())
+  code            String            @unique // e.g. "EXTRA_DEVICES_50", "SCADA_EDITOR"
+  name            String            // e.g. "Extra 50 Devices"
+  description     String?
+  type            AddonType         // QUOTA or FEATURE
+  resourceType    AddonResourceType? // only for QUOTA addons
+  quantityPerUnit Int?              // e.g. 50 (devices), 10 (users) — null for FEATURE
+  featureFlag     String?           // e.g. "scada_editor" — only for FEATURE addons
+  priceMonthly    Float             @default(0)
+  isActive        Boolean           @default(true)
+  sortOrder       Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  tenantAddons TenantAddon[]
+
+  @@map("addon_catalog")
+}
+
+model TenantAddon {
+  id        String   @id @default(uuid())
+  tenantId  String
+  addonId   String
+  quantity  Int      @default(1)   // how many units purchased (1 unit = quantityPerUnit resources)
+  isActive  Boolean  @default(true)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  addon  AddonCatalog @relation(fields: [addonId], references: [id])
+
+  @@unique([tenantId, addonId]) // one entry per tenant-addon pair, quantity controls amount
+  @@map("tenant_addons")
 }
 
 // ================================
@@ -111,6 +167,7 @@ model Tenant {
   users     User[]
   projects  Project[]
   auditLogs AuditLog[]
+  addons    TenantAddon[]
 
   @@map("tenants")
 }

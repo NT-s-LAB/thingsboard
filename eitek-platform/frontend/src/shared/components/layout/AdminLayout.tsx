@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Image,
   Puzzle,
+  Package,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { useAuthStore } from '@/features/auth/stores/authStore';
@@ -58,6 +59,12 @@ const navigation: NavItem[] = [
     icon: <Puzzle className="w-5 h-5" />,
     label: 'Widget Library',
     description: 'System widget templates',
+  },
+  {
+    href: '/admin/addons',
+    icon: <Package className="w-5 h-5" />,
+    label: 'Add-on Catalog',
+    description: 'Manage add-on packages and pricing',
   },
   {
     href: '/admin/settings',
