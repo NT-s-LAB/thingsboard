@@ -16,10 +16,14 @@ import { TenantUsersService } from './tenant-users.service';
 import { CreateTenantUserDto } from './dto/create-tenant-user.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Tenant Users')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.SUPER_ADMIN)
 @Controller('tenants/:tenantId/users')
 export class TenantUsersController {
   constructor(private readonly tenantUsersService: TenantUsersService) {}

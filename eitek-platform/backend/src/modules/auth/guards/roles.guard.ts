@@ -3,6 +3,14 @@ import { Reflector } from '@nestjs/core';
 import { UserRole } from '@prisma/client';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
+const ROLE_HIERARCHY: Record<UserRole, number> = {
+  [UserRole.VIEWER]: 0,
+  [UserRole.OPERATOR]: 1,
+  [UserRole.PROJECT_MANAGER]: 2,
+  [UserRole.TENANT_ADMIN]: 3,
+  [UserRole.SUPER_ADMIN]: 4,
+};
+
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
@@ -18,13 +26,15 @@ export class RolesGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
-    
+
     if (!user) {
       return false;
     }
 
-    // Check if user has any of the required roles
-    // User.role is a single enum value, not an array
-    return requiredRoles.includes(user.role);
+    const userLevel = ROLE_HIERARCHY[user.role as UserRole] ?? -1;
+
+    // User passes if their role level >= minimum required role level
+    const minRequired = Math.min(...requiredRoles.map((r) => ROLE_HIERARCHY[r] ?? 999));
+    return userLevel >= minRequired;
   }
 }

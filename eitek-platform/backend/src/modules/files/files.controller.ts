@@ -18,12 +18,16 @@ import { FilesService } from './files.service';
 import { UploadFileDto } from './dto/upload-file.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/common.interface';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Files')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.VIEWER)
 @Controller('files')
 export class FilesController {
   constructor(private readonly filesService: FilesService) {}

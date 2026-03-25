@@ -16,17 +16,21 @@ import { CreateDeviceDto } from '../dto/create-device.dto';
 import { UpdateDeviceDto } from '../dto/update-device.dto';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { RequestUser } from '../../../common/interfaces/common.interface';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Devices')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('devices')
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
 
   @ApiOperation({ summary: 'Create a new device' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Post()
   async create(
     @Body() createDeviceDto: CreateDeviceDto,
@@ -42,6 +46,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Get all devices with pagination' })
+  @Roles(UserRole.VIEWER)
   @Get()
   async findAll(
     @Query() pagination: PaginationDto,
@@ -58,6 +63,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Get device by ID' })
+  @Roles(UserRole.VIEWER)
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     const device = await this.devicesService.findOne(id, user);
@@ -70,6 +76,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Update device' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -86,6 +93,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Delete device' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     await this.devicesService.remove(id, user);
@@ -101,6 +109,7 @@ export class DevicesController {
   // ================================
 
   @ApiOperation({ summary: 'Get device credentials' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Get(':id/credentials')
   async getCredentials(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     const credentials = await this.devicesService.getCredentials(id, user);
@@ -113,6 +122,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Save device credentials' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Post(':id/credentials')
   async saveCredentials(
     @Param('id') id: string,
@@ -133,6 +143,7 @@ export class DevicesController {
   // ================================
 
   @ApiOperation({ summary: 'Get device attributes by scope' })
+  @Roles(UserRole.VIEWER)
   @Get(':id/attributes/:scope')
   async getAttributes(
     @Param('id') id: string,
@@ -155,6 +166,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Save device attributes' })
+  @Roles(UserRole.OPERATOR)
   @Post(':id/attributes/:scope')
   async saveAttributes(
     @Param('id') id: string,
@@ -171,6 +183,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Delete device attributes' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Delete(':id/attributes/:scope')
   async deleteAttributes(
     @Param('id') id: string,
@@ -191,6 +204,7 @@ export class DevicesController {
   // ================================
 
   @ApiOperation({ summary: 'Get device latest telemetry' })
+  @Roles(UserRole.VIEWER)
   @Get(':id/telemetry')
   async getTelemetry(
     @Param('id') deviceId: string,
@@ -211,6 +225,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Get device timeseries data' })
+  @Roles(UserRole.VIEWER)
   @Get(':id/timeseries')
   async getTimeseries(
     @Param('id') deviceId: string,
@@ -247,6 +262,7 @@ export class DevicesController {
   // ================================
 
   @ApiOperation({ summary: 'Send RPC command to device' })
+  @Roles(UserRole.OPERATOR)
   @Post(':id/rpc')
   async sendRpc(
     @Param('id') deviceId: string,
@@ -272,6 +288,7 @@ export class DevicesController {
   // ================================
 
   @ApiOperation({ summary: 'Get device alarms' })
+  @Roles(UserRole.VIEWER)
   @Get(':id/alarms')
   async getAlarms(
     @Param('id') deviceId: string,
@@ -298,6 +315,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Acknowledge device alarm' })
+  @Roles(UserRole.OPERATOR)
   @Post(':id/alarms/:alarmId/ack')
   async ackAlarm(
     @Param('id') deviceId: string,
@@ -313,6 +331,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Clear device alarm' })
+  @Roles(UserRole.OPERATOR)
   @Post(':id/alarms/:alarmId/clear')
   async clearAlarm(
     @Param('id') deviceId: string,
@@ -332,6 +351,7 @@ export class DevicesController {
   // ================================
 
   @ApiOperation({ summary: 'Get device events' })
+  @Roles(UserRole.VIEWER)
   @Get(':id/events/:eventType')
   async getEvents(
     @Param('id') deviceId: string,
@@ -361,6 +381,7 @@ export class DevicesController {
   // ================================
 
   @ApiOperation({ summary: 'Get device relations' })
+  @Roles(UserRole.VIEWER)
   @Get(':id/relations')
   async getRelations(
     @Param('id') deviceId: string,
@@ -377,6 +398,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Save device relation' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Post(':id/relations')
   async saveRelation(
     @Param('id') deviceId: string,
@@ -392,6 +414,7 @@ export class DevicesController {
   }
 
   @ApiOperation({ summary: 'Delete device relation' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Delete(':id/relations')
   async deleteRelation(
     @Param('id') deviceId: string,
@@ -413,6 +436,7 @@ export class DevicesController {
   // ================================
 
   @ApiOperation({ summary: 'Get device audit logs' })
+  @Roles(UserRole.VIEWER)
   @Get(':id/audit-logs')
   async getAuditLogs(
     @Param('id') deviceId: string,

@@ -12,6 +12,7 @@ import {
   Layers,
   Bell,
   User,
+  Users,
   Search,
   Menu,
   X,
@@ -29,7 +30,16 @@ import { Input } from '@/shared/components/ui/Input';
 import { NotificationContainer } from '@/shared/components/ui/Notification';
 import { useAuthStore } from '@/features/auth/stores/authStore';
 import { useGlobalStore } from '@/shared/stores/globalStore';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import type { UserRoleEnum } from '@/shared/types';
+
+const ROLE_LEVEL: Record<string, number> = {
+  VIEWER: 0,
+  OPERATOR: 1,
+  PROJECT_MANAGER: 2,
+  TENANT_ADMIN: 3,
+  SUPER_ADMIN: 4,
+};
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -41,18 +51,26 @@ interface NavItem {
   icon: React.ReactNode;
   label: string;
   badge?: string | number;
+  minRole?: UserRoleEnum;
 }
 
 interface NavGroup {
   icon: React.ReactNode;
   label: string;
   children: NavItem[];
+  minRole?: UserRoleEnum;
 }
 
 type NavEntry = NavItem | NavGroup;
 
 function isNavGroup(entry: NavEntry): entry is NavGroup {
   return 'children' in entry;
+}
+
+function hasAccess(userRole: string | undefined, minRole?: UserRoleEnum): boolean {
+  if (!minRole) return true;
+  const level = ROLE_LEVEL[userRole || ''] ?? -1;
+  return level >= (ROLE_LEVEL[minRole] ?? 999);
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
@@ -79,7 +97,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
     {
       href: '/profiles',
       icon: <Layers className="w-5 h-5" />,
-      label: 'Profiles'
+      label: 'Profiles',
+      minRole: 'VIEWER' as UserRoleEnum,
     },
     {
       href: '/projects',
@@ -99,11 +118,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
     {
       href: '/templates',
       icon: <Template className="w-5 h-5" />,
-      label: 'Templates'
+      label: 'Templates',
+      minRole: 'TENANT_ADMIN' as UserRoleEnum,
     },
     {
       icon: <Library className="w-5 h-5" />,
       label: 'Library',
+      minRole: 'VIEWER' as UserRoleEnum,
       children: [
         {
           href: '/library/widgets',
@@ -118,11 +139,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       ],
     },
     {
+      href: '/users',
+      icon: <Users className="w-5 h-5" />,
+      label: 'Users',
+      minRole: 'TENANT_ADMIN' as UserRoleEnum,
+    },
+    {
       href: '/settings',
       icon: <Settings className="w-5 h-5" />,
       label: 'Settings'
     }
   ];
+
+  const filteredNavigation = useMemo(() => {
+    const role = user?.role;
+    return navigation.filter((entry) => {
+      if (isNavGroup(entry)) {
+        return hasAccess(role, entry.minRole);
+      }
+      return hasAccess(role, entry.minRole);
+    });
+  }, [user?.role]);
 
   const isActive = (href: string) => {
     if (href === '/') {
@@ -204,7 +241,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
           </div>
         )}
         <ul className="space-y-1">
-          {navigation.map((entry) => {
+          {filteredNavigation.map((entry) => {
             if (isNavGroup(entry)) {
               const groupExpanded = expandedGroups[entry.label] ?? false;
               const childActive = entry.children.some((c) => isActive(c.href));

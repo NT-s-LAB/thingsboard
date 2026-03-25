@@ -44,10 +44,10 @@ export class CreateUserDto {
   @IsEnum(UserRole)
   role?: UserRole;
 
-  @ApiProperty({ description: 'Tenant ID' })
+  @ApiPropertyOptional({ description: 'Tenant ID (auto-assigned from JWT for non-SUPER_ADMIN)' })
+  @IsOptional()
   @IsUUID()
-  @IsNotEmpty()
-  tenantId: string;
+  tenantId?: string;
 
   @ApiPropertyOptional({ description: 'Is user active', default: true })
   @IsOptional()

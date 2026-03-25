@@ -14,15 +14,19 @@ import { SymbolsService } from './symbols.service';
 import { CreateSymbolDto } from './dto/create-symbol.dto';
 import { UpdateSymbolDto } from './dto/update-symbol.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Symbols')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('symbols')
 export class SymbolsController {
   constructor(private readonly symbolsService: SymbolsService) {}
 
   @ApiOperation({ summary: 'Create a new SVG symbol' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Post()
   async create(@Body() dto: CreateSymbolDto) {
     const symbol = await this.symbolsService.create(dto);
@@ -35,6 +39,7 @@ export class SymbolsController {
   }
 
   @ApiOperation({ summary: 'List SVG symbols with filtering' })
+  @Roles(UserRole.VIEWER)
   @Get()
   async findAll(
     @Query('search') search?: string,
@@ -64,6 +69,7 @@ export class SymbolsController {
   }
 
   @ApiOperation({ summary: 'Get symbol by ID' })
+  @Roles(UserRole.VIEWER)
   @Get('categories')
   async getCategories() {
     const categories = await this.symbolsService.getCategories();
@@ -75,6 +81,7 @@ export class SymbolsController {
   }
 
   @ApiOperation({ summary: 'Get symbol by ID' })
+  @Roles(UserRole.VIEWER)
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const symbol = await this.symbolsService.findOne(id);
@@ -86,6 +93,7 @@ export class SymbolsController {
   }
 
   @ApiOperation({ summary: 'Update a symbol' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateSymbolDto) {
     const symbol = await this.symbolsService.update(id, dto);
@@ -98,6 +106,7 @@ export class SymbolsController {
   }
 
   @ApiOperation({ summary: 'Delete a symbol' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete(':id')
   async remove(@Param('id') id: string) {
     await this.symbolsService.remove(id);

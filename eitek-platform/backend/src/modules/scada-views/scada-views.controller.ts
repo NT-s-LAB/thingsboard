@@ -17,17 +17,21 @@ import { ScadaViewQueryDto } from './dto/scada-view-query.dto';
 import { CreateScadaWidgetDto } from './dto/create-scada-widget.dto';
 import { UpdateScadaWidgetDto } from './dto/update-scada-widget.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/common.interface';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('SCADA Views')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('scada-views')
 export class ScadaViewsController {
   constructor(private readonly scadaViewsService: ScadaViewsService) {}
 
   @ApiOperation({ summary: 'Create a new SCADA view' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Post()
   async create(
     @Body() createDto: CreateScadaViewDto,
@@ -43,6 +47,7 @@ export class ScadaViewsController {
   }
 
   @ApiOperation({ summary: 'Get all SCADA views with pagination' })
+  @Roles(UserRole.VIEWER)
   @Get()
   async findAll(
     @Query() query: ScadaViewQueryDto,
@@ -59,6 +64,7 @@ export class ScadaViewsController {
   }
 
   @ApiOperation({ summary: 'Get SCADA view by ID' })
+  @Roles(UserRole.VIEWER)
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     const view = await this.scadaViewsService.findOne(id, user);
@@ -71,6 +77,7 @@ export class ScadaViewsController {
   }
 
   @ApiOperation({ summary: 'Update SCADA view' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -88,6 +95,7 @@ export class ScadaViewsController {
   }
 
   @ApiOperation({ summary: 'Delete SCADA view' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     await this.scadaViewsService.remove(id, user);
@@ -101,6 +109,7 @@ export class ScadaViewsController {
   // ========== ScadaWidget CRUD (widgets placed on a view) ==========
 
   @ApiOperation({ summary: 'Add a widget to a SCADA view' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Post(':id/widgets')
   async addWidget(
     @Param('id') viewId: string,
@@ -117,6 +126,7 @@ export class ScadaViewsController {
   }
 
   @ApiOperation({ summary: 'Bulk update widgets on a SCADA view' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Put(':id/widgets/bulk')
   async bulkUpdateWidgets(
     @Param('id') viewId: string,
@@ -133,6 +143,7 @@ export class ScadaViewsController {
   }
 
   @ApiOperation({ summary: 'Update a widget on a SCADA view' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Put(':id/widgets/:widgetId')
   async updateWidget(
     @Param('id') viewId: string,
@@ -150,6 +161,7 @@ export class ScadaViewsController {
   }
 
   @ApiOperation({ summary: 'Delete a widget from a SCADA view' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Delete(':id/widgets/:widgetId')
   async deleteWidget(
     @Param('id') viewId: string,
@@ -165,6 +177,7 @@ export class ScadaViewsController {
   }
 
   @ApiOperation({ summary: 'Duplicate a widget on a SCADA view' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Post(':id/widgets/:widgetId/duplicate')
   async duplicateWidget(
     @Param('id') viewId: string,

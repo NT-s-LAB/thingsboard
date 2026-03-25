@@ -15,8 +15,11 @@ import { CreateWidgetDto } from './dto/create-widget.dto';
 import { UpdateWidgetDto } from './dto/update-widget.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/common.interface';
+import { UserRole } from '@prisma/client';
 import { IsOptional, IsString } from 'class-validator';
 
 class FindAllWidgetsQueryDto extends PaginationDto {
@@ -27,12 +30,13 @@ class FindAllWidgetsQueryDto extends PaginationDto {
 
 @ApiTags('Widgets')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('widgets')
 export class WidgetsController {
   constructor(private readonly widgetsService: WidgetsService) {}
 
   @ApiOperation({ summary: 'Create a new widget' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Post()
   async create(@Body() createDto: CreateWidgetDto, @CurrentUser() user: RequestUser) {
     const widget = await this.widgetsService.create(createDto, user);
@@ -45,6 +49,7 @@ export class WidgetsController {
   }
 
   @ApiOperation({ summary: 'Get all widgets with pagination' })
+  @Roles(UserRole.VIEWER)
   @Get()
   async findAll(
     @Query() query: FindAllWidgetsQueryDto,
@@ -61,6 +66,7 @@ export class WidgetsController {
   }
 
   @ApiOperation({ summary: 'Get widget by ID' })
+  @Roles(UserRole.VIEWER)
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const widget = await this.widgetsService.findOne(id);
@@ -73,6 +79,7 @@ export class WidgetsController {
   }
 
   @ApiOperation({ summary: 'Update widget' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -89,6 +96,7 @@ export class WidgetsController {
   }
 
   @ApiOperation({ summary: 'Delete widget' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     await this.widgetsService.remove(id, user);

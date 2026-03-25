@@ -15,17 +15,21 @@ import { CreateAreaDto } from './dto/create-area.dto';
 import { UpdateAreaDto } from './dto/update-area.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/common.interface';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Areas')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('areas')
 export class AreasController {
   constructor(private readonly areasService: AreasService) {}
 
   @ApiOperation({ summary: 'Create a new area' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Post()
   async create(
     @Body() createAreaDto: CreateAreaDto,
@@ -41,6 +45,7 @@ export class AreasController {
   }
 
   @ApiOperation({ summary: 'Get all areas with pagination' })
+  @Roles(UserRole.VIEWER)
   @Get()
   async findAll(
     @Query() pagination: PaginationDto,
@@ -58,6 +63,7 @@ export class AreasController {
   }
 
   @ApiOperation({ summary: 'Get area by ID' })
+  @Roles(UserRole.VIEWER)
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     const area = await this.areasService.findOne(id, user);
@@ -70,6 +76,7 @@ export class AreasController {
   }
 
   @ApiOperation({ summary: 'Update area' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -86,6 +93,7 @@ export class AreasController {
   }
 
   @ApiOperation({ summary: 'Delete area' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     await this.areasService.remove(id, user);

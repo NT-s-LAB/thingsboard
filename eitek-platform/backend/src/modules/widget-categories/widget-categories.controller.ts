@@ -15,15 +15,19 @@ import { CreateWidgetCategoryDto } from './dto/create-widget-category.dto';
 import { UpdateWidgetCategoryDto } from './dto/update-widget-category.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Widget Categories')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('widget-categories')
 export class WidgetCategoriesController {
   constructor(private readonly service: WidgetCategoriesService) {}
 
   @ApiOperation({ summary: 'Create a widget category' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Post()
   async create(@Body() dto: CreateWidgetCategoryDto) {
     const category = await this.service.create(dto);
@@ -36,6 +40,7 @@ export class WidgetCategoriesController {
   }
 
   @ApiOperation({ summary: 'Get all widget categories' })
+  @Roles(UserRole.VIEWER)
   @Get()
   async findAll(@Query() pagination: PaginationDto) {
     const result = await this.service.findAll(pagination);
@@ -49,6 +54,7 @@ export class WidgetCategoriesController {
   }
 
   @ApiOperation({ summary: 'Get widget category by ID' })
+  @Roles(UserRole.VIEWER)
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const category = await this.service.findOne(id);
@@ -61,6 +67,7 @@ export class WidgetCategoriesController {
   }
 
   @ApiOperation({ summary: 'Update widget category' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateWidgetCategoryDto) {
     const category = await this.service.update(id, dto);
@@ -73,6 +80,7 @@ export class WidgetCategoriesController {
   }
 
   @ApiOperation({ summary: 'Delete widget category' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete(':id')
   async remove(@Param('id') id: string) {
     await this.service.remove(id);

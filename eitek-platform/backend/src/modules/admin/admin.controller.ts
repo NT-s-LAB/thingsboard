@@ -7,6 +7,9 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 import { AdminService, SystemStats, RecentActivity, TenantOverview } from './admin.service';
 import { SystemHealthService, SystemHealth } from './system-health.service';
 import { User, TenantId } from '../auth/decorators/user.decorator';
@@ -18,7 +21,8 @@ import { User, TenantId } from '../auth/decorators/user.decorator';
  * All endpoints require authentication and SUPER_ADMIN role.
  */
 @Controller('admin')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.SUPER_ADMIN)
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
@@ -32,8 +36,6 @@ export class AdminController {
   @Get('stats')
   @HttpCode(HttpStatus.OK)
   async getSystemStats(@User() user: any): Promise<SystemStats> {
-    // TODO: Add role check for SUPER_ADMIN
-    // For now, any authenticated user can access (we'll add role guard later)
     return this.adminService.getSystemStats();
   }
 

@@ -15,15 +15,19 @@ import { CreateDeviceTemplateDto } from './dto/create-device-template.dto';
 import { UpdateDeviceTemplateDto } from './dto/update-device-template.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Device Templates')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('device-templates')
 export class DeviceTemplatesController {
   constructor(private readonly deviceTemplatesService: DeviceTemplatesService) {}
 
   @ApiOperation({ summary: 'Create a new device template' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Post()
   async create(@Body() createDto: CreateDeviceTemplateDto) {
     const template = await this.deviceTemplatesService.create(createDto);
@@ -36,6 +40,7 @@ export class DeviceTemplatesController {
   }
 
   @ApiOperation({ summary: 'Get all device templates with pagination' })
+  @Roles(UserRole.VIEWER)
   @Get()
   async findAll(
     @Query() pagination: PaginationDto,
@@ -52,6 +57,7 @@ export class DeviceTemplatesController {
   }
 
   @ApiOperation({ summary: 'Get device template by ID' })
+  @Roles(UserRole.VIEWER)
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const template = await this.deviceTemplatesService.findOne(id);
@@ -64,6 +70,7 @@ export class DeviceTemplatesController {
   }
 
   @ApiOperation({ summary: 'Update device template' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -79,6 +86,7 @@ export class DeviceTemplatesController {
   }
 
   @ApiOperation({ summary: 'Delete device template' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete(':id')
   async remove(@Param('id') id: string) {
     await this.deviceTemplatesService.remove(id);

@@ -15,17 +15,21 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/common.interface';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Projects')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @ApiOperation({ summary: 'Get recent projects' })
+  @Roles(UserRole.VIEWER)
   @Get('recent')
   async getRecent(
     @Query('limit') limit: string = '10',
@@ -44,6 +48,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'Get favorite projects' })
+  @Roles(UserRole.VIEWER)
   @Get('favorites')
   async getFavorites(@CurrentUser() user: RequestUser) {
     const projects = await this.projectsService.getFavoriteProjects(
@@ -59,6 +64,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'Create a new project' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Post()
   async create(
     @Body() createProjectDto: CreateProjectDto,
@@ -74,6 +80,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'Get all projects with pagination' })
+  @Roles(UserRole.VIEWER)
   @Get()
   async findAll(
     @Query() pagination: PaginationDto,
@@ -90,6 +97,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'Add project to favorites' })
+  @Roles(UserRole.VIEWER)
   @Post(':id/favorite')
   async addToFavorites(
     @Param('id') id: string,
@@ -104,6 +112,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'Remove project from favorites' })
+  @Roles(UserRole.VIEWER)
   @Delete(':id/favorite')
   async removeFromFavorites(
     @Param('id') id: string,
@@ -118,6 +127,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'Get project by ID' })
+  @Roles(UserRole.VIEWER)
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     const project = await this.projectsService.findOne(id, user.tenantId);
@@ -130,6 +140,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'Update project' })
+  @Roles(UserRole.PROJECT_MANAGER)
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -146,6 +157,7 @@ export class ProjectsController {
   }
 
   @ApiOperation({ summary: 'Delete project' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     await this.projectsService.remove(id, user.tenantId);

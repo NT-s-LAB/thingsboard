@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -11,6 +11,10 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
+    if (!createUserDto.tenantId) {
+      throw new BadRequestException('Tenant ID is required');
+    }
+
     // Check if user with email already exists
     const existingUser = await this.prisma.user.findUnique({
       where: { email: createUserDto.email },
@@ -41,10 +45,12 @@ export class UsersService {
     // Hash password
     const hashedPassword = await bcrypt.hash(createUserDto.password, 12);
 
+    const { tenantId, password: rawPassword, ...rest } = createUserDto;
     const user = await this.prisma.user.create({
       data: {
-        ...createUserDto,
+        ...rest,
         password: hashedPassword,
+        tenantId: tenantId!,
       },
       include: {
         tenant: { select: { id: true, name: true } },
@@ -56,7 +62,11 @@ export class UsersService {
     return result as any;
   }
 
-  async findAll(pagination: PaginationDto, tenantId?: string): Promise<PaginatedResult<User>> {
+  async findAll(
+    pagination: PaginationDto,
+    tenantId?: string,
+    roleFilter?: string[],
+  ): Promise<PaginatedResult<User>> {
     const page = pagination.page;
     const limit = pagination.effectiveLimit;
     const offset = pagination.offset;
@@ -68,6 +78,11 @@ export class UsersService {
 
     if (tenantId) {
       where.tenantId = tenantId;
+    }
+
+    // Only show users with allowed roles (e.g. TENANT_ADMIN sees PM/OPERATOR/VIEWER only)
+    if (roleFilter && roleFilter.length > 0) {
+      where.role = { in: roleFilter };
     }
 
     if (search) {

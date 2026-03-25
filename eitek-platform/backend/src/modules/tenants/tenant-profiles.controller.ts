@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,13 +18,21 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { TenantProfilesService } from './tenant-profiles.service';
 import { CreateTenantProfileDto } from './dto/create-tenant-profile.dto';
 import { UpdateTenantProfileDto } from './dto/update-tenant-profile.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Tenant Profiles')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.SUPER_ADMIN)
 @Controller('tenant-profiles')
 export class TenantProfilesController {
   constructor(private readonly tenantProfilesService: TenantProfilesService) {}

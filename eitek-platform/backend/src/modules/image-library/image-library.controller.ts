@@ -21,6 +21,8 @@ import { CreateImageCategoryDto } from './dto/create-image-category.dto';
 import { UpdateImageCategoryDto } from './dto/update-image-category.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { IsOptional, IsString } from 'class-validator';
 
 class FindImagesQueryDto extends PaginationDto {
@@ -30,10 +32,11 @@ class FindImagesQueryDto extends PaginationDto {
 }
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../../common/interfaces/common.interface';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Image Library')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('image-library')
 export class ImageLibraryController {
   constructor(private readonly service: ImageLibraryService) {}
@@ -41,6 +44,7 @@ export class ImageLibraryController {
   // ── Category CRUD ──
 
   @ApiOperation({ summary: 'Create image category (folder)' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Post('categories')
   async createCategory(@Body() dto: CreateImageCategoryDto, @CurrentUser() user: RequestUser) {
     const category = await this.service.createCategory(dto, user);
@@ -53,6 +57,7 @@ export class ImageLibraryController {
   }
 
   @ApiOperation({ summary: 'Get all image categories (tree)' })
+  @Roles(UserRole.VIEWER)
   @Get('categories')
   async findAllCategories(@Query() pagination: PaginationDto, @CurrentUser() user: RequestUser) {
     const result = await this.service.findAllCategories(pagination, user);
@@ -66,6 +71,7 @@ export class ImageLibraryController {
   }
 
   @ApiOperation({ summary: 'Get image category by ID' })
+  @Roles(UserRole.VIEWER)
   @Get('categories/:id')
   async findCategory(@Param('id') id: string) {
     const category = await this.service.findCategory(id);
@@ -78,6 +84,7 @@ export class ImageLibraryController {
   }
 
   @ApiOperation({ summary: 'Update image category' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Put('categories/:id')
   async updateCategory(@Param('id') id: string, @Body() dto: UpdateImageCategoryDto) {
     const category = await this.service.updateCategory(id, dto);
@@ -90,6 +97,7 @@ export class ImageLibraryController {
   }
 
   @ApiOperation({ summary: 'Delete image category' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete('categories/:id')
   async removeCategory(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     await this.service.removeCategory(id, user);
@@ -103,6 +111,7 @@ export class ImageLibraryController {
   // ── Image CRUD ──
 
   @ApiOperation({ summary: 'Upload image to library' })
+  @Roles(UserRole.TENANT_ADMIN)
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -149,6 +158,7 @@ export class ImageLibraryController {
   }
 
   @ApiOperation({ summary: 'Get images (optionally filtered by category)' })
+  @Roles(UserRole.VIEWER)
   @Get('images')
   async findImages(
     @Query() query: FindImagesQueryDto,
@@ -165,6 +175,7 @@ export class ImageLibraryController {
   }
 
   @ApiOperation({ summary: 'Move image to another category' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Put('images/:id/move')
   async moveImage(
     @Param('id') id: string,
@@ -180,6 +191,7 @@ export class ImageLibraryController {
   }
 
   @ApiOperation({ summary: 'Delete image' })
+  @Roles(UserRole.TENANT_ADMIN)
   @Delete('images/:id')
   async deleteImage(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     await this.service.deleteImage(id, user);

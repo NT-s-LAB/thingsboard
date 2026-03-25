@@ -7,6 +7,7 @@ import { Button } from '@/shared/components/ui/Button';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { useAuthStore } from '@/features/auth/stores/authStore';
 import { useAuthGuard } from '@/features/auth/hooks/useAuthGuard';
+import { ROLE_HIERARCHY, UserRoleType } from '@/features/auth/hooks/useRoleGuard';
 import { useProjectStore } from '@/features/projects/stores/projectStore';
 import { useDeviceStore } from '@/features/devices/stores/deviceStore';
 import { formatDistanceToNow } from '@/shared/utils/date';
@@ -207,12 +208,28 @@ const DashboardPage: React.FC = () => {
     };
   }, [recentProjects, favoriteProjects, devices, pagination]);
 
+  const userRole = (user?.role as UserRoleType) || 'VIEWER';
+  const roleLevel = ROLE_HIERARCHY[userRole] ?? 0;
+  const canCreate = roleLevel >= ROLE_HIERARCHY.PROJECT_MANAGER;   // PM+
+  const canManageTemplates = roleLevel >= ROLE_HIERARCHY.TENANT_ADMIN; // TA+
+  const canOperate = roleLevel >= ROLE_HIERARCHY.OPERATOR;         // Operator+
+
   const greeting = useMemo(() => {
     const h = new Date().getHours();
     if (h < 12) return 'Good morning';
     if (h < 18) return 'Good afternoon';
     return 'Good evening';
   }, []);
+
+  const roleSubtitle = useMemo(() => {
+    switch (userRole) {
+      case 'TENANT_ADMIN': return 'Full access — manage users, devices, projects, and SCADA views.';
+      case 'PROJECT_MANAGER': return 'Manage projects, sites, areas, and devices.';
+      case 'OPERATOR': return 'Monitor devices, send commands, and manage alarms.';
+      case 'VIEWER': return 'View dashboards, devices, and project data.';
+      default: return 'Monitor your IoT infrastructure from one place.';
+    }
+  }, [userRole]);
 
   const navigate = useCallback((path: string) => () => router.push(path), [router]);
 
@@ -263,27 +280,29 @@ const DashboardPage: React.FC = () => {
               {user?.firstName || 'User'} {user?.lastName || ''}
             </h1>
             <p className="text-slate-400 text-sm max-w-md">
-              Monitor your IoT infrastructure, manage devices, and control SCADA dashboards from one place.
+              {roleSubtitle}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              onClick={navigate('/projects')}
-              className="bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm"
-            >
-              {Icons.plus}
-              <span className="ml-1.5">New Project</span>
-            </Button>
-            <Button
-              size="sm"
-              onClick={navigate('/scada/new')}
-              className="bg-blue-500 hover:bg-blue-600 text-white border-0"
-            >
-              {Icons.layout}
-              <span className="ml-1.5">New SCADA</span>
-            </Button>
-          </div>
+          {canCreate && (
+            <div className="flex items-center gap-3">
+              <Button
+                size="sm"
+                onClick={navigate('/projects')}
+                className="bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm"
+              >
+                {Icons.plus}
+                <span className="ml-1.5">New Project</span>
+              </Button>
+              <Button
+                size="sm"
+                onClick={navigate('/scada/new')}
+                className="bg-blue-500 hover:bg-blue-600 text-white border-0"
+              >
+                {Icons.layout}
+                <span className="ml-1.5">New SCADA</span>
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -506,6 +525,7 @@ const DashboardPage: React.FC = () => {
           <CardContent className="p-5 space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-1">Quick Actions</h2>
 
+            {/* View projects — all roles */}
             <button
               onClick={navigate('/projects')}
               className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-blue-300 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40 transition-colors text-left group"
@@ -514,11 +534,12 @@ const DashboardPage: React.FC = () => {
                 {Icons.folder}
               </div>
               <div>
-                <p className="text-sm font-semibold">Create Project</p>
-                <p className="text-xs text-muted-foreground">Start a new IoT project</p>
+                <p className="text-sm font-semibold">{canCreate ? 'Create Project' : 'View Projects'}</p>
+                <p className="text-xs text-muted-foreground">{canCreate ? 'Start a new IoT project' : 'Browse your projects'}</p>
               </div>
             </button>
 
+            {/* Devices — all roles can view, operator+ can operate */}
             <button
               onClick={navigate('/devices')}
               className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-cyan-300 dark:border-cyan-800 bg-cyan-50/50 dark:bg-cyan-950/20 hover:bg-cyan-100/70 dark:hover:bg-cyan-950/40 transition-colors text-left group"
@@ -527,38 +548,44 @@ const DashboardPage: React.FC = () => {
                 {Icons.cpu}
               </div>
               <div>
-                <p className="text-sm font-semibold">Add Device</p>
-                <p className="text-xs text-muted-foreground">Register an IoT device</p>
+                <p className="text-sm font-semibold">{canCreate ? 'Add Device' : canOperate ? 'Manage Devices' : 'View Devices'}</p>
+                <p className="text-xs text-muted-foreground">{canCreate ? 'Register an IoT device' : 'Monitor device status'}</p>
               </div>
             </button>
 
-            <button
-              onClick={navigate('/scada/new')}
-              className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/40 transition-colors text-left group"
-            >
-              <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/60 dark:text-emerald-400 group-hover:scale-110 transition-transform">
-                {Icons.layout}
-              </div>
-              <div>
-                <p className="text-sm font-semibold">New SCADA Dashboard</p>
-                <p className="text-xs text-muted-foreground">Build a monitoring screen</p>
-              </div>
-            </button>
+            {/* SCADA — PM+ can create */}
+            {canCreate && (
+              <button
+                onClick={navigate('/scada/new')}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/40 transition-colors text-left group"
+              >
+                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/60 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                  {Icons.layout}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">New SCADA Dashboard</p>
+                  <p className="text-xs text-muted-foreground">Build a monitoring screen</p>
+                </div>
+              </button>
+            )}
 
-            <button
-              onClick={navigate('/templates')}
-              className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 hover:bg-purple-100/70 dark:hover:bg-purple-950/40 transition-colors text-left group"
-            >
-              <div className="p-2 rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-900/60 dark:text-purple-400 group-hover:scale-110 transition-transform">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125V6.75c0 .621.504 1.125 1.125 1.125H14.25c.621 0 1.125.504 1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125h2.625c.621 0 1.125.504 1.125 1.125v5.25A3.75 3.75 0 0 1 17.25 21H6.75Z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold">Templates</p>
-                <p className="text-xs text-muted-foreground">Manage widget & device templates</p>
-              </div>
-            </button>
+            {/* Templates — TA+ only */}
+            {canManageTemplates && (
+              <button
+                onClick={navigate('/templates')}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 hover:bg-purple-100/70 dark:hover:bg-purple-950/40 transition-colors text-left group"
+              >
+                <div className="p-2 rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-900/60 dark:text-purple-400 group-hover:scale-110 transition-transform">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125V6.75c0 .621.504 1.125 1.125 1.125H14.25c.621 0 1.125.504 1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125h2.625c.621 0 1.125.504 1.125 1.125v5.25A3.75 3.75 0 0 1 17.25 21H6.75Z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Templates</p>
+                  <p className="text-xs text-muted-foreground">Manage widget & device templates</p>
+                </div>
+              </button>
+            )}
           </CardContent>
         </Card>
       </div>
