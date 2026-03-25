@@ -3,17 +3,24 @@ import { PrismaService } from '../../database/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto';
+import { TenantAddonService } from '../addons/tenant-addon.service';
 import * as bcrypt from 'bcryptjs';
 import { User } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantAddonService: TenantAddonService,
+  ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     if (!createUserDto.tenantId) {
       throw new BadRequestException('Tenant ID is required');
     }
+
+    // Check tenant quota before creating
+    await this.tenantAddonService.checkQuota(createUserDto.tenantId, 'USERS');
 
     // Check if user with email already exists
     const existingUser = await this.prisma.user.findUnique({

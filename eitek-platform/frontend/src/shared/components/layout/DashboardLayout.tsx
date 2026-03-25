@@ -25,6 +25,7 @@ import {
   MapPin,
   Building2,
   Package,
+  ScreenShare,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
@@ -121,6 +122,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       icon: <Template className="w-5 h-5" />,
       label: 'Templates',
       minRole: 'TENANT_ADMIN' as UserRoleEnum,
+    },
+    {
+      href: '/device-scada-templates',
+      icon: <ScreenShare className="w-5 h-5" />,
+      label: 'Device SCADA',
+      minRole: 'VIEWER' as UserRoleEnum,
     },
     {
       icon: <Library className="w-5 h-5" />,

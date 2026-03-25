@@ -23,6 +23,8 @@ import { useRoleGuard } from '@/features/auth/hooks/useRoleGuard';
 import { useAuthStore } from '@/features/auth/stores/authStore';
 import { useGlobalStore } from '@/shared/stores/globalStore';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
+import { QuotaBadge } from '@/shared/components/ui/QuotaBadge';
+import { useQuota } from '@/shared/hooks/useQuota';
 import {
   userService,
   ManagedUser,
@@ -331,6 +333,10 @@ export default function UsersPage() {
   const [deletingUser, setDeletingUser] = useState<ManagedUser | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Quota
+  const { isAtLimit, current: quotaCurrent, max: quotaMax } = useQuota();
+  const userLimitReached = isAtLimit('users');
+
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
@@ -404,10 +410,13 @@ export default function UsersPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Manage users in your organization</p>
         </div>
-        <Button onClick={() => { setEditingUser(null); setShowAddModal(true); }}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add User
-        </Button>
+        <div className="flex items-center gap-3">
+          <QuotaBadge current={quotaCurrent('users')} max={quotaMax('users')} label="Users" />
+          <Button onClick={() => { if (!userLimitReached) { setEditingUser(null); setShowAddModal(true); } else { alert('Đã đạt giới hạn user. Vui lòng nâng gói hoặc mua thêm add-on.'); } }}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add User
+          </Button>
+        </div>
       </div>
 
       {/* Search & Filters */}

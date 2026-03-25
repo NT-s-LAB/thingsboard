@@ -4,14 +4,21 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto';
 import { RequestUser } from '../../common/interfaces/common.interface';
+import { TenantAddonService } from '../addons/tenant-addon.service';
 import { Project } from '@prisma/client';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantAddonService: TenantAddonService,
+  ) {}
 
   async create(createProjectDto: CreateProjectDto, user: RequestUser): Promise<Project> {
     const tenantId = user.tenantId;
+
+    // Check tenant quota before creating
+    await this.tenantAddonService.checkQuota(tenantId, 'PROJECTS');
 
     // Check uniqueness of name within tenant
     const existing = await this.prisma.project.findFirst({

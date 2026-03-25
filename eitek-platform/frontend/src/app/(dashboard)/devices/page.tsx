@@ -10,9 +10,11 @@ import { EditDeviceModal } from '@/features/devices/components/EditDeviceModal';
 import { DeleteDeviceModal } from '@/features/devices/components/DeleteDeviceModal';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { Button } from '@/shared/components/ui/Button';
+import { QuotaBadge } from '@/shared/components/ui/QuotaBadge';
 import { useDeviceStore } from '@/features/devices/stores/deviceStore';
 import { useProfileStore } from '@/features/profiles/stores/profileStore';
 import { useDevicesListRealtime } from '@/features/devices/hooks/useDeviceRealtime';
+import { useQuota } from '@/shared/hooks/useQuota';
 
 const DevicesPage: React.FC = () => {
   const {
@@ -50,6 +52,8 @@ const DevicesPage: React.FC = () => {
   const updateDeviceRealtimeStatus = useDeviceStore(s => s.updateDeviceRealtimeStatus);
 
   const { deviceProfiles, fetchDeviceProfiles } = useProfileStore();
+  const { isAtLimit, current: quotaCurrent, max: quotaMax } = useQuota();
+  const deviceLimitReached = isAtLimit('devices');
 
   // Build a lookup from TB device profile ID → profile image
   const profileImageMap = useMemo(() => {
@@ -128,6 +132,7 @@ const DevicesPage: React.FC = () => {
             Manage and monitor your IoT devices
           </p>
         </div>
+        <QuotaBadge current={quotaCurrent('devices')} max={quotaMax('devices')} label="Devices" />
       </div>
 
       {/* Filters */}
@@ -144,7 +149,7 @@ const DevicesPage: React.FC = () => {
         isIndeterminate={selection.isIndeterminate}
         onSelectAll={selectAllDevices}
         onDeselectAll={deselectAllDevices}
-        onCreateDevice={openCreateModal}
+        onCreateDevice={() => { if (!deviceLimitReached) openCreateModal(); else alert('Đã đạt giới hạn thiết bị. Vui lòng nâng gói hoặc mua thêm add-on.'); }}
         onBulkActions={openBulkActionsModal}
         onExport={handleExport}
         onImport={handleImport}
@@ -170,7 +175,7 @@ const DevicesPage: React.FC = () => {
                 : 'Get started by adding your first device.'}
             </p>
             <div className="space-x-2">
-              <Button onClick={openCreateModal}>
+              <Button onClick={() => { if (!deviceLimitReached) openCreateModal(); else alert('Đã đạt giới hạn thiết bị. Vui lòng nâng gói hoặc mua thêm add-on.'); }}>
                 Add Device
               </Button>
               {(filters.search || filters.deviceTypes.length > 0 || filters.statuses.length > 0) && (

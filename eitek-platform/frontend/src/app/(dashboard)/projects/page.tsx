@@ -6,7 +6,9 @@ import { Plus, FolderTree, Search, Grid, List, RefreshCw } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
+import { QuotaBadge } from '@/shared/components/ui/QuotaBadge';
 import { useAuthStore } from '@/features/auth/stores/authStore';
+import { useQuota } from '@/shared/hooks/useQuota';
 import { projectService } from '@/features/projects/services/projectService';
 import { ProjectFormModal } from '@/features/projects/components/ProjectFormModal';
 import { ProjectDeleteDialog } from '@/features/projects/components/ProjectDeleteDialog';
@@ -42,6 +44,10 @@ const ProjectsPage: React.FC = () => {
 
   // Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Quota
+  const { isAtLimit, current: quotaCurrent, max: quotaMax } = useQuota();
+  const projectLimitReached = isAtLimit('projects');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<ProjectItem | null>(null);
@@ -220,10 +226,15 @@ const ProjectsPage: React.FC = () => {
               Quản lý các dự án SCADA &amp; IoT của bạn
             </p>
           </div>
-          <Button onClick={() => setIsCreateModalOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Tạo dự án
-          </Button>
+          <div className="flex items-center gap-3">
+            <QuotaBadge current={quotaCurrent('projects')} max={quotaMax('projects')} label="Dự án" />
+            <Button
+              onClick={() => { if (!projectLimitReached) setIsCreateModalOpen(true); else alert('Đã đạt giới hạn dự án. Vui lòng nâng gói hoặc mua thêm add-on.'); }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Tạo dự án
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -283,7 +294,7 @@ const ProjectsPage: React.FC = () => {
               {searchQuery ? 'Không tìm thấy dự án phù hợp' : 'Tạo dự án đầu tiên để bắt đầu'}
             </p>
             {!searchQuery && (
-              <Button onClick={() => setIsCreateModalOpen(true)}>
+              <Button onClick={() => { if (!projectLimitReached) setIsCreateModalOpen(true); else alert('Đã đạt giới hạn dự án. Vui lòng nâng gói hoặc mua thêm add-on.'); }}>
                 <Plus className="w-4 h-4 mr-2" />
                 Tạo dự án
               </Button>

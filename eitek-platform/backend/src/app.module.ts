@@ -24,6 +24,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AddonsModule } from './modules/addons/addons.module';
+import { DeviceScadaModule } from './modules/device-scada/device-scada.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import thingsBoardConfig from './config/thingsboard.config';
@@ -57,6 +58,7 @@ import thingsBoardConfig from './config/thingsboard.config';
     DeviceTemplatesModule,
     ProfilesModule,
     ScadaViewsModule,
+    DeviceScadaModule,
     WidgetsModule,
     WidgetCategoriesModule,
     SymbolsModule,

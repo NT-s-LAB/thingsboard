@@ -12,6 +12,7 @@ import { PaginationDto, PaginatedResult } from '../../../common/dto/pagination.d
 import { RequestUser } from '../../../common/interfaces/common.interface';
 import { ThingsBoardDeviceApiService } from '../../thingsboard-integration/services/device-api.service';
 import { ThingsBoardClientService } from '../../thingsboard-integration/services/thingsboard-client.service';
+import { TenantAddonService } from '../../addons/tenant-addon.service';
 import { Device } from '@prisma/client';
 
 @Injectable()
@@ -27,6 +28,7 @@ export class DevicesService {
     private readonly prisma: PrismaService,
     private readonly tbDeviceApi: ThingsBoardDeviceApiService,
     private readonly tbClient: ThingsBoardClientService,
+    private readonly tenantAddonService: TenantAddonService,
   ) {}
 
   /**
@@ -85,6 +87,9 @@ export class DevicesService {
   }
 
   async create(createDeviceDto: CreateDeviceDto, user: RequestUser): Promise<Device> {
+    // Check tenant quota before creating
+    await this.tenantAddonService.checkQuota(user.tenantId, 'DEVICES');
+
     // Validate area belongs to user's tenant
     const area = await this.prisma.area.findFirst({
       where: {

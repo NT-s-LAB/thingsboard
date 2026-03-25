@@ -15,15 +15,21 @@ import { DeviceAlarmsTab } from '@/features/devices/components/tabs/DeviceAlarms
 import { DeviceEventsTab } from '@/features/devices/components/tabs/DeviceEventsTab';
 import { DeviceRelationsTab } from '@/features/devices/components/tabs/DeviceRelationsTab';
 import { DeviceAuditLogsTab } from '@/features/devices/components/tabs/DeviceAuditLogsTab';
+import { DeviceScadaTab } from '@/features/device-scada/components/DeviceScadaTab';
 import { useDeviceRealtime } from '@/features/devices/hooks/useDeviceRealtime';
 
-type TabKey = 'details' | 'attributes' | 'telemetry' | 'alarms' | 'events' | 'relations' | 'audit-logs';
+type TabKey = 'details' | 'scada' | 'attributes' | 'telemetry' | 'alarms' | 'events' | 'relations' | 'audit-logs';
 
 // SVG Icons for tabs
-const TabIcons = {
+const TabIcons: Record<string, React.ReactNode> = {
   details: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+  scada: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
   ),
   attributes: (
@@ -60,6 +66,7 @@ const TabIcons = {
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'details', label: 'Details' },
+  { key: 'scada', label: 'SCADA' },
   { key: 'attributes', label: 'Attributes' },
   { key: 'telemetry', label: 'Telemetry' },
   { key: 'alarms', label: 'Alarms' },
@@ -296,6 +303,9 @@ const DeviceDetailPage: React.FC = () => {
       <div className="bg-white rounded-lg border border-gray-200">
         {activeTab === 'details' && (
           <DeviceDetailsTab device={device} credentials={credentials} onRefresh={fetchDevice} />
+        )}
+        {activeTab === 'scada' && (
+          <DeviceScadaTab deviceId={deviceId} />
         )}
         {activeTab === 'attributes' && (
           <DeviceAttributesTab deviceId={deviceId} />

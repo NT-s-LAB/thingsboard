@@ -28,6 +28,8 @@ import { scadaService } from '@/features/scada/services/scadaService';
 import { ScadaFormModal } from '@/features/scada/components/ScadaFormModal';
 import { ScadaDeleteDialog } from '@/features/scada/components/ScadaDeleteDialog';
 import { ScadaCard } from '@/features/scada/components/ScadaCard';
+import { useQuota } from '@/shared/hooks/useQuota';
+import { QuotaBadge } from '@/shared/components/ui/QuotaBadge';
 
 interface ProjectDetail {
   id: string;
@@ -68,6 +70,7 @@ const ProjectDetailPage: React.FC = () => {
   const [isScadaDeleteOpen, setIsScadaDeleteOpen] = useState(false);
   const [selectedScada, setSelectedScada] = useState<any | null>(null);
   const [scadaActionLoading, setScadaActionLoading] = useState(false);
+  const { isAtLimit, current: quotaCurrent, max: quotaMax, refresh: refreshQuota } = useQuota();
 
   const fetchProject = useCallback(async () => {
     try {
@@ -191,6 +194,7 @@ const ProjectDetailPage: React.FC = () => {
       });
       setIsScadaCreateOpen(false);
       await fetchScadaViews();
+      refreshQuota();
     } catch (err: any) {
       alert(err.message || 'Lỗi khi tạo SCADA dashboard');
     } finally {
@@ -457,6 +461,7 @@ const ProjectDetailPage: React.FC = () => {
                 <h2 className="text-lg font-semibold text-gray-900">
                   SCADA Dashboards ({scadaViews.length})
                 </h2>
+                <QuotaBadge label="Dashboard" current={quotaCurrent('dashboards')} max={quotaMax('dashboards')} />
               </div>
               <div className="flex items-center space-x-2">
                 <Button
@@ -468,7 +473,7 @@ const ProjectDetailPage: React.FC = () => {
                 >
                   <RefreshCw className={`w-4 h-4 ${scadaLoading ? 'animate-spin' : ''}`} />
                 </Button>
-                <Button size="sm" onClick={() => setIsScadaCreateOpen(true)}>
+                <Button size="sm" onClick={() => setIsScadaCreateOpen(true)} disabled={isAtLimit('dashboards')} title={isAtLimit('dashboards') ? 'Đã đạt giới hạn dashboard' : undefined}>
                   <Plus className="w-4 h-4 mr-1" />
                   Tạo SCADA
                 </Button>
@@ -505,7 +510,7 @@ const ProjectDetailPage: React.FC = () => {
                     : 'Tạo dashboard SCADA đầu tiên cho dự án này'}
                 </p>
                 {!scadaSearch && (
-                  <Button size="sm" onClick={() => setIsScadaCreateOpen(true)}>
+                  <Button size="sm" onClick={() => setIsScadaCreateOpen(true)} disabled={isAtLimit('dashboards')} title={isAtLimit('dashboards') ? 'Đã đạt giới hạn dashboard' : undefined}>
                     <Plus className="w-4 h-4 mr-1" />
                     Tạo Dashboard
                   </Button>

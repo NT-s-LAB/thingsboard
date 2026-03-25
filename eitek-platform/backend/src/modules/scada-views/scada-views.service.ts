@@ -4,13 +4,20 @@ import { CreateScadaViewDto } from './dto/create-scada-view.dto';
 import { UpdateScadaViewDto } from './dto/update-scada-view.dto';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto';
 import { RequestUser } from '../../common/interfaces/common.interface';
+import { TenantAddonService } from '../addons/tenant-addon.service';
 import { ScadaView } from '@prisma/client';
 
 @Injectable()
 export class ScadaViewsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantAddonService: TenantAddonService,
+  ) {}
 
   async create(createDto: CreateScadaViewDto, user: RequestUser): Promise<ScadaView> {
+    // Check tenant quota before creating
+    await this.tenantAddonService.checkQuota(user.tenantId, 'DASHBOARDS');
+
     // Must have either projectId or areaId
     if (!createDto.projectId && !createDto.areaId) {
       throw new BadRequestException('Either projectId or areaId must be provided');

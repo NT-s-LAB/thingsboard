@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ScadaEditorV2 } from '@/features/scada/engine/editor/ScadaEditorV2';
 import { RuntimeRenderer } from '@/features/scada/engine/runtime/RuntimeRenderer';
 import { MultiPageRuntime } from '@/features/scada/engine/runtime/MultiPageRuntime';
@@ -26,6 +26,7 @@ import { validateProject, formatValidationResult } from '@/features/scada/core/v
 import { TimeWindowSelector } from '@/features/scada/engine/runtime/TimeWindowSelector';
 import type { ScreenDefinition } from '@/features/scada/core/types';
 import type { ScadaProject } from '@/features/scada/core/types/project.types';
+import { deviceScadaService } from '@/features/device-scada/services/deviceScadaService';
 
 // Ensure widget definitions are registered once
 let widgetsRegistered = false;
@@ -42,6 +43,8 @@ interface ScadaPageProps {
 
 const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isDeviceTemplate = searchParams.get('mode') === 'device-template';
   const [screen, setScreen] = useState<ScreenDefinition | null>(null);
   const [project, setProject] = useState<ScadaProject | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,11 +88,16 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
 
     setLoading(true);
     setError(null);
-    screenService
-      .getById(params.id)
+
+    const loadPromise = isDeviceTemplate
+      ? deviceScadaService.getTemplate(params.id).then((tpl) => tpl.screenDefinition as unknown as ScreenDefinition)
+      : screenService.getById(params.id);
+
+    loadPromise
       .then((data) => {
         setScreen(data);
-        realIdRef.current = data.id;
+        // For device templates, the DB template ID is params.id, not the inner screenDefinition.id
+        realIdRef.current = isDeviceTemplate ? params.id : data.id;
         // Migrate to project model
         const proj = screenDefinitionToProject(data);
         setProject(proj);
@@ -97,7 +105,7 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
       })
       .catch((err) => setError(err?.message ?? 'Failed to load screen'))
       .finally(() => setLoading(false));
-  }, [params.id]);
+  }, [params.id, isDeviceTemplate]);
 
   // ── View mode: register widgets & load screen into runtime store ──
   useEffect(() => {
@@ -162,7 +170,11 @@ const ScadaPage: React.FC<ScadaPageProps> = ({ params }) => {
         : updated;
 
       const isNew = params.id === 'new' && !realIdRef.current;
-      if (isNew) {
+      if (isDeviceTemplate) {
+        // Save back to device SCADA template
+        const saveId = realIdRef.current ?? params.id;
+        await deviceScadaService.updateTemplate(saveId, { screenDefinition: screenToSave as any });
+      } else if (isNew) {
         const created = await screenService.create({ ...screenToSave, name: screenToSave.name || 'Untitled' });
         realIdRef.current = created.id;
         window.history.replaceState(null, '', `/scada/${created.id}`);

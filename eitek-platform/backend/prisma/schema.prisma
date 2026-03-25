@@ -168,6 +168,10 @@ model Tenant {
   projects  Project[]
   auditLogs AuditLog[]
   addons    TenantAddon[]
+  deviceScadaTemplates      DeviceScadaTemplate[]
+  deviceProfileScadaDefaults DeviceProfileScadaDefault[]
+  tenantDeviceProfiles       TenantDeviceProfile[]
+  tenantAssetProfiles        TenantAssetProfile[]
 
   @@map("tenants")
 }
@@ -368,6 +372,7 @@ model Device {
   area         Area         @relation(fields: [areaId], references: [id])
   deviceType   DeviceType   @relation(fields: [deviceTypeId], references: [id])
   deviceState  DeviceState?
+  scadaOverride DeviceScadaOverride?
   auditLogs    AuditLog[]
 
   @@unique([areaId, name])
@@ -410,6 +415,90 @@ model DeviceState {
 // ================================
 // SCADA SYSTEM
 // ================================
+
+// Device-level SCADA: Templates per device profile
+model DeviceScadaTemplate {
+  id                String   @id @default(uuid())
+  name              String
+  description       String?
+  screenDefinition  Json     // ScreenDefinition JSON with $currentDevice placeholders
+  thumbnail         String?
+  version           Int      @default(1)
+  isActive          Boolean  @default(true)
+  tenantId          String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant          Tenant                    @relation(fields: [tenantId], references: [id])
+  profileDefaults DeviceProfileScadaDefault[]
+  overrides       DeviceScadaOverride[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("device_scada_templates")
+}
+
+// Tracks which TB device profiles belong to which eitek tenant
+model TenantDeviceProfile {
+  id              String   @id @default(uuid())
+  tbProfileId     String   // ThingsBoard device profile ID
+  tenantId        String
+  createdAt       DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, tbProfileId])
+  @@index([tbProfileId])
+  @@map("tenant_device_profiles")
+}
+
+// Tracks which TB asset profiles belong to which eitek tenant
+model TenantAssetProfile {
+  id              String   @id @default(uuid())
+  tbProfileId     String   // ThingsBoard asset profile ID
+  tenantId        String
+  createdAt       DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, tbProfileId])
+  @@index([tbProfileId])
+  @@map("tenant_asset_profiles")
+}
+
+// Mapping: one default SCADA template per (tenant, device profile)
+model DeviceProfileScadaDefault {
+  id              String   @id @default(uuid())
+  deviceProfileId String   // ThingsBoard device profile ID
+  templateId      String
+  tenantId        String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  template DeviceScadaTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  tenant   Tenant              @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, deviceProfileId])
+  @@index([templateId])
+  @@map("device_profile_scada_defaults")
+}
+
+// Per-device overrides on top of the profile's default template
+model DeviceScadaOverride {
+  id         String   @id @default(uuid())
+  deviceId   String
+  templateId String
+  overrides  Json     // Partial widget overrides: { widgets: { [id]: { properties, visible, ... } } }
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  device   Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  template DeviceScadaTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId])
+  @@index([templateId])
+  @@map("device_scada_overrides")
+}
 
 model ScadaView {
   id           String        @id @default(uuid())

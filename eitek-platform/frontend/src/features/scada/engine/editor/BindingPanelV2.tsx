@@ -8,12 +8,14 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { widgetRegistry } from '../../core/registry';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
 import { useScadaProjectStore } from '../../stores/scadaProjectStore';
 import type { WidgetBinding, BindingSourceType } from '../../core/types';
 import { deviceService } from '../../../devices/services/deviceService';
 import type { Device } from '../../../devices/types';
+import { CURRENT_DEVICE_PLACEHOLDER, CURRENT_DEVICE_NAME_PLACEHOLDER } from '../../../device-scada/types';
 import '../../styles/scada.css';
 
 const SOURCE_TYPES: { value: BindingSourceType; label: string }[] = [
@@ -380,10 +382,15 @@ const BindingFieldEditor: React.FC<BindingFieldEditorProps> = ({
     return () => { cancelled = true; };
   }, [expanded, sourceType]);
 
-  // Fetch telemetry keys when device is selected
+  // Detect device-template editing mode
+  const searchParams = useSearchParams();
+  const isDeviceTemplate = searchParams.get('mode') === 'device-template';
+
+  // Fetch telemetry keys when device is selected (skip for $currentDevice placeholder)
   useEffect(() => {
     const entityId = binding?.source.entityId;
     if (!entityId || !expanded) return;
+    if (entityId === CURRENT_DEVICE_PLACEHOLDER) return; // placeholder — no real device to fetch
     if (sourceType !== 'telemetry' && sourceType !== 'attribute') return;
     let cancelled = false;
     setKeysLoading(true);
@@ -463,10 +470,12 @@ const BindingFieldEditor: React.FC<BindingFieldEditorProps> = ({
                     value={binding?.source.entityId ?? ''}
                     onChange={(e) => {
                       setTelemetryKeys([]);
+                      const val = e.target.value;
                       onChange({
                         source: {
                           ...(binding?.source ?? { type: 'telemetry' as const, key: '', entityType: 'DEVICE' as const }),
-                          entityId: e.target.value,
+                          entityId: val,
+                          ...(val === CURRENT_DEVICE_PLACEHOLDER ? { entityName: CURRENT_DEVICE_NAME_PLACEHOLDER } : {}),
                         },
                       });
                     }}
@@ -475,12 +484,22 @@ const BindingFieldEditor: React.FC<BindingFieldEditorProps> = ({
                     <option value="">
                       {devicesLoading ? 'Loading...' : '-- Select device --'}
                     </option>
+                    {isDeviceTemplate && (
+                      <option value={CURRENT_DEVICE_PLACEHOLDER} style={{ fontWeight: 600, color: '#8B5CF6' }}>
+                        🔗 Current Device (dynamic)
+                      </option>
+                    )}
                     {filteredDevices.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name}{d.serialNumber ? ` (${d.serialNumber})` : ''}
                       </option>
                     ))}
                   </select>
+                  {binding?.source.entityId === CURRENT_DEVICE_PLACEHOLDER && (
+                    <span style={{ fontSize: 9, color: '#8B5CF6', marginTop: 2 }}>
+                      Sẽ tự động thay thế bằng thiết bị thực tế khi xem
+                    </span>
+                  )}
                 </div>
               </Row>
 
@@ -694,6 +713,7 @@ const ChartSeriesBindingEditor: React.FC<ChartSeriesBindingEditorProps> = ({
   useEffect(() => {
     const entityId = series.entityId as string | undefined;
     if (!entityId || !expanded) return;
+    if (entityId === CURRENT_DEVICE_PLACEHOLDER) return; // placeholder — skip fetch
     if (sourceType !== 'telemetry' && sourceType !== 'attribute') return;
     let cancelled = false;
     setKeysLoading(true);
@@ -713,6 +733,10 @@ const ChartSeriesBindingEditor: React.FC<ChartSeriesBindingEditorProps> = ({
     });
     return () => { cancelled = true; };
   }, [series.entityId, expanded, sourceType]);
+
+  // Detect device-template editing mode
+  const searchParams = useSearchParams();
+  const isDeviceTemplate = searchParams.get('mode') === 'device-template';
 
   const filteredDevices = useMemo(() => {
     if (!deviceSearch) return devices;
@@ -838,8 +862,9 @@ const ChartSeriesBindingEditor: React.FC<ChartSeriesBindingEditorProps> = ({
                 value={(series.entityId as string) ?? ''}
                 onChange={(e) => {
                   setTelemetryKeys([]);
+                  const val = e.target.value;
                   onSeriesChange({
-                    entityId: e.target.value,
+                    entityId: val,
                     entityType: 'DEVICE',
                     key: '', // Reset key when device changes
                   });
@@ -847,7 +872,7 @@ const ChartSeriesBindingEditor: React.FC<ChartSeriesBindingEditorProps> = ({
                   onBindingChange({
                     source: {
                       type: sourceType,
-                      entityId: e.target.value,
+                      entityId: val,
                       entityType: 'DEVICE',
                       key: '',
                     },
@@ -858,12 +883,22 @@ const ChartSeriesBindingEditor: React.FC<ChartSeriesBindingEditorProps> = ({
                 <option value="">
                   {devicesLoading ? 'Loading...' : '-- Select device --'}
                 </option>
+                {isDeviceTemplate && (
+                  <option value={CURRENT_DEVICE_PLACEHOLDER} style={{ fontWeight: 600, color: '#8B5CF6' }}>
+                    🔗 Current Device (dynamic)
+                  </option>
+                )}
                 {filteredDevices.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}{d.serialNumber ? ` (${d.serialNumber})` : ''}
                   </option>
                 ))}
               </select>
+              {(series.entityId as string) === CURRENT_DEVICE_PLACEHOLDER && (
+                <span style={{ fontSize: 9, color: '#8B5CF6', marginTop: 2 }}>
+                  Sẽ tự động thay thế bằng thiết bị thực tế khi xem
+                </span>
+              )}
             </div>
           </Row>
 

@@ -262,7 +262,13 @@ export class TenantAddonService {
         where: { area: { site: { project: { tenantId } } }, isActive: true },
       }),
       this.prisma.scadaView.count({
-        where: { area: { site: { project: { tenantId } } }, isActive: true },
+        where: {
+          isActive: true,
+          OR: [
+            { project: { tenantId } },
+            { area: { site: { project: { tenantId } } } },
+          ],
+        },
       }),
     ]);
 
