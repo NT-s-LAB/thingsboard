@@ -52,6 +52,7 @@ export default function AdminSettingsPage() {
   const [testingEmail, setTestingEmail] = useState(false);
   const [testingTB, setTestingTB] = useState(false);
   const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [testRecipient, setTestRecipient] = useState('');
 
   // Form states
   const [generalSettings, setGeneralSettings] = useState(DEFAULT_GENERAL_SETTINGS);
@@ -154,7 +155,10 @@ export default function AdminSettingsPage() {
     try {
       setTestingEmail(true);
       setTestResult(null);
-      const result = await adminSettingsService.testEmail();
+      const result = await adminSettingsService.testEmail({
+        recipient: testRecipient || undefined,
+        ...emailSettings,
+      });
       setTestResult({ type: result.success ? 'success' : 'error', message: result.message });
     } catch (err: any) {
       setTestResult({ type: 'error', message: err.message });
@@ -347,81 +351,226 @@ export default function AdminSettingsPage() {
 
   const renderEmailSettings = () => (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-slate-900 mb-4">Cấu hình Email</h2>
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">SMTP Host</label>
-          <Input
-            value={emailSettings.smtpHost}
-            onChange={(e) => setEmailSettings({ ...emailSettings, smtpHost: e.target.value })}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-slate-900">Cấu hình Email</h2>
+        <button
+          type="button"
+          onClick={() => setEmailSettings({ ...emailSettings, enabled: !emailSettings.enabled })}
+          className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+            emailSettings.enabled ? 'bg-blue-600' : 'bg-gray-200'
+          }`}
+        >
+          <span
+            className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              emailSettings.enabled ? 'translate-x-5' : 'translate-x-0'
+            }`}
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">SMTP Port</label>
-          <Input
-            type="number"
-            value={emailSettings.smtpPort}
-            onChange={(e) => setEmailSettings({ ...emailSettings, smtpPort: parseInt(e.target.value) || 587 })}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">SMTP Username</label>
-          <Input
-            value={emailSettings.smtpUsername}
-            onChange={(e) => setEmailSettings({ ...emailSettings, smtpUsername: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">SMTP Password</label>
-          <div className="relative">
-            <Input
-              type={showPasswords.smtpPassword ? 'text' : 'password'}
-              value={emailSettings.smtpPassword}
-              onChange={(e) => setEmailSettings({ ...emailSettings, smtpPassword: e.target.value })}
-            />
-            <button
-              type="button"
-              onClick={() => togglePasswordVisibility('smtpPassword')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              {showPasswords.smtpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Tên người gửi</label>
-          <Input
-            value={emailSettings.fromName}
-            onChange={(e) => setEmailSettings({ ...emailSettings, fromName: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Email người gửi</label>
-          <Input
-            value={emailSettings.fromEmail}
-            onChange={(e) => setEmailSettings({ ...emailSettings, fromEmail: e.target.value })}
-          />
-        </div>
+        </button>
       </div>
-      <div className="flex items-center space-x-3">
-        <input
-          type="checkbox"
-          id="smtp-secure"
-          checked={emailSettings.smtpSecure}
-          onChange={(e) => setEmailSettings({ ...emailSettings, smtpSecure: e.target.checked })}
-          className="rounded"
-        />
-        <label htmlFor="smtp-secure" className="text-sm text-slate-700">Sử dụng TLS/SSL</label>
-      </div>
-      <Button variant="outline" onClick={handleTestEmail} disabled={testingEmail}>
-        {testingEmail ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
-        Gửi email kiểm tra
-      </Button>
-      {testResult && activeSection === 'email' && (
-        <div className={`p-3 rounded-lg text-sm ${testResult.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-          {testResult.message}
+
+      {!emailSettings.enabled && (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200">
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+          <p className="text-sm text-amber-700">
+            Tính năng gửi email đang <strong>tắt</strong>. Bật để cấu hình và sử dụng email (thông báo, khôi phục mật khẩu, v.v.).
+          </p>
         </div>
       )}
+
+      <fieldset disabled={!emailSettings.enabled} className={!emailSettings.enabled ? 'opacity-50 pointer-events-none' : ''}>
+        <div className="space-y-6">
+          {/* Provider Selection */}
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wide mb-3">Nhà cung cấp Email</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setEmailSettings({ ...emailSettings, provider: 'smtp' })}
+                className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
+                  emailSettings.provider === 'smtp'
+                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  emailSettings.provider === 'smtp' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  <Server className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className={`font-medium text-sm ${emailSettings.provider === 'smtp' ? 'text-blue-700' : 'text-slate-700'}`}>SMTP</p>
+                  <p className="text-xs text-slate-500">Gmail, Office365, Custom SMTP</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmailSettings({ ...emailSettings, provider: 'resend' })}
+                className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
+                  emailSettings.provider === 'resend'
+                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  emailSettings.provider === 'resend' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className={`font-medium text-sm ${emailSettings.provider === 'resend' ? 'text-blue-700' : 'text-slate-700'}`}>Resend</p>
+                  <p className="text-xs text-slate-500">API-based email service</p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* SMTP Settings */}
+          {emailSettings.provider === 'smtp' && (
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wide mb-3">Máy chủ SMTP</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">SMTP Host</label>
+                  <Input
+                    value={emailSettings.smtpHost}
+                    onChange={(e) => setEmailSettings({ ...emailSettings, smtpHost: e.target.value })}
+                    placeholder="smtp.gmail.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">SMTP Port</label>
+                  <Input
+                    type="number"
+                    value={emailSettings.smtpPort}
+                    onChange={(e) => setEmailSettings({ ...emailSettings, smtpPort: parseInt(e.target.value) || 587 })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">SMTP Username</label>
+                  <Input
+                    value={emailSettings.smtpUsername}
+                    onChange={(e) => setEmailSettings({ ...emailSettings, smtpUsername: e.target.value })}
+                    placeholder="user@gmail.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">SMTP Password</label>
+                  <div className="relative">
+                    <Input
+                      type={showPasswords.smtpPassword ? 'text' : 'password'}
+                      value={emailSettings.smtpPassword}
+                      onChange={(e) => setEmailSettings({ ...emailSettings, smtpPassword: e.target.value })}
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => togglePasswordVisibility('smtpPassword')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPasswords.smtpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3 mt-3">
+                <input
+                  type="checkbox"
+                  id="smtp-secure"
+                  checked={emailSettings.smtpSecure}
+                  onChange={(e) => setEmailSettings({ ...emailSettings, smtpSecure: e.target.checked })}
+                  className="rounded"
+                />
+                <label htmlFor="smtp-secure" className="text-sm text-slate-700">Sử dụng TLS/SSL</label>
+              </div>
+            </div>
+          )}
+
+          {/* Resend Settings */}
+          {emailSettings.provider === 'resend' && (
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wide mb-3">Resend API</h3>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">API Key</label>
+                <div className="relative">
+                  <Input
+                    type={showPasswords.resendApiKey ? 'text' : 'password'}
+                    value={emailSettings.resendApiKey}
+                    onChange={(e) => setEmailSettings({ ...emailSettings, resendApiKey: e.target.value })}
+                    placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('resendApiKey')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPasswords.resendApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  Lấy API Key tại{' '}
+                  <a href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    resend.com/api-keys
+                  </a>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Sender Info */}
+          <div className="border-t border-slate-200 pt-4">
+            <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wide mb-3">Thông tin người gửi</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tên người gửi</label>
+                <Input
+                  value={emailSettings.fromName}
+                  onChange={(e) => setEmailSettings({ ...emailSettings, fromName: e.target.value })}
+                  placeholder="EITEK Platform"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email người gửi</label>
+                <Input
+                  value={emailSettings.fromEmail}
+                  onChange={(e) => setEmailSettings({ ...emailSettings, fromEmail: e.target.value })}
+                  placeholder="noreply@eitek.com"
+                />
+                {emailSettings.provider === 'resend' && (
+                  <p className="mt-1 text-xs text-slate-500">Domain phải được xác minh trên Resend</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Test Email */}
+          <div className="border-t border-slate-200 pt-4">
+            <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wide mb-3">Kiểm tra kết nối</h3>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email nhận thử (tùy chọn)</label>
+                <Input
+                  type="email"
+                  value={testRecipient}
+                  onChange={(e) => setTestRecipient(e.target.value)}
+                  placeholder="admin@eitek.com"
+                />
+              </div>
+              <Button variant="outline" onClick={handleTestEmail} disabled={testingEmail} className="shrink-0">
+                {testingEmail ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <TestTube className="w-4 h-4 mr-2" />}
+                {testRecipient ? 'Gửi email kiểm tra' : 'Kiểm tra kết nối'}
+              </Button>
+            </div>
+            {testResult && activeSection === 'email' && (
+              <div className={`mt-3 p-3 rounded-lg text-sm flex items-start gap-2 ${
+                testResult.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {testResult.type === 'success' ? <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" /> : <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />}
+                <span>{testResult.message}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </fieldset>
     </div>
   );
 

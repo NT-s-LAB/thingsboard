@@ -57,6 +57,33 @@ export class RegisterDto {
   password: string;
 }
 
+export class ForgotPasswordDto {
+  @ApiProperty({ description: 'User email address', example: 'user@eitek.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty({ description: 'Reset token from email link' })
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+
+  @ApiProperty({ description: 'New password', minLength: 6 })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  password: string;
+}
+
+export class ActivateAccountDto {
+  @ApiProperty({ description: 'Activation token from email link' })
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+}
+
 export class RefreshTokenDto {
   @ApiProperty({
     description: 'Refresh token',

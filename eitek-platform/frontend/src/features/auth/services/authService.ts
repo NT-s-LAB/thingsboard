@@ -49,15 +49,19 @@ class AuthService {
     });
   }
 
-  async requestPasswordReset(email: string): Promise<void> {
-    await apiClient.post(`${this.basePath}/password-reset`, { email });
+  async requestPasswordReset(email: string): Promise<{ message: string }> {
+    return apiClient.post<{ message: string }>(`${this.basePath}/forgot-password`, { email });
   }
 
-  async resetPassword(token: string, password: string): Promise<void> {
-    await apiClient.post(`${this.basePath}/password-reset/confirm`, {
+  async resetPassword(token: string, password: string): Promise<{ message: string }> {
+    return apiClient.post<{ message: string }>(`${this.basePath}/reset-password`, {
       token,
       password,
     });
+  }
+
+  async activateAccount(token: string): Promise<{ message: string }> {
+    return apiClient.post<{ message: string }>(`${this.basePath}/activate`, { token });
   }
 
   async verifyToken(): Promise<boolean> {
@@ -69,20 +73,8 @@ class AuthService {
     }
   }
 
-  async register(data: { email: string; firstName: string; lastName: string; password: string }): Promise<LoginResponse> {
-    const res = await apiClient.post<any>(`${this.basePath}/register`, data);
-    const loginResponse: LoginResponse = {
-      token: res.accessToken || res.token,
-      refreshToken: res.refreshToken,
-      user: res.user,
-    };
-    if (loginResponse.token) {
-      apiClient.setToken(loginResponse.token);
-    }
-    if (loginResponse.refreshToken) {
-      apiClient.setRefreshToken(loginResponse.refreshToken);
-    }
-    return loginResponse;
+  async register(data: { email: string; firstName: string; lastName: string; password: string }): Promise<{ message: string }> {
+    return apiClient.post<{ message: string }>(`${this.basePath}/register`, data);
   }
 }
 

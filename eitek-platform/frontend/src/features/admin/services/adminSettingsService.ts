@@ -67,11 +67,14 @@ export const DEFAULT_THINGSBOARD_SETTINGS = {
 };
 
 export const DEFAULT_EMAIL_SETTINGS = {
+  enabled: false,
+  provider: 'smtp' as 'smtp' | 'resend',
   smtpHost: 'smtp.gmail.com',
   smtpPort: 587,
   smtpUsername: '',
   smtpPassword: '',
   smtpSecure: true,
+  resendApiKey: '',
   fromName: 'EITEK Platform',
   fromEmail: 'noreply@eitek.com',
 };
@@ -138,9 +141,21 @@ class AdminSettingsService {
 
   /**
    * Test email configuration
+   * Sends current form values so user doesn't need to save first
    */
-  async testEmail(): Promise<TestResult> {
-    return apiClient.post<TestResult>(`${this.basePath}/test/email`);
+  async testEmail(params: {
+    recipient?: string;
+    provider?: string;
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpUsername?: string;
+    smtpPassword?: string;
+    smtpSecure?: boolean;
+    resendApiKey?: string;
+    fromName?: string;
+    fromEmail?: string;
+  }): Promise<TestResult> {
+    return apiClient.post<TestResult>(`${this.basePath}/test/email`, params);
   }
 
   /**

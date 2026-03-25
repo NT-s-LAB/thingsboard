@@ -5,11 +5,12 @@ import {
   HttpStatus, 
   UseGuards, 
   Get, 
-  Req 
+  Req,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { LoginDto, RegisterDto, RefreshTokenDto, AuthResponseDto } from './dto/auth.dto';
+import { LoginDto, RegisterDto, RefreshTokenDto, AuthResponseDto, ForgotPasswordDto, ResetPasswordDto, ActivateAccountDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { User } from './decorators/user.decorator';
 import { ApiResponseWrapper } from '@/common/decorators/api-response.decorator';
@@ -44,17 +45,58 @@ export class AuthController {
   @ApiOperation({ summary: 'User registration' })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: 'Registration successful',
-    type: AuthResponseDto,
+    description: 'Registration successful — activation email sent',
   })
-  @ApiResponseWrapper(AuthResponseDto)
-  async register(@Body() registerDto: RegisterDto): Promise<ResponseDto<AuthResponseDto>> {
+  @ApiResponseWrapper()
+  async register(@Body() registerDto: RegisterDto): Promise<ResponseDto<any>> {
     const result = await this.authService.register(registerDto);
     
     return {
       success: true,
       statusCode: HttpStatus.CREATED,
-      message: 'Registration successful',
+      message: result.message,
+      data: result,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Post('activate')
+  @ApiOperation({ summary: 'Activate account via email token' })
+  @ApiResponseWrapper()
+  async activateAccount(@Body() dto: ActivateAccountDto): Promise<ResponseDto<any>> {
+    const result = await this.authService.activateAccount(dto.token);
+    return {
+      success: true,
+      statusCode: HttpStatus.OK,
+      message: result.message,
+      data: result,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Request password reset email' })
+  @ApiResponseWrapper()
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<ResponseDto<any>> {
+    const result = await this.authService.forgotPassword(dto.email);
+    return {
+      success: true,
+      statusCode: HttpStatus.OK,
+      message: result.message,
+      data: result,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password using token from email' })
+  @ApiResponseWrapper()
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<ResponseDto<any>> {
+    const result = await this.authService.resetPassword(dto.token, dto.password);
+    return {
+      success: true,
+      statusCode: HttpStatus.OK,
+      message: result.message,
       data: result,
       timestamp: new Date().toISOString(),
     };

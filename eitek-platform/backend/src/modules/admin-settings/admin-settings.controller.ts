@@ -19,12 +19,16 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
+import { EmailService } from '../email/email.service';
 
 @Controller('admin/settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.SUPER_ADMIN)
 export class AdminSettingsController {
-  constructor(private readonly adminSettingsService: AdminSettingsService) {}
+  constructor(
+    private readonly adminSettingsService: AdminSettingsService,
+    private readonly emailService: EmailService,
+  ) {}
 
   /**
    * Get all system settings grouped by category
@@ -88,10 +92,63 @@ export class AdminSettingsController {
 
   /**
    * Test email configuration
+   * Accepts config from form so user doesn't need to save first
+   * Supports both SMTP and Resend providers
    */
   @Post('test/email')
-  async testEmail() {
-    return this.adminSettingsService.testEmailConfiguration();
+  async testEmail(@Body() body: {
+    recipient?: string;
+    provider?: string;
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpUsername?: string;
+    smtpPassword?: string;
+    smtpSecure?: boolean;
+    resendApiKey?: string;
+    fromName?: string;
+    fromEmail?: string;
+  }) {
+    const provider = body?.provider || 'smtp';
+    const fromName = body?.fromName || 'EITEK Platform';
+    const fromEmail = body?.fromEmail || 'noreply@eitek.com';
+
+    if (provider === 'resend' && body?.resendApiKey) {
+      // Resolve masked API key
+      let apiKey = body.resendApiKey;
+      if (apiKey === '********') {
+        const realKey = await this.adminSettingsService.getSettingValue<string>('email.resendApiKey');
+        apiKey = realKey || '';
+      }
+      return this.emailService.testResendWithConfig(
+        { apiKey, fromName, fromEmail, enabled: true },
+        body.recipient,
+      );
+    }
+
+    // SMTP test
+    if (body?.smtpHost && body?.smtpUsername) {
+      let password = body.smtpPassword || '';
+      if (password === '********') {
+        const realPassword = await this.adminSettingsService.getSettingValue<string>('email.smtpPassword');
+        password = realPassword || '';
+      }
+      return this.emailService.testWithConfig(
+        {
+          host: body.smtpHost,
+          port: body.smtpPort || 587,
+          secure: body.smtpSecure ?? true,
+          username: body.smtpUsername,
+          password,
+          fromName,
+          fromEmail,
+          enabled: true,
+        },
+        body.recipient,
+      );
+    }
+
+    // Fallback: read from DB
+    return this.emailService.testConnection(body?.recipient);
   }
 
   /**

@@ -1,16 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/shared/components/ui/Button';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
-import { useAuthStore } from '@/features/auth/stores/authStore';
 import { useGlobalStore } from '@/shared/stores/globalStore';
 import { authService } from '@/features/auth/services/authService';
-import { Eye, EyeOff, User, Lock, Mail, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, User, Lock, Mail, ArrowRight, CheckCircle } from 'lucide-react';
 
 const registerSchema = z.object({
   firstName: z.string().min(1, 'Vui lòng nhập họ'),
@@ -26,11 +24,12 @@ const registerSchema = z.object({
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
-  const router = useRouter();
   const { addNotification } = useGlobalStore();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
 
   const {
     register,
@@ -45,28 +44,15 @@ export default function RegisterPage() {
       setIsLoading(true);
       setError(null);
 
-      const response = await authService.register({
+      await authService.register({
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName,
         password: data.password,
       });
 
-      // Auto-login after register
-      useAuthStore.setState({
-        user: response.user,
-        token: response.token,
-        refreshToken: response.refreshToken ?? null,
-        isAuthenticated: true,
-        isLoading: false,
-      });
-
-      addNotification({
-        type: 'success',
-        title: 'Đăng ký thành công',
-        message: 'Chào mừng bạn đến với EITEK Platform',
-      });
-      router.push('/');
+      setRegisteredEmail(data.email);
+      setSuccess(true);
     } catch (err: any) {
       setError(err.message || 'Đăng ký thất bại');
       addNotification({
@@ -86,6 +72,35 @@ export default function RegisterPage() {
        ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
        : 'border-gray-300 focus:border-[#1e3a5f] focus:ring-2 focus:ring-[#1e3a5f]/20'
      }`;
+
+  // Success state — show "check your email" message
+  if (success) {
+    return (
+      <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10">
+        <div className="text-center">
+          <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
+            <CheckCircle className="w-8 h-8 text-green-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">Đăng ký thành công!</h2>
+          <p className="text-gray-500 mb-2">
+            Chúng tôi đã gửi email kích hoạt đến:
+          </p>
+          <p className="font-semibold text-[#1e3a5f] text-lg mb-6">{registeredEmail}</p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700 mb-6">
+            <p>Vui lòng kiểm tra hộp thư (và thư mục spam) để kích hoạt tài khoản.</p>
+            <p className="mt-1 text-blue-500">Link kích hoạt có hiệu lực trong 24 giờ.</p>
+          </div>
+          <a
+            href="/login"
+            className="inline-flex items-center gap-2 text-[#1e3a5f] hover:text-[#2a4a6f] font-medium transition-colors"
+          >
+            <ArrowRight className="w-4 h-4" />
+            Đi đến trang đăng nhập
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10">

@@ -151,6 +151,10 @@ export class AdminSettingsService implements OnModuleInit {
       });
 
       if (existing) {
+        // Skip updating secret fields when the masked placeholder is sent back
+        if (existing.isSecret && value === '********') {
+          continue;
+        }
         // Update existing
         updates.push(
           this.prisma.systemSettings.update({
