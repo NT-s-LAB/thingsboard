@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { User, Shield, Bell, Palette, Save, Eye, EyeOff, Upload, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { User, Shield, Bell, Palette, Save, Eye, EyeOff, Upload, RefreshCw, Check, X, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { Card } from '@/shared/components/ui/Card';
@@ -49,6 +49,47 @@ const DATE_FORMATS = [
   { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' },
 ];
 
+// ── Password Helpers ─────────────────────────────────────────────────────────
+
+interface PasswordCheck {
+  label: string;
+  met: boolean;
+}
+
+function getPasswordChecks(password: string): PasswordCheck[] {
+  return [
+    { label: 'Ít nhất 8 ký tự', met: password.length >= 8 },
+    { label: 'Chứa chữ hoa (A-Z)', met: /[A-Z]/.test(password) },
+    { label: 'Chứa chữ thường (a-z)', met: /[a-z]/.test(password) },
+    { label: 'Chứa số hoặc ký tự đặc biệt', met: /(\d|\W)/.test(password) },
+  ];
+}
+
+function getPasswordStrength(password: string): { level: number; label: string; color: string } {
+  if (!password) return { level: 0, label: '', color: '' };
+  const checks = getPasswordChecks(password);
+  const met = checks.filter(c => c.met).length;
+  if (met <= 1) return { level: 1, label: 'Yếu', color: 'bg-red-500' };
+  if (met === 2) return { level: 2, label: 'Trung bình', color: 'bg-yellow-500' };
+  if (met === 3) return { level: 3, label: 'Khá', color: 'bg-blue-500' };
+  return { level: 4, label: 'Mạnh', color: 'bg-green-500' };
+}
+
+// ── Toggle Component ─────────────────────────────────────────────────────────
+
+const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }> = ({ checked, onChange, disabled }) => (
+  <label className="relative inline-flex items-center cursor-pointer">
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      disabled={disabled}
+      className="sr-only peer"
+    />
+    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
+  </label>
+);
+
 // ════════════════════════════════════════════════════════════════════════════
 // Main Component
 // ════════════════════════════════════════════════════════════════════════════
@@ -60,6 +101,9 @@ const SettingsPage: React.FC = () => {
   const [activeSection, setActiveSection] = useState('account');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // API base URL for static assets
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
   // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -84,6 +128,30 @@ const SettingsPage: React.FC = () => {
   });
   const [changingPassword, setChangingPassword] = useState(false);
 
+  // Dirty tracking
+  const [initialProfileForm, setInitialProfileForm] = useState<UpdateProfileDto>({});
+  const [initialSettingsForm, setInitialSettingsForm] = useState<UpdateUserSettingsDto>({});
+
+  const isProfileDirty = useMemo(() => {
+    return JSON.stringify(profileForm) !== JSON.stringify(initialProfileForm) || !!avatarFile;
+  }, [profileForm, initialProfileForm, avatarFile]);
+
+  const isPreferencesDirty = useMemo(() => {
+    return JSON.stringify(settingsForm) !== JSON.stringify(initialSettingsForm);
+  }, [settingsForm, initialSettingsForm]);
+
+  // Password validation
+  const passwordChecks = useMemo(() => getPasswordChecks(passwordForm.newPassword), [passwordForm.newPassword]);
+  const passwordStrength = useMemo(() => getPasswordStrength(passwordForm.newPassword), [passwordForm.newPassword]);
+  const isPasswordFormValid = useMemo(() => {
+    return (
+      passwordForm.currentPassword.length > 0 &&
+      passwordForm.newPassword.length >= 8 &&
+      passwordChecks.every(c => c.met) &&
+      passwordForm.newPassword === passwordForm.confirmPassword
+    );
+  }, [passwordForm, passwordChecks]);
+
   // Sections
   const sections: SettingsSection[] = [
     { id: 'account', title: 'Tài khoản', icon: <User className="w-5 h-5" />, description: 'Thông tin cá nhân' },
@@ -100,14 +168,18 @@ const SettingsPage: React.FC = () => {
       const data = await settingsService.getAll();
       setProfile(data.profile);
       setSettings(data.settings);
-      setProfileForm({
+
+      const profileData: UpdateProfileDto = {
         firstName: data.profile.firstName,
         lastName: data.profile.lastName,
         email: data.profile.email,
         phone: data.profile.phone || '',
         description: data.profile.description || '',
-      });
-      setSettingsForm({
+      };
+      setProfileForm(profileData);
+      setInitialProfileForm(profileData);
+
+      const settingsData: UpdateUserSettingsDto = {
         theme: data.settings.theme,
         language: data.settings.language,
         timezone: data.settings.timezone,
@@ -119,8 +191,10 @@ const SettingsPage: React.FC = () => {
         systemUpdates: data.settings.systemUpdates,
         projectActivity: data.settings.projectActivity,
         weeklyReports: data.settings.weeklyReports,
-      });
-    } catch (error) {
+      };
+      setSettingsForm(settingsData);
+      setInitialSettingsForm(settingsData);
+    } catch {
       addNotification({ type: 'error', title: 'Lỗi', message: 'Không thể tải cài đặt' });
     } finally {
       setLoading(false);
@@ -130,6 +204,13 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Cleanup avatar preview URL
+  useEffect(() => {
+    return () => {
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    };
+  }, [avatarPreview]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -141,6 +222,7 @@ const SettingsPage: React.FC = () => {
         return;
       }
       setAvatarFile(file);
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
       setAvatarPreview(URL.createObjectURL(file));
     }
   };
@@ -155,6 +237,7 @@ const SettingsPage: React.FC = () => {
         setProfile(prev => prev ? { ...prev, avatar: avatarResult.avatar } : null);
         updateUser({ avatar: avatarResult.avatar });
         setAvatarFile(null);
+        if (avatarPreview) URL.revokeObjectURL(avatarPreview);
         setAvatarPreview(null);
       }
 
@@ -167,31 +250,29 @@ const SettingsPage: React.FC = () => {
         email: updatedProfile.email,
       });
 
+      // Reset dirty tracking
+      setInitialProfileForm({ ...profileForm });
+
       addNotification({ type: 'success', title: 'Thành công', message: 'Đã cập nhật hồ sơ' });
-    } catch (error: any) {
-      addNotification({ type: 'error', title: 'Lỗi', message: error.message || 'Không thể cập nhật hồ sơ' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Không thể cập nhật hồ sơ';
+      addNotification({ type: 'error', title: 'Lỗi', message });
     } finally {
       setSaving(false);
     }
   };
 
   const handleChangePassword = async () => {
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      addNotification({ type: 'error', title: 'Lỗi', message: 'Mật khẩu mới không khớp' });
-      return;
-    }
-    if (passwordForm.newPassword.length < 8) {
-      addNotification({ type: 'error', title: 'Lỗi', message: 'Mật khẩu phải có ít nhất 8 ký tự' });
-      return;
-    }
+    if (!isPasswordFormValid) return;
 
     try {
       setChangingPassword(true);
       await settingsService.changePassword(passwordForm);
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       addNotification({ type: 'success', title: 'Thành công', message: 'Đã đổi mật khẩu' });
-    } catch (error: any) {
-      addNotification({ type: 'error', title: 'Lỗi', message: error.message || 'Không thể đổi mật khẩu' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Không thể đổi mật khẩu';
+      addNotification({ type: 'error', title: 'Lỗi', message });
     } finally {
       setChangingPassword(false);
     }
@@ -202,9 +283,11 @@ const SettingsPage: React.FC = () => {
       setSaving(true);
       const updated = await settingsService.updatePreferences(settingsForm);
       setSettings(updated);
+      setInitialSettingsForm({ ...settingsForm });
       addNotification({ type: 'success', title: 'Thành công', message: 'Đã lưu cài đặt' });
-    } catch (error: any) {
-      addNotification({ type: 'error', title: 'Lỗi', message: error.message || 'Không thể lưu cài đặt' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Không thể lưu cài đặt';
+      addNotification({ type: 'error', title: 'Lỗi', message });
     } finally {
       setSaving(false);
     }
@@ -221,7 +304,7 @@ const SettingsPage: React.FC = () => {
             <div className="w-24 h-24 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center">
               {avatarPreview || profile?.avatar ? (
                 <img
-                  src={avatarPreview || profile?.avatar}
+                  src={avatarPreview || (profile?.avatar?.startsWith('http') ? profile.avatar : `${apiBaseUrl}${profile?.avatar}`)}
                   alt="Avatar"
                   className="w-full h-full object-cover"
                 />
@@ -293,8 +376,14 @@ const SettingsPage: React.FC = () => {
             />
           </div>
         </div>
-        <div className="mt-6 flex justify-end">
-          <Button onClick={handleSaveProfile} disabled={saving}>
+        <div className="mt-6 flex items-center justify-end gap-3">
+          {isProfileDirty && (
+            <span className="text-sm text-amber-600 flex items-center gap-1">
+              <AlertCircle className="w-4 h-4" />
+              Có thay đổi chưa lưu
+            </span>
+          )}
+          <Button onClick={handleSaveProfile} disabled={saving || !isProfileDirty}>
             {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
             Lưu thay đổi
           </Button>
@@ -367,7 +456,45 @@ const SettingsPage: React.FC = () => {
                 {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Tối thiểu 8 ký tự, bao gồm chữ hoa, chữ thường và số</p>
+
+            {/* Password Strength Indicator */}
+            {passwordForm.newPassword && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 flex gap-1">
+                    {[1, 2, 3, 4].map((level) => (
+                      <div
+                        key={level}
+                        className={`h-1.5 flex-1 rounded-full transition-colors ${
+                          level <= passwordStrength.level ? passwordStrength.color : 'bg-gray-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className={`text-xs font-medium ${
+                    passwordStrength.level <= 1 ? 'text-red-600' :
+                    passwordStrength.level === 2 ? 'text-yellow-600' :
+                    passwordStrength.level === 3 ? 'text-blue-600' : 'text-green-600'
+                  }`}>
+                    {passwordStrength.label}
+                  </span>
+                </div>
+
+                {/* Requirements Checklist */}
+                <div className="space-y-1">
+                  {passwordChecks.map((check, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      {check.met ? (
+                        <Check className="w-3.5 h-3.5 text-green-500" />
+                      ) : (
+                        <X className="w-3.5 h-3.5 text-gray-300" />
+                      )}
+                      <span className={check.met ? 'text-green-700' : 'text-gray-500'}>{check.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Xác nhận mật khẩu mới</label>
@@ -386,14 +513,43 @@ const SettingsPage: React.FC = () => {
                 {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {passwordForm.confirmPassword && passwordForm.newPassword !== passwordForm.confirmPassword && (
+              <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                <X className="w-3 h-3" /> Mật khẩu không khớp
+              </p>
+            )}
+            {passwordForm.confirmPassword && passwordForm.newPassword === passwordForm.confirmPassword && (
+              <p className="mt-1 text-xs text-green-600 flex items-center gap-1">
+                <Check className="w-3 h-3" /> Mật khẩu khớp
+              </p>
+            )}
           </div>
           <Button
             onClick={handleChangePassword}
-            disabled={changingPassword || !passwordForm.currentPassword || !passwordForm.newPassword}
+            disabled={changingPassword || !isPasswordFormValid}
           >
             {changingPassword ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Shield className="w-4 h-4 mr-2" />}
             Đổi mật khẩu
           </Button>
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Phiên đăng nhập</h3>
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium text-green-800">Phiên hiện tại</p>
+              <p className="text-green-600 text-xs">Đang hoạt động — Trình duyệt này</p>
+            </div>
+          </div>
+          {profile?.lastLogin && (
+            <div className="flex items-center justify-between text-gray-500 px-1">
+              <span>Đăng nhập lần cuối</span>
+              <span className="font-medium text-gray-700">{new Date(profile.lastLogin).toLocaleString('vi-VN')}</span>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -414,17 +570,20 @@ const SettingsPage: React.FC = () => {
 
   const renderNotificationsSection = () => {
     const notificationItems = [
+      { key: 'deviceAlerts' as const, label: 'Cảnh báo thiết bị', description: 'Khi thiết bị offline hoặc có lỗi', enabled: true },
+      { key: 'systemUpdates' as const, label: 'Cập nhật hệ thống', description: 'Thông báo về bảo trì và cập nhật', enabled: true },
+      { key: 'projectActivity' as const, label: 'Hoạt động dự án', description: 'Thay đổi trong dự án của bạn', enabled: true },
+    ];
+
+    const emailItems = [
       { key: 'emailNotifications' as const, label: 'Thông báo email', description: 'Nhận thông báo qua email' },
-      { key: 'deviceAlerts' as const, label: 'Cảnh báo thiết bị', description: 'Khi thiết bị offline hoặc có lỗi' },
-      { key: 'systemUpdates' as const, label: 'Cập nhật hệ thống', description: 'Thông báo về bảo trì và cập nhật' },
-      { key: 'projectActivity' as const, label: 'Hoạt động dự án', description: 'Thay đổi trong dự án của bạn' },
       { key: 'weeklyReports' as const, label: 'Báo cáo tuần', description: 'Tổng hợp hoạt động hàng tuần' },
     ];
 
     return (
       <div className="space-y-6">
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Cài đặt thông báo</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Thông báo trong ứng dụng</h3>
           <div className="space-y-4">
             {notificationItems.map((item) => (
               <div key={item.key} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
@@ -432,25 +591,55 @@ const SettingsPage: React.FC = () => {
                   <p className="text-sm font-medium text-gray-900">{item.label}</p>
                   <p className="text-sm text-gray-500">{item.description}</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settingsForm[item.key] ?? false}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, [item.key]: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
+                <Toggle
+                  checked={settingsForm[item.key] ?? false}
+                  onChange={(v) => setSettingsForm({ ...settingsForm, [item.key]: v })}
+                />
               </div>
             ))}
           </div>
-          <div className="mt-6 flex justify-end">
-            <Button onClick={handleSavePreferences} disabled={saving}>
-              {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-              Lưu cài đặt
-            </Button>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center gap-2 mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Thông báo qua email</h3>
+            <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded-full">Sắp triển khai</span>
+          </div>
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+            <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-blue-700">
+              Cấu hình thông báo email sẽ được kích hoạt sau khi thiết lập SMTP server. 
+              Bạn có thể bật/tắt trước, cài đặt sẽ được áp dụng khi tính năng sẵn sàng.
+            </p>
+          </div>
+          <div className="space-y-4">
+            {emailItems.map((item) => (
+              <div key={item.key} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{item.label}</p>
+                  <p className="text-sm text-gray-500">{item.description}</p>
+                </div>
+                <Toggle
+                  checked={settingsForm[item.key] ?? false}
+                  onChange={(v) => setSettingsForm({ ...settingsForm, [item.key]: v })}
+                />
+              </div>
+            ))}
           </div>
         </Card>
+
+        <div className="flex items-center justify-end gap-3">
+          {isPreferencesDirty && (
+            <span className="text-sm text-amber-600 flex items-center gap-1">
+              <AlertCircle className="w-4 h-4" />
+              Có thay đổi chưa lưu
+            </span>
+          )}
+          <Button onClick={handleSavePreferences} disabled={saving || !isPreferencesDirty}>
+            {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+            Lưu cài đặt
+          </Button>
+        </div>
       </div>
     );
   };
@@ -535,39 +724,36 @@ const SettingsPage: React.FC = () => {
               <p className="text-sm font-medium text-gray-900">Chế độ compact</p>
               <p className="text-sm text-gray-500">Sử dụng khoảng cách nhỏ hơn</p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settingsForm.compactMode ?? false}
-                onChange={(e) => setSettingsForm({ ...settingsForm, compactMode: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
+            <Toggle
+              checked={settingsForm.compactMode ?? false}
+              onChange={(v) => setSettingsForm({ ...settingsForm, compactMode: v })}
+            />
           </div>
           <div className="flex items-center justify-between py-3">
             <div>
               <p className="text-sm font-medium text-gray-900">Hiển thị lưới</p>
               <p className="text-sm text-gray-500">Hiển thị đường lưới trong SCADA editor</p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settingsForm.showGridLines ?? true}
-                onChange={(e) => setSettingsForm({ ...settingsForm, showGridLines: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
+            <Toggle
+              checked={settingsForm.showGridLines ?? true}
+              onChange={(v) => setSettingsForm({ ...settingsForm, showGridLines: v })}
+            />
           </div>
         </div>
-        <div className="mt-6 flex justify-end">
-          <Button onClick={handleSavePreferences} disabled={saving}>
-            {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-            Lưu cài đặt
-          </Button>
-        </div>
       </Card>
+
+      <div className="flex items-center justify-end gap-3">
+        {isPreferencesDirty && (
+          <span className="text-sm text-amber-600 flex items-center gap-1">
+            <AlertCircle className="w-4 h-4" />
+            Có thay đổi chưa lưu
+          </span>
+        )}
+        <Button onClick={handleSavePreferences} disabled={saving || !isPreferencesDirty}>
+          {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+          Lưu cài đặt
+        </Button>
+      </div>
     </div>
   );
 

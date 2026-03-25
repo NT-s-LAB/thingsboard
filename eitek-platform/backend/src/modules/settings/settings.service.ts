@@ -63,7 +63,7 @@ export class SettingsService {
         ...(dto.firstName && { firstName: dto.firstName }),
         ...(dto.lastName && { lastName: dto.lastName }),
         ...(dto.email && { email: dto.email }),
-        ...(dto.phone !== undefined && { phone: dto.phone }),
+        ...(dto.phone !== undefined && { phone: dto.phone || null }),
         ...(dto.description !== undefined && { description: dto.description }),
       },
       select: {

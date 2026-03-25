@@ -21,6 +21,15 @@ class ApiService {
     this.refreshToken = null;
   }
 
+  private async parseErrorResponse(response: Response): Promise<string> {
+    try {
+      const errorBody = await response.json();
+      if (typeof errorBody.message === 'string') return errorBody.message;
+      if (Array.isArray(errorBody.message)) return errorBody.message.join(', ');
+    } catch {}
+    return `API Error: ${response.status} ${response.statusText}`;
+  }
+
   private getHeaders() {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -122,7 +131,7 @@ class ApiService {
       }
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        throw new Error(await this.parseErrorResponse(response));
       }
 
       const json = await response.json();
@@ -173,7 +182,7 @@ class ApiService {
       const response = await fetch(url, config);
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        throw new Error(await this.parseErrorResponse(response));
       }
 
       const blob = await response.blob();
@@ -220,7 +229,7 @@ class ApiService {
       const response = await fetch(url, config);
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        throw new Error(await this.parseErrorResponse(response));
       }
 
       const json = await response.json();

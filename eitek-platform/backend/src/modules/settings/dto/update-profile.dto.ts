@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsEmail, MinLength, MaxLength, Matches } from 'class-validator';
+import { IsString, IsOptional, IsEmail, MinLength, MaxLength, Matches, ValidateIf } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 
 export class UpdateProfileDto {
   @ApiPropertyOptional()
@@ -23,9 +24,11 @@ export class UpdateProfileDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Transform(({ value }) => (value === '' ? null : value))
+  @ValidateIf((o) => o.phone !== null && o.phone !== undefined)
   @IsString()
   @Matches(/^\+?[1-9]\d{1,14}$/, { message: 'Invalid phone number format' })
-  phone?: string;
+  phone?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()

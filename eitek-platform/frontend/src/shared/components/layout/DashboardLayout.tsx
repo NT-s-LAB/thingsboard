@@ -26,7 +26,9 @@ import {
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
+import { NotificationContainer } from '@/shared/components/ui/Notification';
 import { useAuthStore } from '@/features/auth/stores/authStore';
+import { useGlobalStore } from '@/shared/stores/globalStore';
 import { useState } from 'react';
 
 interface SidebarProps {
@@ -429,11 +431,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pathname = usePathname();
+  const { notifications, removeNotification } = useGlobalStore();
 
   // SCADA viewer/editor gets a full-screen layout (no sidebar, no header)
   const isScadaFullscreen = /^\/scada\/[^/]+/.test(pathname);
   if (isScadaFullscreen) {
-    return <div className="h-screen">{children}</div>;
+    return (
+      <div className="h-screen">
+        {children}
+        <NotificationContainer notifications={notifications} onDismiss={removeNotification} />
+      </div>
+    );
   }
 
   return (
@@ -450,6 +458,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {children}
         </main>
       </div>
+
+      <NotificationContainer notifications={notifications} onDismiss={removeNotification} />
     </div>
   );
 };
