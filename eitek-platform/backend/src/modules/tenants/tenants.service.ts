@@ -191,7 +191,58 @@ export class TenantsService {
       throw new NotFoundException('Tenant not found');
     }
 
-    await this.prisma.tenant.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Audit logs (references tenant, user, project, device)
+      await tx.auditLog.deleteMany({ where: { tenantId: id } });
+
+      // 2. Scada views & widgets (via project/area chain)
+      await tx.scadaView.deleteMany({
+        where: {
+          OR: [
+            { project: { tenantId: id } },
+            { area: { site: { project: { tenantId: id } } } },
+          ],
+        },
+      });
+
+      // 3. Devices (states & overrides cascade)
+      await tx.device.deleteMany({
+        where: { area: { site: { project: { tenantId: id } } } },
+      });
+
+      // 4. Areas
+      await tx.area.deleteMany({
+        where: { site: { project: { tenantId: id } } },
+      });
+
+      // 5. Sites
+      await tx.site.deleteMany({
+        where: { project: { tenantId: id } },
+      });
+
+      // 6. Projects (user_projects cascade from project)
+      await tx.project.deleteMany({ where: { tenantId: id } });
+
+      // 7. Files uploaded by tenant users (before deleting users)
+      await tx.file.deleteMany({
+        where: { uploader: { tenantId: id } },
+      });
+
+      // 8. Users (user_roles, user_settings cascade from user)
+      await tx.user.deleteMany({ where: { tenantId: id } });
+
+      // 9. SCADA-related tenant data
+      await tx.deviceProfileScadaDefault.deleteMany({ where: { tenantId: id } });
+      await tx.deviceScadaTemplate.deleteMany({ where: { tenantId: id } });
+      await tx.tenantDeviceProfile.deleteMany({ where: { tenantId: id } });
+      await tx.tenantAssetProfile.deleteMany({ where: { tenantId: id } });
+
+      // 10. Tenant addons (cascade exists but be explicit)
+      await tx.tenantAddon.deleteMany({ where: { tenantId: id } });
+
+      // 11. Delete tenant
+      await tx.tenant.delete({ where: { id } });
+    });
   }
 
 }

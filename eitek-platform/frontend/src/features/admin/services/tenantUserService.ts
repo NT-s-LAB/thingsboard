@@ -116,24 +116,21 @@ class TenantUserService {
    * Get a single user by ID
    */
   async getUser(tenantId: string, userId: string): Promise<TenantUser> {
-    const response = await apiClient.get<TenantUserResponse>(`/tenants/${tenantId}/users/${userId}`);
-    return response.data;
+    return apiClient.get<TenantUser>(`/tenants/${tenantId}/users/${userId}`);
   }
 
   /**
    * Create a new user for a tenant
    */
   async createUser(tenantId: string, data: CreateTenantUserDto): Promise<TenantUser> {
-    const response = await apiClient.post<TenantUserResponse>(`/tenants/${tenantId}/users`, data);
-    return response.data;
+    return apiClient.post<TenantUser>(`/tenants/${tenantId}/users`, data);
   }
 
   /**
    * Update a user
    */
   async updateUser(tenantId: string, userId: string, data: UpdateTenantUserDto): Promise<TenantUser> {
-    const response = await apiClient.put<TenantUserResponse>(`/tenants/${tenantId}/users/${userId}`, data);
-    return response.data;
+    return apiClient.put<TenantUser>(`/tenants/${tenantId}/users/${userId}`, data);
   }
 
   /**
@@ -147,11 +144,10 @@ class TenantUserService {
    * Resend activation link
    */
   async resendActivationLink(tenantId: string, userId: string): Promise<ActivationLinkResponse['data']> {
-    const response = await apiClient.post<ActivationLinkResponse>(
+    return apiClient.post<ActivationLinkResponse['data']>(
       `/tenants/${tenantId}/users/${userId}/resend-activation`,
       {}
     );
-    return response.data;
   }
 
   /**
@@ -165,11 +161,10 @@ class TenantUserService {
    * Toggle user active status
    */
   async toggleUserStatus(tenantId: string, userId: string): Promise<TenantUser> {
-    const response = await apiClient.post<TenantUserResponse>(
+    return apiClient.post<TenantUser>(
       `/tenants/${tenantId}/users/${userId}/toggle-status`,
       {}
     );
-    return response.data;
   }
 }
 

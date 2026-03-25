@@ -83,6 +83,27 @@ export class AuthService {
     });
 
     if (existingUser) {
+      // If user exists but not activated, regenerate token and resend email
+      if (!existingUser.isActivated) {
+        const newToken = crypto.randomBytes(32).toString('hex');
+        const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const newHashedPassword = await bcrypt.hash(password, 12);
+
+        await this.prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            password: newHashedPassword,
+            firstName,
+            lastName,
+            activationToken: newToken,
+            activationExpiresAt: newExpiry,
+          },
+        });
+
+        await this.sendActivationEmail(email, firstName, newToken);
+        return { message: 'Đăng ký thành công! Vui lòng kiểm tra email để kích hoạt tài khoản.' };
+      }
+
       throw new ConflictException('User with this email already exists');
     }
 
@@ -91,7 +112,7 @@ export class AuthService {
     const activationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
     const tenantCode = `tenant-${Date.now()}`;
-    const tenantName = `${firstName} ${lastName}`;
+    const tenantName = `${firstName} ${lastName} - ${tenantCode}`;
 
     const user = await this.prisma.$transaction(async (tx) => {
       const defaultProfile = await tx.tenantProfile.findFirst({
@@ -167,9 +188,8 @@ export class AuthService {
       where: { email },
     });
 
-    // Always return success to prevent email enumeration
     if (!user || !user.isActive) {
-      return { message: 'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được link đặt lại mật khẩu.' };
+      throw new BadRequestException('Email không tồn tại trong hệ thống.');
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -186,7 +206,7 @@ export class AuthService {
 
     await this.sendResetPasswordEmail(user.email, user.firstName, resetToken);
 
-    return { message: 'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được link đặt lại mật khẩu.' };
+    return { message: 'Link kích hoạt tài khoản đã được gửi vào email của bạn.' };
   }
 
   /**
@@ -226,7 +246,7 @@ export class AuthService {
 
     const result = await this.emailService.sendEmail({
       to: email,
-      subject: '🔑 EITEK Platform - Kích hoạt tài khoản',
+      subject: 'EITEK Platform - Kích hoạt tài khoản',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px; background: #ffffff;">
           <div style="text-align: center; margin-bottom: 24px;">
@@ -263,7 +283,7 @@ export class AuthService {
 
     const result = await this.emailService.sendEmail({
       to: email,
-      subject: '🔒 EITEK Platform - Đặt lại mật khẩu',
+      subject: 'EITEK Platform - Đặt lại mật khẩu',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px; background: #ffffff;">
           <div style="text-align: center; margin-bottom: 24px;">

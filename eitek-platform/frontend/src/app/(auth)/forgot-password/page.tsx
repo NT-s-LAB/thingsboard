@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-3">Kiểm tra email của bạn</h2>
           <p className="text-gray-500 mb-2">
-            Nếu tài khoản với email bên dưới tồn tại, chúng tôi đã gửi link đặt lại mật khẩu:
+            Vui lòng kiểm tra email của bạn để đặt lại mật khẩu:
           </p>
           <p className="font-semibold text-[#1e3a5f] text-lg mb-6">{sentEmail}</p>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700 mb-6">
