@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import { DeviceFilters } from '@/features/devices/components/DeviceFilters';
 import { DeviceToolbar } from '@/features/devices/components/DeviceToolbar';
 import { DeviceCard } from '@/features/devices/components/DeviceCard';
@@ -78,15 +78,8 @@ const DevicesPage: React.FC = () => {
     }, [updateDeviceRealtimeStatus]),
   });
 
-  // Auto-refresh device status every 30 seconds (silent, no loading spinner)
-  const fetchRef = useRef(fetchDevices);
-  fetchRef.current = fetchDevices;
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchRef.current();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  // Realtime status updates are handled by the WebSocket hook above (useDevicesListRealtime).
+  // No polling needed.
 
   const handleExport = () => {
     // TODO: Implement export functionality

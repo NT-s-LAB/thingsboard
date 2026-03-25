@@ -40,6 +40,9 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
   // Active device subscriptions
   private subscriptions = new Map<string, DeviceSubscriptionState>();
   
+  // Reverse index: tbDeviceId → deviceId for O(1) lookup on telemetry updates
+  private tbDeviceIdIndex = new Map<string, string>();
+  
   // Batch queue for initial data fetch
   private batchQueue: string[] = [];
   private batchTimer: NodeJS.Timeout | null = null;
@@ -91,6 +94,7 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
     
     await Promise.allSettled(cleanupPromises);
     this.subscriptions.clear();
+    this.tbDeviceIdIndex.clear();
     
     this.logger.log('Device Subscription Manager shutdown complete');
   }
@@ -177,6 +181,7 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
       };
 
       this.subscriptions.set(deviceId, state);
+      this.tbDeviceIdIndex.set(device.tbDeviceId, deviceId);
 
       // Subscribe to TB WebSocket for real-time updates
       try {
@@ -195,6 +200,10 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
         this.logger.log(`Subscribed to device ${deviceId} (TB: ${device.tbDeviceId})`);
       } catch (error) {
         this.logger.error(`Failed to subscribe to TB WebSocket for device ${deviceId}: ${error.message}`);
+        // Clean up zombie subscription to prevent memory leak
+        this.subscriptions.delete(deviceId);
+        this.tbDeviceIdIndex.delete(device.tbDeviceId);
+        return;
       }
 
       // Queue for batch initial data fetch
@@ -256,11 +265,13 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
       }
 
       this.subscriptions.delete(deviceId);
+      this.tbDeviceIdIndex.delete(state.tbDeviceId);
       this.logger.log(`Unsubscribed from device ${deviceId}`);
     } catch (error) {
       this.logger.error(`Error cleaning up subscription for device ${deviceId}: ${error.message}`);
-      // Still remove from map to prevent state leak
+      // Still remove from maps to prevent state leak
       this.subscriptions.delete(deviceId);
+      this.tbDeviceIdIndex.delete(state.tbDeviceId);
     }
   }
 
@@ -277,10 +288,7 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
     // Map telemetry data
     const mappedData = this.deviceMapper.mapTelemetryData(update.data);
 
-    // Update local cache (database)
-    this.updateDeviceState(state.deviceId, mappedData);
-
-    // Broadcast to connected clients with scoping
+    // Broadcast to connected clients with scoping (no DB write)
     this.realtimeGateway.broadcastTelemetryScoped(
       state.deviceId,
       mappedData,
@@ -372,17 +380,7 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
     // Map telemetry
     const mappedTelemetry = this.deviceMapper.mapTelemetryData(telemetryData);
 
-    // Update local database
-    await this.updateDeviceState(state.deviceId, mappedTelemetry);
-    await this.prisma.device.update({
-      where: { id: state.deviceId },
-      data: {
-        isOnline,
-        ...(isOnline ? { lastSeen: new Date() } : {}),
-      },
-    });
-
-    // Broadcast to clients
+    // Broadcast to clients (no DB write — TB is source of truth)
     this.realtimeGateway.broadcastTelemetryScoped(
       state.deviceId,
       mappedTelemetry,
@@ -398,29 +396,9 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
     state.lastUpdate = new Date();
   }
 
-  private async updateDeviceState(deviceId: string, telemetryData: any): Promise<void> {
-    await this.prisma.deviceState.upsert({
-      where: { deviceId },
-      update: {
-        telemetryData,
-        lastUpdate: new Date(),
-      },
-      create: {
-        deviceId,
-        telemetryData,
-        attributes: {},
-        alarms: {},
-        lastUpdate: new Date(),
-      },
-    });
-  }
-
   private findByTbEntityId(tbEntityId: string): DeviceSubscriptionState | undefined {
-    for (const state of this.subscriptions.values()) {
-      if (state.tbDeviceId === tbEntityId) {
-        return state;
-      }
-    }
-    return undefined;
+    const deviceId = this.tbDeviceIdIndex.get(tbEntityId);
+    if (!deviceId) return undefined;
+    return this.subscriptions.get(deviceId);
   }
 }

@@ -12,24 +12,27 @@ import { PaginationDto, PaginatedResult } from '../../../common/dto/pagination.d
 import { RequestUser } from '../../../common/interfaces/common.interface';
 import { ThingsBoardDeviceApiService } from '../../thingsboard-integration/services/device-api.service';
 import { ThingsBoardClientService } from '../../thingsboard-integration/services/thingsboard-client.service';
-import { DeviceSyncService } from './device-sync.service';
 import { Device } from '@prisma/client';
 
 @Injectable()
 export class DevicesService {
   private readonly logger = new Logger(DevicesService.name);
 
+  // In-memory cache for device online status (TTL-based)
+  private statusCache = new Map<string, { data: { isOnline: boolean; lastActivityTime?: number }; expiry: number }>();
+  private readonly STATUS_CACHE_TTL = 10_000; // 10 seconds
+  private readonly BATCH_SIZE = 30; // Max concurrent TB API calls per batch
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tbDeviceApi: ThingsBoardDeviceApiService,
     private readonly tbClient: ThingsBoardClientService,
-    private readonly deviceSync: DeviceSyncService,
   ) {}
 
   /**
    * Fetch real-time online status for a batch of devices from ThingsBoard.
-   * Queries SERVER_SCOPE `active` attribute per device in parallel.
-   * Returns a map of tbDeviceId → { isOnline, lastActivityTime }.
+   * Uses batching (max BATCH_SIZE concurrent) and caching (TTL-based) to avoid
+   * overwhelming ThingsBoard API at scale (1000+ devices).
    */
   private async fetchRealtimeStatus(
     tbDeviceIds: string[],
@@ -37,26 +40,44 @@ export class DevicesService {
     const statusMap = new Map<string, { isOnline: boolean; lastActivityTime?: number }>();
     if (!tbDeviceIds.length) return statusMap;
 
-    const results = await Promise.allSettled(
-      tbDeviceIds.map(async (tbId) => {
-        const attrs = await this.tbClient.getDeviceAttributes(tbId, 'SERVER_SCOPE', [
-          'active',
-          'lastActivityTime',
-        ]);
-        return {
-          tbId,
-          isOnline: attrs['active']?.value === true,
-          lastActivityTime: attrs['lastActivityTime']?.value as number | undefined,
-        };
-      }),
-    );
+    const now = Date.now();
+    const uncachedIds: string[] = [];
 
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        statusMap.set(result.value.tbId, {
-          isOnline: result.value.isOnline,
-          lastActivityTime: result.value.lastActivityTime,
-        });
+    // Return cached entries, collect uncached IDs
+    for (const tbId of tbDeviceIds) {
+      const cached = this.statusCache.get(tbId);
+      if (cached && cached.expiry > now) {
+        statusMap.set(tbId, cached.data);
+      } else {
+        uncachedIds.push(tbId);
+      }
+    }
+
+    if (uncachedIds.length === 0) return statusMap;
+
+    // Process in batches of BATCH_SIZE to avoid overwhelming TB
+    for (let i = 0; i < uncachedIds.length; i += this.BATCH_SIZE) {
+      const batch = uncachedIds.slice(i, i + this.BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (tbId) => {
+          const attrs = await this.tbClient.getDeviceAttributes(tbId, 'SERVER_SCOPE', [
+            'active',
+            'lastActivityTime',
+          ]);
+          return {
+            tbId,
+            isOnline: attrs['active']?.value === true,
+            lastActivityTime: attrs['lastActivityTime']?.value as number | undefined,
+          };
+        }),
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          const { tbId, ...data } = result.value;
+          statusMap.set(tbId, data);
+          this.statusCache.set(tbId, { data, expiry: now + this.STATUS_CACHE_TTL });
+        }
       }
     }
 
@@ -197,19 +218,6 @@ export class DevicesService {
         },
       });
 
-      // Initialize device state
-      await this.prisma.deviceState.create({
-        data: {
-          deviceId: device.id,
-          telemetryData: {},
-          attributes: {},
-          alarms: {},
-        },
-      });
-
-      // Start sync process for real-time data
-      await this.deviceSync.startDeviceSync(device.id);
-
       return device;
     } catch (error) {
       if (error.response?.status) {
@@ -270,9 +278,6 @@ export class DevicesService {
           },
           deviceType: {
             select: { id: true, name: true, category: true },
-          },
-          deviceState: {
-            select: { telemetryData: true, lastUpdate: true },
           },
         },
         skip: offset,
@@ -341,7 +346,6 @@ export class DevicesService {
           },
         },
         deviceType: true,
-        deviceState: true,
       },
     });
 
@@ -449,7 +453,6 @@ export class DevicesService {
         include: {
           area: true,
           deviceType: true,
-          deviceState: true,
         },
       });
     } catch (error) {
@@ -468,9 +471,6 @@ export class DevicesService {
     try {
       // Delete from ThingsBoard first
       await this.tbDeviceApi.deleteDevice(device.tbDeviceId);
-
-      // Stop sync process
-      await this.deviceSync.stopDeviceSync(device.id);
 
       // Delete from our database (cascade will handle device_state)
       await this.prisma.device.delete({

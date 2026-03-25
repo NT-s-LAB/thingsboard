@@ -43,23 +43,29 @@ export interface TbAttributeUpdate {
 export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ThingsBoardWebSocketService.name);
   
-  private ws: WebSocket | null = null;
+  // Connection pool for scalability (round-robin)
+  private wsPool: (WebSocket | null)[] = [];
+  private wsConnected: boolean[] = [];
+  private readonly POOL_SIZE: number;
   private baseUrl: string;
-  private reconnectTimer: NodeJS.Timeout | null = null;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
-  private isConnected = false;
-  private isReconnecting = false;
+  private reconnectTimers: (NodeJS.Timeout | null)[] = [];
+  private heartbeatTimers: (NodeJS.Timeout | null)[] = [];
+  private isReconnecting: boolean[] = [];
   
   // Exponential backoff for reconnection
-  private reconnectAttempts = 0;
-  private readonly RECONNECT_BASE_DELAY = 1000; // 1 second
-  private readonly RECONNECT_MAX_DELAY = 60000; // 60 seconds max
-  private readonly RECONNECT_MAX_ATTEMPTS = 10; // Max attempts before giving up
+  private reconnectAttempts: number[] = [];
+  private readonly RECONNECT_BASE_DELAY = 1000;
+  private readonly RECONNECT_MAX_DELAY = 60000;
+  private readonly RECONNECT_MAX_ATTEMPTS = 10;
   
-  // Subscription management
+  // Subscription management (shared across pool)
   private subscriptions = new Map<number, TbWebSocketSubscription>();
-  private entitySubscriptions = new Map<string, Set<number>>(); // entityId -> subscriptionIds
+  private entitySubscriptions = new Map<string, Set<number>>();
   private nextSubscriptionId = 1;
+  // Track which pool index owns each subscription
+  private subscriptionToPool = new Map<number, number>();
+  // Round-robin counter
+  private nextPoolIndex = 0;
   
   // Pending subscriptions (queued while connecting)
   private pendingSubscriptions: Array<{ sub: TbWebSocketSubscription; resolve: (id: number) => void }> = [];
@@ -70,13 +76,27 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
     private readonly eventEmitter: EventEmitter2,
   ) {
     const tbUrl = this.configService.get<string>('THINGSBOARD_URL', 'http://localhost:8080');
-    // Convert HTTP to WebSocket URL
     this.baseUrl = tbUrl.replace(/^http/, 'ws');
+    this.POOL_SIZE = this.configService.get<number>('TB_WS_POOL_SIZE', 3);
+    
+    // Initialize pool arrays
+    for (let i = 0; i < this.POOL_SIZE; i++) {
+      this.wsPool.push(null);
+      this.wsConnected.push(false);
+      this.isReconnecting.push(false);
+      this.reconnectAttempts.push(0);
+      this.reconnectTimers.push(null);
+      this.heartbeatTimers.push(null);
+    }
   }
 
   async onModuleInit(): Promise<void> {
-    this.logger.log('Initializing ThingsBoard WebSocket connection...');
-    await this.connect();
+    this.logger.log(`Initializing ThingsBoard WebSocket pool (${this.POOL_SIZE} connections)...`);
+    const connectPromises = [];
+    for (let i = 0; i < this.POOL_SIZE; i++) {
+      connectPromises.push(this.connectOne(i));
+    }
+    await Promise.allSettled(connectPromises);
   }
 
   onModuleDestroy(): void {
@@ -84,50 +104,49 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
   }
 
   /**
-   * Connect to ThingsBoard WebSocket API
+   * Connect a single pool member
    */
-  async connect(): Promise<void> {
-    if (this.isConnected || this.isReconnecting) {
-      return;
-    }
+  private async connectOne(index: number): Promise<void> {
+    if (this.wsConnected[index] || this.isReconnecting[index]) return;
 
     try {
-      // Get fresh token from TB client
       const token = await this.tbClient.getAccessToken();
       const wsUrl = `${this.baseUrl}/api/ws/plugins/telemetry?token=${token}`;
 
-      this.logger.log(`Connecting to ThingsBoard WebSocket: ${this.baseUrl}/api/ws/plugins/telemetry`);
+      this.logger.log(`Connecting WS pool[${index}] to ThingsBoard...`);
 
-      this.ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl);
+      this.wsPool[index] = ws;
 
-      this.ws.on('open', () => this.handleOpen());
-      this.ws.on('message', (data) => this.handleMessage(data));
-      this.ws.on('error', (error) => this.handleError(error));
-      this.ws.on('close', (code, reason) => this.handleClose(code, reason));
-
+      ws.on('open', () => this.handleOpen(index));
+      ws.on('message', (data) => this.handleMessage(data));
+      ws.on('error', (error) => this.handleError(index, error));
+      ws.on('close', (code, reason) => this.handleClose(index, code, reason));
     } catch (error) {
-      this.logger.error(`Failed to connect to ThingsBoard WebSocket: ${error.message}`);
-      this.scheduleReconnect();
+      this.logger.error(`Failed to connect WS pool[${index}]: ${error.message}`);
+      this.scheduleReconnect(index);
     }
   }
 
   /**
-   * Disconnect from ThingsBoard WebSocket
+   * Disconnect all pool members
    */
   disconnect(): void {
-    this.clearTimers();
-    
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+    for (let i = 0; i < this.POOL_SIZE; i++) {
+      this.clearTimers(i);
+      if (this.wsPool[i]) {
+        this.wsPool[i]!.close();
+        this.wsPool[i] = null;
+      }
+      this.wsConnected[i] = false;
     }
     
-    this.isConnected = false;
     this.subscriptions.clear();
     this.entitySubscriptions.clear();
+    this.subscriptionToPool.clear();
     this.pendingSubscriptions = [];
     
-    this.logger.log('Disconnected from ThingsBoard WebSocket');
+    this.logger.log('Disconnected all ThingsBoard WebSocket pool members');
   }
 
   /**
@@ -174,8 +193,11 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
     const sub = this.subscriptions.get(subscriptionId);
     if (!sub) return;
 
+    const poolIndex = this.subscriptionToPool.get(subscriptionId);
+
     // Remove from maps
     this.subscriptions.delete(subscriptionId);
+    this.subscriptionToPool.delete(subscriptionId);
     const entitySubs = this.entitySubscriptions.get(sub.entityId);
     if (entitySubs) {
       entitySubs.delete(subscriptionId);
@@ -184,16 +206,16 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
       }
     }
 
-    // Send unsubscribe command
-    if (this.isConnected && this.ws) {
+    // Send unsubscribe command to the right pool member
+    if (poolIndex !== undefined && this.wsConnected[poolIndex] && this.wsPool[poolIndex]) {
       const cmd = {
         tsSubCmds: [],
         historyCmds: [],
         attrSubCmds: [],
         unsubscribeCmds: [{ cmdId: subscriptionId }],
       };
-      this.ws.send(JSON.stringify(cmd));
-      this.logger.debug(`Unsubscribed from ${sub.entityId} (cmdId: ${subscriptionId})`);
+      this.wsPool[poolIndex]!.send(JSON.stringify(cmd));
+      this.logger.debug(`Unsubscribed from ${sub.entityId} (cmdId: ${subscriptionId}, pool: ${poolIndex})`);
     }
   }
 
@@ -217,10 +239,10 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
   }
 
   /**
-   * Check if connected
+   * Check if at least one pool member is connected
    */
   isWebSocketConnected(): boolean {
-    return this.isConnected;
+    return this.wsConnected.some((c) => c);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -237,22 +259,36 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
     }
     this.entitySubscriptions.get(sub.entityId)!.add(subscriptionId);
 
-    // If connected, send subscription command immediately
-    if (this.isConnected && this.ws) {
-      this.sendSubscriptionCommand(subscriptionId, sub);
+    // Find a connected pool member (round-robin)
+    const poolIndex = this.pickPoolIndex();
+    if (poolIndex !== null) {
+      this.subscriptionToPool.set(subscriptionId, poolIndex);
+      this.sendSubscriptionCommand(poolIndex, subscriptionId, sub);
     } else {
       // Queue for when connected
-      this.pendingSubscriptions.push({
-        sub,
-        resolve: () => {},
-      });
+      this.pendingSubscriptions.push({ sub, resolve: () => {} });
     }
 
     return subscriptionId;
   }
 
-  private sendSubscriptionCommand(cmdId: number, sub: TbWebSocketSubscription): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+  /**
+   * Pick next connected pool member via round-robin
+   */
+  private pickPoolIndex(): number | null {
+    for (let i = 0; i < this.POOL_SIZE; i++) {
+      const idx = (this.nextPoolIndex + i) % this.POOL_SIZE;
+      if (this.wsConnected[idx] && this.wsPool[idx]) {
+        this.nextPoolIndex = (idx + 1) % this.POOL_SIZE;
+        return idx;
+      }
+    }
+    return null;
+  }
+
+  private sendSubscriptionCommand(poolIndex: number, cmdId: number, sub: TbWebSocketSubscription): void {
+    const ws = this.wsPool[poolIndex];
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
     const cmd: any = {
       tsSubCmds: [],
@@ -278,34 +314,43 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
       });
     }
 
-    this.ws.send(JSON.stringify(cmd));
-    this.logger.debug(`Sent subscription for ${sub.entityId} (${sub.scope}, cmdId: ${cmdId})`);
+    ws.send(JSON.stringify(cmd));
+    this.logger.debug(`Sent subscription for ${sub.entityId} (${sub.scope}, cmdId: ${cmdId}, pool: ${poolIndex})`);
   }
 
-  private handleOpen(): void {
-    this.isConnected = true;
-    this.isReconnecting = false;
-    this.resetReconnectAttempts(); // Reset on successful connection
-    this.logger.log('Connected to ThingsBoard WebSocket');
+  private handleOpen(index: number): void {
+    this.wsConnected[index] = true;
+    this.isReconnecting[index] = false;
+    this.reconnectAttempts[index] = 0;
+    this.logger.log(`WS pool[${index}] connected to ThingsBoard`);
 
-    // Start heartbeat
-    this.startHeartbeat();
+    // Start heartbeat for this connection
+    this.startHeartbeat(index);
 
-    // Send pending subscriptions
-    for (const { sub, resolve } of this.pendingSubscriptions) {
-      const cmdId = this.nextSubscriptionId++;
-      this.subscriptions.set(cmdId, sub);
-      this.sendSubscriptionCommand(cmdId, sub);
-      resolve(cmdId);
+    // On first connection ready: flush pending subscriptions
+    if (this.pendingSubscriptions.length > 0) {
+      const pending = [...this.pendingSubscriptions];
+      this.pendingSubscriptions = [];
+      for (const { sub, resolve } of pending) {
+        const cmdId = this.nextSubscriptionId++;
+        this.subscriptions.set(cmdId, sub);
+        if (!this.entitySubscriptions.has(sub.entityId)) {
+          this.entitySubscriptions.set(sub.entityId, new Set());
+        }
+        this.entitySubscriptions.get(sub.entityId)!.add(cmdId);
+        this.subscriptionToPool.set(cmdId, index);
+        this.sendSubscriptionCommand(index, cmdId, sub);
+        resolve(cmdId);
+      }
     }
-    this.pendingSubscriptions = [];
 
-    // Re-subscribe existing subscriptions (after reconnect)
+    // Re-subscribe subscriptions that belonged to this pool index (after reconnect)
     for (const [cmdId, sub] of this.subscriptions) {
-      this.sendSubscriptionCommand(cmdId, sub);
+      if (this.subscriptionToPool.get(cmdId) === index) {
+        this.sendSubscriptionCommand(index, cmdId, sub);
+      }
     }
 
-    // Emit connected event
     this.eventEmitter.emit('tb.websocket.connected');
   }
 
@@ -313,16 +358,13 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
     try {
       const message = JSON.parse(data.toString());
 
-      // Handle subscription updates
       if (message.subscriptionId !== undefined) {
         this.handleSubscriptionUpdate(message);
       }
 
-      // Handle errors
       if (message.errorCode) {
         this.logger.error(`ThingsBoard WebSocket error: ${message.errorMsg || message.errorCode}`);
       }
-
     } catch (error) {
       this.logger.error(`Failed to parse WebSocket message: ${error.message}`);
     }
@@ -333,7 +375,6 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
     if (!sub) return;
 
     if (message.data) {
-      // Telemetry or attribute update
       const update: TbTelemetryUpdate = {
         subscriptionId: message.subscriptionId,
         entityId: sub.entityId,
@@ -342,81 +383,67 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
         latestValues: message.latestValues || {},
       };
 
-      // Emit event for listeners
       this.eventEmitter.emit('tb.telemetry.update', update);
       this.eventEmitter.emit(`tb.telemetry.${sub.entityId}`, update);
-
-      this.logger.debug(`Received telemetry update for ${sub.entityId}: ${Object.keys(message.data).join(', ')}`);
     }
   }
 
-  private handleError(error: Error): void {
-    this.logger.error(`ThingsBoard WebSocket error: ${error.message}`);
+  private handleError(index: number, error: Error): void {
+    this.logger.error(`WS pool[${index}] error: ${error.message}`);
   }
 
-  private handleClose(code: number, reason: Buffer): void {
-    this.isConnected = false;
-    this.clearTimers();
+  private handleClose(index: number, code: number, reason: Buffer): void {
+    this.wsConnected[index] = false;
+    this.clearTimers(index);
 
-    this.logger.warn(`ThingsBoard WebSocket closed: code=${code}, reason=${reason?.toString() || 'N/A'}`);
+    this.logger.warn(`WS pool[${index}] closed: code=${code}, reason=${reason?.toString() || 'N/A'}`);
 
-    // Auto-reconnect unless intentionally closed
     if (code !== 1000) {
-      this.scheduleReconnect();
+      this.scheduleReconnect(index);
     }
   }
 
-  private scheduleReconnect(): void {
-    if (this.isReconnecting) return;
+  private scheduleReconnect(index: number): void {
+    if (this.isReconnecting[index]) return;
 
-    // Check if we've exceeded max attempts
-    if (this.reconnectAttempts >= this.RECONNECT_MAX_ATTEMPTS) {
-      this.logger.error(`Exceeded max reconnect attempts (${this.RECONNECT_MAX_ATTEMPTS}). Giving up.`);
-      this.isReconnecting = false;
+    if (this.reconnectAttempts[index] >= this.RECONNECT_MAX_ATTEMPTS) {
+      this.logger.error(`WS pool[${index}] exceeded max reconnect attempts. Giving up.`);
+      this.isReconnecting[index] = false;
       return;
     }
 
-    this.isReconnecting = true;
-    this.reconnectAttempts++;
+    this.isReconnecting[index] = true;
+    this.reconnectAttempts[index]++;
 
-    // Calculate delay with exponential backoff + jitter
-    // Formula: min(baseDelay * 2^attempts + jitter, maxDelay)
-    const exponentialDelay = this.RECONNECT_BASE_DELAY * Math.pow(2, this.reconnectAttempts - 1);
-    const jitter = Math.random() * 1000; // 0-1000ms jitter
+    const exponentialDelay = this.RECONNECT_BASE_DELAY * Math.pow(2, this.reconnectAttempts[index] - 1);
+    const jitter = Math.random() * 1000;
     const delay = Math.min(exponentialDelay + jitter, this.RECONNECT_MAX_DELAY);
 
-    this.logger.log(`Scheduling reconnect in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts}/${this.RECONNECT_MAX_ATTEMPTS})...`);
+    this.logger.log(`WS pool[${index}] reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts[index]}/${this.RECONNECT_MAX_ATTEMPTS})...`);
 
-    this.reconnectTimer = setTimeout(async () => {
-      this.isReconnecting = false;
-      await this.connect();
+    this.reconnectTimers[index] = setTimeout(async () => {
+      this.isReconnecting[index] = false;
+      await this.connectOne(index);
     }, delay);
   }
 
-  /**
-   * Reset reconnect attempts on successful connection
-   */
-  private resetReconnectAttempts(): void {
-    this.reconnectAttempts = 0;
-  }
-
-  private startHeartbeat(): void {
-    // Send ping every 30 seconds to keep connection alive
-    this.heartbeatTimer = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.ping();
+  private startHeartbeat(index: number): void {
+    this.heartbeatTimers[index] = setInterval(() => {
+      const ws = this.wsPool[index];
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.ping();
       }
     }, 30000);
   }
 
-  private clearTimers(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
+  private clearTimers(index: number): void {
+    if (this.reconnectTimers[index]) {
+      clearTimeout(this.reconnectTimers[index]!);
+      this.reconnectTimers[index] = null;
     }
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
+    if (this.heartbeatTimers[index]) {
+      clearInterval(this.heartbeatTimers[index]!);
+      this.heartbeatTimers[index] = null;
     }
   }
 }

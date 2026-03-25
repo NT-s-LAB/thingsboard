@@ -107,24 +107,6 @@ export interface IThingsBoardService {
 }
 
 /**
- * Device Synchronization Interface
- */
-export interface IDeviceSyncService {
-  // Sync operations
-  syncDeviceFromTB(tbDeviceId: string): Promise<void>;
-  syncDeviceToTB(deviceId: string): Promise<string>; // Returns TB device ID
-  syncAllDevices(): Promise<void>;
-  
-  // Batch operations
-  bulkSyncFromTB(tbDeviceIds: string[]): Promise<void>;
-  bulkSyncToTB(deviceIds: string[]): Promise<string[]>;
-  
-  // Validation
-  validateDeviceMapping(deviceId: string): Promise<boolean>;
-  validateTBDeviceExists(tbDeviceId: string): Promise<boolean>;
-}
-
-/**
  * Real-time Data Integration Interface
  */
 export interface IRealTimeService {

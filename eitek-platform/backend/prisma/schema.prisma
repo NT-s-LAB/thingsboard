@@ -307,6 +307,7 @@ model Site {
   areas       Area[]
 
   @@unique([projectId, name])
+  @@index([projectId])
   @@map("sites")
 }
 
@@ -324,6 +325,7 @@ model Area {
   scadaViews  ScadaView[]
 
   @@unique([siteId, name])
+  @@index([siteId])
   @@map("areas")
 }
 
@@ -369,6 +371,10 @@ model Device {
   auditLogs    AuditLog[]
 
   @@unique([areaId, name])
+  @@index([areaId])
+  @@index([deviceTypeId])
+  @@index([createdAt(sort: Desc)])
+  @@index([isActive, areaId])
   @@map("devices")
 }
 
@@ -599,6 +605,9 @@ model AuditLog {
   deviceId  String?
   device    Device?     @relation(fields: [deviceId], references: [id])
 
+  @@index([tenantId, timestamp(sort: Desc)])
+  @@index([entityId])
+  @@index([deviceId])
   @@map("audit_logs")
 }
 

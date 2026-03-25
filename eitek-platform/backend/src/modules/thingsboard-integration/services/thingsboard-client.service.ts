@@ -14,6 +14,7 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
   private refreshTokenValue: string | null = null;
   private tokenExpiry = 0;
   private tbTenantId: string | null = null; // ThingsBoard tenant ID from JWT
+  private loginPromise: Promise<string> | null = null; // Singleton login guard
 
   constructor(
     private readonly httpService: HttpService,
@@ -34,9 +35,12 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
   }
 
   private async ensureAuthenticated(): Promise<void> {
-    if (!this.accessToken || Date.now() >= this.tokenExpiry) {
-      await this.login();
+    if (this.accessToken && Date.now() < this.tokenExpiry) return;
+    // Singleton guard: all concurrent callers share the same login() promise
+    if (!this.loginPromise) {
+      this.loginPromise = this.login().finally(() => { this.loginPromise = null; });
     }
+    await this.loginPromise;
   }
 
   private getHeaders() {
