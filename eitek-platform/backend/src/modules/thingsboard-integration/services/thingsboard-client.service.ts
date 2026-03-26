@@ -305,6 +305,14 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
     await this.ensureAuthenticated();
     const timeout = request.timeout || 30000;
 
+    console.log('\n╔════════════════════════════════════════════════╗');
+    console.log('║        SENDING RPC TO THINGSBOARD             ║');
+    console.log('╠════════════════════════════════════════════════╣');
+    console.log('TB Device ID:', deviceId);
+    console.log('RPC Request:', JSON.stringify(request, null, 2));
+    console.log('URL:', `${this.baseUrl}/api/rpc/oneway/${deviceId}`);
+    console.log('╚════════════════════════════════════════════════╝\n');
+
     try {
       const response = await firstValueFrom(
         this.httpService.post(
@@ -313,12 +321,14 @@ export class ThingsBoardClientService implements IThingsBoardClient, OnModuleIni
           { headers: this.getHeaders(), timeout },
         ),
       );
+      console.log('✅ TB RPC Response:', JSON.stringify(response.data, null, 2));
       return {
         requestId: response.data?.requestId || '',
         response: response.data,
         timeout: false,
       };
     } catch (error) {
+      console.log('❌ TB RPC Error:', error.message);
       if (error.code === 'ECONNABORTED') {
         return { requestId: '', timeout: true, error: 'Request timed out' };
       }

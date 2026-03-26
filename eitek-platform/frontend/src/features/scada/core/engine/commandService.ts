@@ -54,6 +54,15 @@ export class CommandService {
 
     const startTime = Date.now();
 
+    // Log RPC request details
+    console.log('[CommandService] Executing command:', {
+      type: request.type,
+      entityId: request.entityId,
+      rpcMethod: request.rpcMethod,
+      rpcParams: request.rpcParams,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       let response: any;
 
@@ -64,6 +73,13 @@ export class CommandService {
       } else {
         throw new Error(`Unknown command type: ${request.type}`);
       }
+
+      // Log RPC response
+      console.log('[CommandService] RPC Response:', {
+        commandId: request.id,
+        response,
+        duration: Date.now() - startTime,
+      });
 
       const result: CommandResult = {
         commandId: request.id,
@@ -79,6 +95,12 @@ export class CommandService {
     } catch (error) {
       const errMsg =
         error instanceof Error ? error.message : 'Command execution failed';
+
+      console.error('[CommandService] RPC Error:', {
+        commandId: request.id,
+        error: errMsg,
+        duration: Date.now() - startTime,
+      });
 
       const result: CommandResult = {
         commandId: request.id,
@@ -114,9 +136,8 @@ export class CommandService {
   // ── Private ──────────────────────────────────────────────────────────────
 
   private async executeRpc(request: CommandRequest): Promise<unknown> {
-    const endpoint = request.rpcOneWay
-      ? `/devices/${request.entityId}/rpc/oneway`
-      : `/devices/${request.entityId}/rpc/twoway`;
+    // Backend endpoint is POST /devices/:id/rpc (no twoway/oneway suffix)
+    const endpoint = `/devices/${request.entityId}/rpc`;
 
     const body = {
       method: request.rpcMethod,

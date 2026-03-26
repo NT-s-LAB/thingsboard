@@ -91,6 +91,8 @@ export class SubscriptionManager {
    * Previous subscriptions are replaced.
    */
   subscribe(points: DataPoint[]): void {
+    console.log('[SubscriptionManager] subscribe() called with', points.length, 'points');
+    
     // Unsubscribe existing first
     this.teardown();
 
@@ -105,7 +107,13 @@ export class SubscriptionManager {
       }
     }
 
-    if (this.points.length === 0) return;
+    console.log('[SubscriptionManager] After dedup:', this.points.length, 'points');
+    console.log('[SubscriptionManager] Device IDs:', Array.from(new Set(this.points.map(p => p.entityId))));
+
+    if (this.points.length === 0) {
+      console.log('[SubscriptionManager] No points to subscribe, returning');
+      return;
+    }
 
     // Initial fetch via HTTP
     this.fetchAll();
@@ -171,48 +179,103 @@ export class SubscriptionManager {
   }
 
   private setupWebSocket(): void {
-    if (!this.ws || !this.ws.connected) return;
+    console.log('[SubscriptionManager] setupWebSocket() called');
+    console.log('[SubscriptionManager] ws exists:', !!this.ws);
+    console.log('[SubscriptionManager] ws.connected:', this.ws?.connected);
+    
+    if (!this.ws || !this.ws.connected) {
+      console.log('[SubscriptionManager] WebSocket not ready, skipping WS subscription');
+      return;
+    }
 
     this.wsHandler = (event: any) => {
+      // Log raw telemetry event from WebSocket
+      console.log('[SubscriptionManager] RAW Telemetry Event:', JSON.stringify(event, null, 2));
+
       if (!event?.deviceId || !event?.data) return;
 
       const updates: DataUpdate[] = [];
-      const now = Date.now();
+
+      // Log telemetry data structure
+      console.log('[SubscriptionManager] Telemetry Data Structure:', {
+        deviceId: event.deviceId,
+        dataKeys: Object.keys(event.data),
+        rawData: event.data,
+        timestamp: event.timestamp,
+      });
 
       for (const [key, values] of Object.entries(event.data)) {
         let value: DataValue = null;
-        if (Array.isArray(values) && values.length > 0) {
+        let timestamp: number = Date.now();
+        
+        // Log each key's raw value structure
+        console.log(`[SubscriptionManager] Key "${key}" raw value:`, {
+          type: typeof values,
+          isArray: Array.isArray(values),
+          rawValue: values,
+        });
+
+        // Handle object format from backend: { value: ..., timestamp: ... }
+        if (values && typeof values === 'object' && !Array.isArray(values) && 'value' in (values as any)) {
+          value = (values as any).value;
+          timestamp = (values as any).timestamp || Date.now();
+          console.log(`[SubscriptionManager] Key "${key}" extracted value (object format):`, value, 'ts:', timestamp);
+        }
+        // Handle array format: [{ value: ..., timestamp: ... }]
+        else if (Array.isArray(values) && values.length > 0) {
           value = (values[0] as any).value ?? null;
+          timestamp = (values[0] as any).ts || (values[0] as any).timestamp || Date.now();
+          console.log(`[SubscriptionManager] Key "${key}" extracted value (array format):`, value, 'ts:', timestamp);
+        }
+
+        const cacheKey = `${event.deviceId}::${key}`;
+        const existing = this.cache.get(cacheKey);
+        
+        // Only update if new data is newer than cached data
+        if (existing && existing.timestamp >= timestamp) {
+          console.log(`[SubscriptionManager] Key "${key}" skipped - cached data is newer (cached: ${existing.timestamp}, new: ${timestamp})`);
+          continue;
         }
 
         const update: DataUpdate = {
           entityId: event.deviceId,
           key,
           value,
-          timestamp: now,
+          timestamp,
         };
 
-        this.cache.set(`${event.deviceId}::${key}`, update);
+        this.cache.set(cacheKey, update);
         updates.push(update);
       }
 
       if (updates.length > 0) {
+        console.log('[SubscriptionManager] Final Updates to UI:', updates);
         this.listener?.(updates);
       }
     };
 
     this.ws.subscribe('telemetry', this.wsHandler);
+    console.log('[SubscriptionManager] Subscribed to telemetry event');
 
     // Subscribe to each device
     const deviceIds = new Set(
       this.points.filter((p) => p.entityType === 'DEVICE').map((p) => p.entityId),
     );
+    console.log('[SubscriptionManager] Device IDs to subscribe:', Array.from(deviceIds));
     Array.from(deviceIds).forEach((id) => {
+      console.log('[SubscriptionManager] Emitting subscribe:device for:', id);
       this.ws!.emit('subscribe:device', { deviceId: id });
     });
   }
 
   private async fetchAll(): Promise<void> {
+    // Skip HTTP polling if WebSocket is connected - realtime is sufficient
+    if (this.ws?.connected) {
+      console.log('[SubscriptionManager] fetchAll() skipped - WebSocket connected, using realtime updates');
+      return;
+    }
+    console.log('[SubscriptionManager] fetchAll() running - WebSocket disconnected, using HTTP fallback');
+
     // Group points by entityId
     const byEntity = new Map<string, DataPoint[]>();
     for (const p of this.points) {

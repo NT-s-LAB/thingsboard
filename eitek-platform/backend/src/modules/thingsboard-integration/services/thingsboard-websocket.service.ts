@@ -297,22 +297,34 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
     };
 
     if (sub.scope === 'LATEST_TELEMETRY') {
-      cmd.tsSubCmds.push({
+      const tsCmd: any = {
         entityType: sub.entityType,
         entityId: sub.entityId,
         scope: 'LATEST_TELEMETRY',
         cmdId,
-        keys: sub.keys?.join(',') || '',
-      });
+      };
+      // Only add keys if specified - empty keys means "subscribe to all"
+      // but sending keys="" can cause TB to not push updates
+      if (sub.keys && sub.keys.length > 0) {
+        tsCmd.keys = sub.keys.join(',');
+      }
+      cmd.tsSubCmds.push(tsCmd);
     } else {
-      cmd.attrSubCmds.push({
+      const attrCmd: any = {
         entityType: sub.entityType,
         entityId: sub.entityId,
         scope: sub.scope,
         cmdId,
-        keys: sub.keys?.join(',') || '',
-      });
+      };
+      // Only add keys if specified
+      if (sub.keys && sub.keys.length > 0) {
+        attrCmd.keys = sub.keys.join(',');
+      }
+      cmd.attrSubCmds.push(attrCmd);
     }
+
+    // DEBUG: Log the subscription command being sent
+    console.log('\n[TB-WS] SENDING SUBSCRIPTION CMD:', JSON.stringify(cmd, null, 2));
 
     ws.send(JSON.stringify(cmd));
     this.logger.debug(`Sent subscription for ${sub.entityId} (${sub.scope}, cmdId: ${cmdId}, pool: ${poolIndex})`);
@@ -358,6 +370,9 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
     try {
       const message = JSON.parse(data.toString());
 
+      // DEBUG: Log raw WS message
+      console.log('\n[TB-WS] RAW MESSAGE:', JSON.stringify(message, null, 2));
+
       if (message.subscriptionId !== undefined) {
         this.handleSubscriptionUpdate(message);
       }
@@ -374,12 +389,28 @@ export class ThingsBoardWebSocketService implements OnModuleInit, OnModuleDestro
     const sub = this.subscriptions.get(message.subscriptionId);
     if (!sub) return;
 
-    if (message.data) {
+    // DEBUG: Log all fields from TB message
+    console.log('[TB-WS] subscriptionId:', message.subscriptionId);
+    console.log('[TB-WS] data:', JSON.stringify(message.data));
+    console.log('[TB-WS] latestValues:', JSON.stringify(message.latestValues));
+
+    // Merge data and latestValues - ThingsBoard uses different fields for different scenarios
+    // - data: realtime telemetry updates
+    // - latestValues: sometimes included with initial subscription or attribute updates
+    const telemetryData = message.data || {};
+    
+    // If data is empty but latestValues has content, use latestValues
+    const hasData = telemetryData && Object.keys(telemetryData).length > 0;
+    const effectiveData = hasData ? telemetryData : (message.latestValues || {});
+    
+    console.log('[TB-WS] effectiveData:', JSON.stringify(effectiveData));
+
+    if (effectiveData && Object.keys(effectiveData).length > 0) {
       const update: TbTelemetryUpdate = {
         subscriptionId: message.subscriptionId,
         entityId: sub.entityId,
         entityType: sub.entityType,
-        data: message.data,
+        data: effectiveData,
         latestValues: message.latestValues || {},
       };
 

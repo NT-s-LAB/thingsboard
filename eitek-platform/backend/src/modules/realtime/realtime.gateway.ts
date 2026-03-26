@@ -10,6 +10,7 @@ import {
   WsException,
 } from '@nestjs/websockets';
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -69,6 +70,7 @@ export class RealtimeGateway
     private readonly configService: ConfigService,
     private readonly authService: AuthService,
     private readonly roomAccessService: RoomAccessService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   afterInit(server: Server) {
@@ -201,28 +203,44 @@ export class RealtimeGateway
     @MessageBody() data: { deviceId: string },
   ) {
     const user = this.getUser(client);
-    const room = `device:${data.deviceId}`;
     
-    // Validate tenant access
-    await this.roomAccessService.validateRoomAccess(user, room);
+    // Resolve to internal device ID (supports both internal ID and tbDeviceId)
+    const resolvedDeviceId = await this.roomAccessService.resolveDeviceId(user.tenantId, data.deviceId);
+    if (!resolvedDeviceId) {
+      throw new WsException(`Device not found or access denied: ${data.deviceId}`);
+    }
+    
+    const room = `device:${resolvedDeviceId}`;
     
     client.join(room);
     this.trackClientSubscription(client.id, room);
-    this.addClientToDeviceTracking(data.deviceId, client.id);
+    this.addClientToDeviceTracking(resolvedDeviceId, client.id);
+    
+    // Emit event for DeviceSubscriptionManager to subscribe to ThingsBoard WebSocket
+    this.eventEmitter.emit('device.client.subscribed', { deviceId: resolvedDeviceId });
     
     this.logger.debug(`Client ${client.id} (tenant: ${user.tenantId}) subscribed to ${room}`);
-    return { event: 'subscribed', data: { room } };
+    return { event: 'subscribed', data: { room, deviceId: resolvedDeviceId } };
   }
 
   @SubscribeMessage('unsubscribe:device')
-  handleUnsubscribeDevice(
+  async handleUnsubscribeDevice(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { deviceId: string },
   ) {
-    const room = `device:${data.deviceId}`;
+    const user = this.getUser(client);
+    
+    // Resolve to internal device ID
+    const resolvedDeviceId = await this.roomAccessService.resolveDeviceId(user.tenantId, data.deviceId);
+    const deviceIdToUse = resolvedDeviceId ?? data.deviceId; // Fallback to provided ID for cleanup
+    
+    const room = `device:${deviceIdToUse}`;
     client.leave(room);
     this.untrackClientSubscription(client.id, room);
-    this.removeClientFromDeviceTracking(data.deviceId, client.id);
+    this.removeClientFromDeviceTracking(deviceIdToUse, client.id);
+    
+    // Emit event for DeviceSubscriptionManager to potentially unsubscribe from ThingsBoard
+    this.eventEmitter.emit('device.client.unsubscribed', { deviceId: deviceIdToUse });
     
     this.logger.debug(`Client ${client.id} unsubscribed from ${room}`);
     return { event: 'unsubscribed', data: { room } };
@@ -393,6 +411,12 @@ export class RealtimeGateway
    * Broadcast telemetry data to device subscribers
    */
   broadcastTelemetry(deviceId: string, data: any) {
+    console.log('\n=== TELEMETRY BROADCAST ===');
+    console.log('Device ID:', deviceId);
+    console.log('Data:', JSON.stringify(data, null, 2));
+    console.log('Room:', `device:${deviceId}`);
+    console.log('===========================\n');
+    
     this.server.to(`device:${deviceId}`).emit('telemetry', {
       deviceId,
       data,
@@ -408,6 +432,13 @@ export class RealtimeGateway
     data: any,
     context: { areaId?: string; projectId?: string },
   ) {
+    console.log('\n========== TELEMETRY SCOPED BROADCAST ==========');
+    console.log('Device ID:', deviceId);
+    console.log('Context:', JSON.stringify(context, null, 2));
+    console.log('Telemetry Data:');
+    console.log(JSON.stringify(data, null, 2));
+    console.log('=================================================\n');
+    
     const payload = {
       deviceId,
       data,

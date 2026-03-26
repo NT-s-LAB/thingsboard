@@ -71,7 +71,10 @@ export function resolveWidgetProperties(
 
   for (const binding of widget.bindings) {
     const rawValue = resolveRawValue(binding, getLatest, variables);
-    const formatted = applyFormat(rawValue, binding.format);
+    // Apply converter function if enabled (ThingsBoard style)
+    const converted = applyConverter(rawValue, binding);
+    // Apply format transformation
+    const formatted = applyFormat(converted, binding.format);
     result[binding.targetProperty] = formatted ?? binding.defaultValue;
   }
 
@@ -109,6 +112,86 @@ function resolveRawValue(
 
     default:
       return undefined;
+  }
+}
+
+/**
+ * Apply ThingsBoard-style converter function and onWhenResultType.
+ * This transforms the raw value to a boolean (for 'state' property on switches etc.)
+ */
+function applyConverter(
+  value: DataValue | undefined,
+  binding: WidgetBinding,
+): DataValue | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  const src = binding.source;
+  let result: DataValue = value;
+
+  // Apply converter function if enabled
+  if (src.converterEnabled && src.converterFunction) {
+    try {
+      // Create a safe function from the converter (function body expects 'data' as input)
+      // eslint-disable-next-line no-new-func
+      const converterFn = new Function('data', src.converterFunction) as (data: unknown) => unknown;
+      result = converterFn(value) as DataValue;
+    } catch (e) {
+      console.warn('[bindingResolver] Converter function error:', e);
+      return value;
+    }
+  }
+
+  // Apply onWhenResultType to convert value to boolean (for 'state' property)
+  // This is only applied when targetProperty is 'state' (switch, valve, etc.)
+  if (binding.targetProperty === 'state' && src.onWhenResultType) {
+    result = convertToBoolean(result, src.onWhenResultType);
+  }
+
+  return result;
+}
+
+/**
+ * Convert a value to boolean based on the expected type (ThingsBoard style).
+ */
+function convertToBoolean(
+  value: DataValue | undefined,
+  resultType: 'string' | 'integer' | 'double' | 'boolean' | 'json',
+): boolean {
+  if (value === undefined || value === null) return false;
+
+  switch (resultType) {
+    case 'boolean':
+      // Interpret as boolean
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') return value.toLowerCase() === 'true' || value === '1' || value === 'on';
+      if (typeof value === 'number') return value !== 0;
+      return Boolean(value);
+
+    case 'string':
+      // String must be truthy and not "false", "0", "off", etc.
+      const strVal = String(value).toLowerCase().trim();
+      return strVal !== '' && strVal !== 'false' && strVal !== '0' && strVal !== 'off';
+
+    case 'integer':
+    case 'double':
+      // Numeric: non-zero is true
+      const numVal = Number(value);
+      return !isNaN(numVal) && numVal !== 0;
+
+    case 'json':
+      // JSON: try to parse if string, then check truthy
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Boolean(parsed);
+        } catch {
+          return Boolean(value);
+        }
+      }
+      return Boolean(value);
+
+    default:
+      return Boolean(value);
   }
 }
 

@@ -130,11 +130,15 @@ export class RoomAccessService {
   /**
    * Validate device access through hierarchy:
    * Device → Area → Site → Project → Tenant
+   * Supports both internal ID and tbDeviceId
    */
   private async validateDeviceAccess(tenantId: string, deviceId: string): Promise<boolean> {
     const device = await this.prisma.device.findFirst({
       where: {
-        id: deviceId,
+        OR: [
+          { id: deviceId },
+          { tbDeviceId: deviceId },
+        ],
         area: {
           site: {
             project: {
@@ -236,5 +240,31 @@ export class RoomAccessService {
         this.accessCache.delete(key);
       }
     }
+  }
+
+  /**
+   * Resolve device ID to internal ID.
+   * Accepts either internal ID or tbDeviceId and returns the internal ID.
+   * Returns null if device not found or not accessible by tenant.
+   */
+  async resolveDeviceId(tenantId: string, deviceIdOrTbId: string): Promise<string | null> {
+    const device = await this.prisma.device.findFirst({
+      where: {
+        OR: [
+          { id: deviceIdOrTbId },
+          { tbDeviceId: deviceIdOrTbId },
+        ],
+        area: {
+          site: {
+            project: {
+              tenantId,
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    return device?.id ?? null;
   }
 }

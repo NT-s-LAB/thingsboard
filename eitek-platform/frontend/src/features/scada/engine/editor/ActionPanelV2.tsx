@@ -45,6 +45,47 @@ function ensureAction(actions: WidgetActionInstance[], trigger: ActionTrigger): 
   ];
 }
 
+/**
+ * Format RPC params for display in the input field.
+ * - Simple values (boolean, number, string): show as-is
+ * - Objects/arrays: JSON.stringify
+ * - undefined: show empty string
+ */
+function formatParamsForDisplay(params: unknown): string {
+  if (params === undefined || params === null) return '';
+  if (typeof params === 'boolean') return String(params);
+  if (typeof params === 'number') return String(params);
+  if (typeof params === 'string') {
+    // If it's a string that looks like JSON, show it
+    if (params.startsWith('{') || params.startsWith('[')) return params;
+    return params;
+  }
+  // Object or array
+  return JSON.stringify(params);
+}
+
+/**
+ * Parse user input for RPC params.
+ * Tries JSON parse first, then falls back to interpreting as literal value.
+ */
+function parseParamsInput(input: string): unknown {
+  const trimmed = input.trim();
+  if (!trimmed) return undefined;
+
+  // Try JSON parse (for objects, arrays, or JSON-encoded values)
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Handle boolean-like strings
+    if (trimmed.toLowerCase() === 'true') return true;
+    if (trimmed.toLowerCase() === 'false') return false;
+    // Handle numbers
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+    // Return as string
+    return trimmed;
+  }
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export const ActionPanelV2: React.FC = () => {
@@ -138,10 +179,10 @@ export const ActionPanelV2: React.FC = () => {
     (device: Device) => {
       if (!selectedWidget) return;
 
-      // Update all bindings' entityId
+      // Update all bindings' entityId — use internal device ID (backend maps to TB)
       const bindings = selectedWidget.bindings.map((b) => ({
         ...b,
-        source: { ...b.source, entityId: device.tbDeviceId, entityName: device.name },
+        source: { ...b.source, entityId: device.id, entityName: device.name },
       }));
 
       // Also ensure state binding exists
@@ -152,17 +193,17 @@ export const ActionPanelV2: React.FC = () => {
           source: {
             type: 'telemetry' as BindingSourceType,
             entityType: 'DEVICE',
-            entityId: device.tbDeviceId,
+            entityId: device.id,
             entityName: device.name,
             key: '',
           },
         });
       }
 
-      // Update all actions' deviceId
+      // Update all actions' deviceId — use internal device ID (backend maps to TB)
       const actions = selectedWidget.actions.map((a) => ({
         ...a,
-        config: { ...a.config, deviceId: device.tbDeviceId },
+        config: { ...a.config, deviceId: device.id },
       }));
 
       updateWidget(selectedWidget.id, { bindings, actions });
@@ -239,7 +280,7 @@ export const ActionPanelV2: React.FC = () => {
                   : 'Not configured'
               }
             >
-              <Row label="Source">
+              <Row label="Action">
                 <select
                   value={stateBinding?.source.type ?? 'telemetry'}
                   onChange={(e) =>
@@ -247,13 +288,13 @@ export const ActionPanelV2: React.FC = () => {
                   }
                   style={inputStyle}
                 >
-                  <option value="telemetry">Time series</option>
-                  <option value="attribute">Attribute</option>
+                  <option value="telemetry">Get time series</option>
+                  <option value="attribute">Get attribute value</option>
                   <option value="static">Static value</option>
                 </select>
               </Row>
               {(stateBinding?.source.type === 'telemetry' || !stateBinding?.source.type) && (
-                <Row label="Key">
+                <Row label="Time series key*">
                   <TelemetryKeyInput
                     deviceId={deviceId}
                     value={stateBinding?.source.key ?? ''}
@@ -278,7 +319,7 @@ export const ActionPanelV2: React.FC = () => {
                       <option value="SHARED_SCOPE">Shared</option>
                     </select>
                   </Row>
-                  <Row label="Key">
+                  <Row label="Attribute key*">
                     <input
                       type="text"
                       value={stateBinding.source.key ?? ''}
@@ -303,6 +344,64 @@ export const ActionPanelV2: React.FC = () => {
                   </select>
                 </Row>
               )}
+              {/* Action result converter - ThingsBoard style */}
+              {stateBinding?.source.type !== 'static' && (
+                <>
+                  <Row label="Action result converter">
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => updateBindings('state', { converterEnabled: false })}
+                        style={{
+                          ...toggleButtonStyle,
+                          background: !stateBinding?.source.converterEnabled ? '#3B82F6' : '#E5E7EB',
+                          color: !stateBinding?.source.converterEnabled ? '#fff' : '#6B7280',
+                        }}
+                      >
+                        None
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateBindings('state', { converterEnabled: true })}
+                        style={{
+                          ...toggleButtonStyle,
+                          background: stateBinding?.source.converterEnabled ? '#3B82F6' : '#E5E7EB',
+                          color: stateBinding?.source.converterEnabled ? '#fff' : '#6B7280',
+                        }}
+                      >
+                        Function
+                      </button>
+                    </div>
+                  </Row>
+                  {stateBinding?.source.converterEnabled && (
+                    <Row label="Converter function">
+                      <textarea
+                        value={stateBinding?.source.converterFunction ?? 'return data;'}
+                        placeholder="return data === 'on' || data === 1;"
+                        onChange={(e) => updateBindings('state', { converterFunction: e.target.value })}
+                        style={{ ...inputStyle, minHeight: 48, fontFamily: 'monospace', fontSize: 10 }}
+                      />
+                    </Row>
+                  )}
+                  <Row label="'On' when result is">
+                    <select
+                      value={stateBinding?.source.onWhenResultType ?? 'boolean'}
+                      onChange={(e) =>
+                        updateBindings('state', {
+                          onWhenResultType: e.target.value as 'string' | 'integer' | 'double' | 'boolean' | 'json',
+                        })
+                      }
+                      style={inputStyle}
+                    >
+                      <option value="boolean">Boolean</option>
+                      <option value="string">String</option>
+                      <option value="integer">Integer</option>
+                      <option value="double">Double</option>
+                      <option value="json">JSON</option>
+                    </select>
+                  </Row>
+                </>
+              )}
             </BehaviorRow>
 
             {/* Turn On */}
@@ -311,7 +410,7 @@ export const ActionPanelV2: React.FC = () => {
               tooltip="Action to execute when the switch is turned ON"
               summary={
                 turnOnAction?.config.rpcMethod
-                  ? `Execute RPC method '${turnOnAction.config.rpcMethod}(${JSON.stringify(turnOnAction.config.rpcParams ?? true)})'`
+                  ? `Execute RPC method '${turnOnAction.config.rpcMethod}'`
                   : 'Not configured'
               }
             >
@@ -343,18 +442,11 @@ export const ActionPanelV2: React.FC = () => {
                   <Row label="Params">
                     <input
                       type="text"
-                      value={
-                        turnOnAction?.config.rpcParams !== undefined
-                          ? JSON.stringify(turnOnAction.config.rpcParams)
-                          : 'true'
-                      }
-                      placeholder="true"
+                      value={formatParamsForDisplay(turnOnAction?.config.rpcParams)}
+                      placeholder="true or {&quot;pin&quot;: 1}"
                       onChange={(e) => {
-                        try {
-                          updateAction('turnOn', { config: { rpcParams: JSON.parse(e.target.value) } });
-                        } catch {
-                          updateAction('turnOn', { config: { rpcParams: e.target.value as unknown as Record<string, unknown> } });
-                        }
+                        const parsed = parseParamsInput(e.target.value);
+                        updateAction('turnOn', { config: { rpcParams: parsed } });
                       }}
                       style={inputStyle}
                     />
@@ -395,7 +487,7 @@ export const ActionPanelV2: React.FC = () => {
               tooltip="Action to execute when the switch is turned OFF"
               summary={
                 turnOffAction?.config.rpcMethod
-                  ? `Execute RPC method '${turnOffAction.config.rpcMethod}(${JSON.stringify(turnOffAction.config.rpcParams ?? false)})'`
+                  ? `Execute RPC method '${turnOffAction.config.rpcMethod}'`
                   : 'Not configured'
               }
             >
@@ -427,18 +519,11 @@ export const ActionPanelV2: React.FC = () => {
                   <Row label="Params">
                     <input
                       type="text"
-                      value={
-                        turnOffAction?.config.rpcParams !== undefined
-                          ? JSON.stringify(turnOffAction.config.rpcParams)
-                          : 'false'
-                      }
-                      placeholder="false"
+                      value={formatParamsForDisplay(turnOffAction?.config.rpcParams)}
+                      placeholder="false or {&quot;pin&quot;: 0}"
                       onChange={(e) => {
-                        try {
-                          updateAction('turnOff', { config: { rpcParams: JSON.parse(e.target.value) } });
-                        } catch {
-                          updateAction('turnOff', { config: { rpcParams: e.target.value as unknown as Record<string, unknown> } });
-                        }
+                        const parsed = parseParamsInput(e.target.value);
+                        updateAction('turnOff', { config: { rpcParams: parsed } });
                       }}
                       style={inputStyle}
                     />
@@ -793,7 +878,7 @@ const DeviceSearchDropdown: React.FC<{
                   }}
                   onMouseLeave={(e) => {
                     (e.currentTarget as HTMLElement).style.background =
-                      device.tbDeviceId === selectedDeviceId ? '#EFF6FF' : 'transparent';
+                      (device.id === selectedDeviceId || device.tbDeviceId === selectedDeviceId) ? '#EFF6FF' : 'transparent';
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
@@ -1051,4 +1136,15 @@ const inputStyle: React.CSSProperties = {
   fontSize: 11,
   outline: 'none',
   background: '#fff',
+};
+
+const toggleButtonStyle: React.CSSProperties = {
+  flex: 1,
+  padding: '4px 8px',
+  border: 'none',
+  borderRadius: 4,
+  fontSize: 11,
+  fontWeight: 500,
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
 };

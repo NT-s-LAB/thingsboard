@@ -227,6 +227,26 @@ export interface BindingSource {
 
   /** Calculated expression */
   expression?: string;
+
+  // ── ThingsBoard-style Initial State Config ──
+
+  /** 
+   * Value type for evaluating "On when result is" (ThingsBoard style).
+   * Determines how the data is interpreted as boolean.
+   */
+  onWhenResultType?: 'string' | 'integer' | 'double' | 'boolean' | 'json';
+
+  /**
+   * Whether converter function is enabled (ThingsBoard "Action result converter").
+   * When false, raw value is used. When true, converterFunction is applied.
+   */
+  converterEnabled?: boolean;
+
+  /**
+   * JavaScript function body for converting the result value.
+   * Example: "return data === 'on' || data === 1;"
+   */
+  converterFunction?: string;
 }
 
 export interface BindingFormat {
@@ -294,7 +314,8 @@ export interface ActionConfig {
   // rpcCall
   deviceId?: string;
   rpcMethod?: string;
-  rpcParams?: Record<string, unknown>;
+  /** RPC params - can be any JSON value (object, array, string, number, boolean, null) */
+  rpcParams?: unknown;
   rpcOneWay?: boolean;
   rpcTimeout?: number;
 

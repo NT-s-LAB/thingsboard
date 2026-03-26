@@ -269,18 +269,33 @@ export class DevicesController {
     @Body() rpcData: { method: string; params: any },
     @CurrentUser() user: RequestUser,
   ) {
-    const result = await this.devicesService.sendRpc(
-      deviceId,
-      rpcData.method,
-      rpcData.params,
-      user,
-    );
-    return {
-      success: true,
-      message: 'RPC command sent successfully',
-      data: result,
-      timestamp: new Date().toISOString(),
-    };
+    console.log('\n╔════════════════════════════════════════════════╗');
+    console.log('║           RPC REQUEST RECEIVED                 ║');
+    console.log('╠════════════════════════════════════════════════╣');
+    console.log('Device ID:', deviceId);
+    console.log('Method:', rpcData.method);
+    console.log('Params:', JSON.stringify(rpcData.params, null, 2));
+    console.log('User:', user.id);
+    console.log('╚════════════════════════════════════════════════╝\n');
+
+    try {
+      const result = await this.devicesService.sendRpc(
+        deviceId,
+        rpcData.method,
+        rpcData.params,
+        user,
+      );
+      console.log('\n✅ RPC SUCCESS:', JSON.stringify(result, null, 2));
+      return {
+        success: true,
+        message: 'RPC command sent successfully',
+        data: result,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.log('\n❌ RPC ERROR:', error.message);
+      throw error;
+    }
   }
 
   // ================================

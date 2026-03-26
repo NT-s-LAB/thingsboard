@@ -7,6 +7,9 @@
  *
  * Images scale to fill the widget when resized.
  * Fires actionSchema triggers: toggle, turnOn, turnOff.
+ * 
+ * Realtime mode: UI only updates when device publishes telemetry back.
+ * Flow: Click → RPC → Device responds → Telemetry → UI updates
  */
 
 import React, { useCallback } from 'react';
@@ -26,7 +29,9 @@ export const SwitchRenderer: React.FC<WidgetRendererProps> = ({
   alarmState,
   onAction,
 }) => {
+  // State comes from binding (telemetry) - no local state
   const state = Boolean(p.state);
+  
   const label = (p.label as string) || '';
   const onColor = (p.onColor as string) || '#22C55E';
   const offColor = (p.offColor as string) || '#9CA3AF';
@@ -44,7 +49,10 @@ export const SwitchRenderer: React.FC<WidgetRendererProps> = ({
   const useImageMode = !!(onImage || offImage);
 
   const doToggle = useCallback(() => {
+    // Don't change local state - just fire action
+    // UI will update when device publishes telemetry back
     const newState = !state;
+    
     onAction?.('toggle', { value: newState });
     if (newState) {
       onAction?.('turnOn', { value: true });

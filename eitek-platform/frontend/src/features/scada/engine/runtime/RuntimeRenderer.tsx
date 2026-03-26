@@ -105,18 +105,31 @@ export const RuntimeRenderer: React.FC<RuntimeRendererProps> = ({
 
   // ── Set up subscription manager ──
   useEffect(() => {
-    if (!screen) return;
+    console.log('[RuntimeRenderer] Subscription effect triggered:', {
+      hasScreen: !!screen,
+      screenId: screen?.id,
+      connected,
+    });
+    
+    if (!screen) {
+      console.log('[RuntimeRenderer] No screen, returning');
+      return;
+    }
 
     const subManager = new SubscriptionManager();
     subManagerRef.current = subManager;
 
     // Provide WebSocket handle
     if (connected) {
+      console.log('[RuntimeRenderer] WebSocket connected, setting up');
       subManager.setWebSocket({ subscribe, unsubscribe, emit, connected });
+    } else {
+      console.log('[RuntimeRenderer] WebSocket NOT connected, skipping setWebSocket');
     }
 
     // Collect data points from screen bindings
     const dataPoints = collectDataPoints(screen);
+    console.log('[RuntimeRenderer] Collected dataPoints:', dataPoints.length, dataPoints);
 
     // Build variables map
     const variablesMap: Record<string, unknown> = {};

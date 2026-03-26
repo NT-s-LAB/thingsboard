@@ -132,13 +132,22 @@ const PageRenderer: React.FC<{
   } as ScreenDefinition), [page.widgets]);
 
   // Collect data points from page widgets
-  const dataPoints = useMemo(
-    () => collectDataPoints(screenForBinding),
-    [screenForBinding],
-  );
+  const dataPoints = useMemo(() => {
+    console.log('[MultiPageRuntime] Collecting dataPoints from widgets:', page.widgets.length);
+    page.widgets.forEach((w, i) => {
+      console.log(`[MultiPageRuntime] Widget[${i}] "${w.name}" type=${w.type} bindings:`, w.bindings);
+    });
+    return collectDataPoints(screenForBinding);
+  }, [screenForBinding]);
 
   // Set up subscription manager and subscribe to data points
   useEffect(() => {
+    console.log('[MultiPageRuntime] Effect triggered:', {
+      dataPointsCount: dataPoints.length,
+      connected,
+      pageId: page.id,
+    });
+    
     // Create manager if needed
     if (!subscriptionManager.current) {
       subscriptionManager.current = new SubscriptionManager(5000);
@@ -147,10 +156,12 @@ const PageRenderer: React.FC<{
     const manager = subscriptionManager.current;
 
     // Set up WebSocket handle
+    console.log('[MultiPageRuntime] Setting WebSocket handle, connected:', connected);
     manager.setWebSocket({ subscribe, unsubscribe, emit, connected });
 
     // Set up update callback
     manager.onUpdate((updates: DataUpdate[]) => {
+      console.log('[MultiPageRuntime] Received updates from SubscriptionManager:', updates);
       setDataCache((prev) => {
         const next = new Map(prev);
         for (const update of updates) {
@@ -162,7 +173,10 @@ const PageRenderer: React.FC<{
 
     // Subscribe to data points
     if (dataPoints.length > 0) {
+      console.log('[MultiPageRuntime] Subscribing to dataPoints:', dataPoints);
       manager.subscribe(dataPoints);
+    } else {
+      console.log('[MultiPageRuntime] No dataPoints to subscribe');
     }
 
     return () => {

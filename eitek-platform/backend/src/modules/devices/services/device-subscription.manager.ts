@@ -69,6 +69,25 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
   }
 
   /**
+   * Handle client subscription event from RealtimeGateway
+   * This bridges the gap between Socket.io rooms and ThingsBoard WebSocket
+   */
+  @OnEvent('device.client.subscribed')
+  async handleClientSubscribed(payload: { deviceId: string }): Promise<void> {
+    this.logger.debug(`Received device.client.subscribed event for ${payload.deviceId}`);
+    await this.subscribeDevice(payload.deviceId);
+  }
+
+  /**
+   * Handle client unsubscription event from RealtimeGateway
+   */
+  @OnEvent('device.client.unsubscribed')
+  handleClientUnsubscribed(payload: { deviceId: string }): void {
+    this.logger.debug(`Received device.client.unsubscribed event for ${payload.deviceId}`);
+    this.unsubscribeDevice(payload.deviceId);
+  }
+
+  /**
    * Clean up on module destroy - clear all timers and subscriptions
    */
   async onModuleDestroy(): Promise<void> {
@@ -130,6 +149,8 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
    * If device is pending cleanup, cancel cleanup and reuse subscription.
    */
   async subscribeDevice(deviceId: string): Promise<void> {
+    console.log('\n[SUBSCRIBE] subscribeDevice called for:', deviceId);
+    
     return this.withLock(deviceId, async () => {
       // Cancel any pending cleanup for this device
       const pendingCleanup = this.pendingCleanups.get(deviceId);
@@ -143,6 +164,7 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
       const existing = this.subscriptions.get(deviceId);
       if (existing) {
         existing.clientCount++;
+        console.log('[SUBSCRIBE] Already subscribed, clientCount:', existing.clientCount);
         // Clear cleanup timer if any
         if (existing.cleanupTimer) {
           clearTimeout(existing.cleanupTimer);
@@ -171,6 +193,8 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
         return;
       }
 
+      console.log('[SUBSCRIBE] Found device, tbDeviceId:', device.tbDeviceId);
+
       // Create subscription state
       const state: DeviceSubscriptionState = {
         deviceId,
@@ -185,11 +209,14 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
 
       // Subscribe to TB WebSocket for real-time updates
       try {
+        // Subscribe to ALL telemetry
+        console.log('[SUBSCRIBE] Subscribing to telemetry for:', device.tbDeviceId);
         state.tbTelemetrySubId = await this.tbWebSocket.subscribeTelemetry(
           device.tbDeviceId,
           'DEVICE',
         );
-        
+        console.log('[SUBSCRIBE] Telemetry subId:', state.tbTelemetrySubId);
+        // Subscribe to server scope attributes (device status)
         state.tbAttributesSubId = await this.tbWebSocket.subscribeAttributes(
           device.tbDeviceId,
           'SERVER_SCOPE',
@@ -197,7 +224,21 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
           ['active', 'lastActivityTime'],
         );
 
-        this.logger.log(`Subscribed to device ${deviceId} (TB: ${device.tbDeviceId})`);
+        // Subscribe to shared scope attributes (device may store relay state here)
+        await this.tbWebSocket.subscribeAttributes(
+          device.tbDeviceId,
+          'SHARED_SCOPE',
+          'DEVICE',
+        );
+
+        // Subscribe to client scope attributes (device-published attributes)
+        await this.tbWebSocket.subscribeAttributes(
+          device.tbDeviceId,
+          'CLIENT_SCOPE', 
+          'DEVICE',
+        );
+
+        this.logger.log(`Subscribed to device ${deviceId} (TB: ${device.tbDeviceId}) - telemetry + all attribute scopes`);
       } catch (error) {
         this.logger.error(`Failed to subscribe to TB WebSocket for device ${deviceId}: ${error.message}`);
         // Clean up zombie subscription to prevent memory leak
@@ -281,12 +322,26 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
    */
   @OnEvent('tb.telemetry.update')
   handleTelemetryUpdate(update: TbTelemetryUpdate): void {
+    console.log('\n╔════════════════════════════════════════════════╗');
+    console.log('║  TELEMETRY FROM THINGSBOARD                   ║');
+    console.log('╠════════════════════════════════════════════════╣');
+    console.log('TB Entity ID:', update.entityId);
+    console.log('Raw Data from TB:');
+    console.log(JSON.stringify(update.data, null, 2));
+    console.log('╚════════════════════════════════════════════════╝\n');
+    
     // Find the device by TB entity ID
     const state = this.findByTbEntityId(update.entityId);
-    if (!state) return;
+    if (!state) {
+      console.log('[WARNING] No subscription found for TB entity:', update.entityId);
+      return;
+    }
+    
+    console.log('Mapped to internal device:', state.deviceId);
 
     // Map telemetry data
     const mappedData = this.deviceMapper.mapTelemetryData(update.data);
+    console.log('Mapped Data:', JSON.stringify(mappedData, null, 2));
 
     // Broadcast to connected clients with scoping (no DB write)
     this.realtimeGateway.broadcastTelemetryScoped(
@@ -364,8 +419,16 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
   }
 
   private async fetchAndBroadcastDeviceData(state: DeviceSubscriptionState): Promise<void> {
+    console.log('\n╔════════════════════════════════════════════════╗');
+    console.log('║  INITIAL FETCH FOR DEVICE                      ║');
+    console.log('╠════════════════════════════════════════════════╣');
+    console.log('Device ID:', state.deviceId);
+    console.log('TB Device ID:', state.tbDeviceId);
+    
     // Fetch latest telemetry
     const telemetryData = await this.tbTelemetryApi.getLatestTelemetry(state.tbDeviceId);
+    console.log('Raw Telemetry from TB API:');
+    console.log(JSON.stringify(telemetryData, null, 2));
 
     // Fetch server attributes for online status
     const serverAttributes = await this.tbTelemetryApi.getAttributes(
@@ -379,6 +442,9 @@ export class DeviceSubscriptionManager implements OnModuleInit, OnModuleDestroy 
 
     // Map telemetry
     const mappedTelemetry = this.deviceMapper.mapTelemetryData(telemetryData);
+    console.log('Mapped Telemetry:');
+    console.log(JSON.stringify(mappedTelemetry, null, 2));
+    console.log('╚════════════════════════════════════════════════╝\n');
 
     // Broadcast to clients (no DB write — TB is source of truth)
     this.realtimeGateway.broadcastTelemetryScoped(

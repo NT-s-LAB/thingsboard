@@ -19,7 +19,8 @@ export interface CommandRequest {
 
   // RPC fields
   rpcMethod?: string;
-  rpcParams?: Record<string, unknown>;
+  /** RPC params - can be any JSON value (object, array, string, number, boolean, null) */
+  rpcParams?: unknown;
   rpcOneWay?: boolean;
   rpcTimeout?: number;
 

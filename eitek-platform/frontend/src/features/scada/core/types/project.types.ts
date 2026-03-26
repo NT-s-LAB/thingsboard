@@ -190,7 +190,8 @@ export interface RpcCallAction extends BaseAction {
   type: typeof ACTION_TYPES.RPC_CALL;
   deviceId: string;
   rpcMethod: string;
-  rpcParams?: Record<string, unknown>;
+  /** RPC params - can be any JSON value (object, array, string, number, boolean, null) */
+  rpcParams?: unknown;
   rpcOneWay?: boolean;
   rpcTimeout?: number;
 }

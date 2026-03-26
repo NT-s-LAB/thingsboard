@@ -329,9 +329,13 @@ export class DevicesService {
   }
 
   async findOne(id: string, user: RequestUser): Promise<Device> {
+    // Try to find by internal ID first, then fallback to tbDeviceId
     const device = await this.prisma.device.findFirst({
       where: {
-        id,
+        OR: [
+          { id },
+          { tbDeviceId: id },
+        ],
         area: {
           site: {
             project: {

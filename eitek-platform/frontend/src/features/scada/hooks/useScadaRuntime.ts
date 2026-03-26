@@ -102,7 +102,15 @@ export function useScadaRuntime() {
   );
 
   useEffect(() => {
+    console.log('[useScadaRuntime] Effect triggered:', {
+      isRuntimeMode,
+      deviceIdsCount: deviceIds.length,
+      deviceIds,
+      connected,
+    });
+    
     if (!isRuntimeMode || deviceIds.length === 0) {
+      console.log('[useScadaRuntime] Not subscribing - isRuntimeMode:', isRuntimeMode, 'deviceIds:', deviceIds.length);
       // Cleanup if runtime stopped or no devices
       if (subscribedRef.current.length > 0) {
         for (const id of subscribedRef.current) {
@@ -122,11 +130,15 @@ export function useScadaRuntime() {
 
     // --- WebSocket subscription ---
     if (connected) {
+      console.log('[useScadaRuntime] WebSocket connected, subscribing to devices');
       subscribe('telemetry', handleTelemetry);
       for (const id of deviceIds) {
+        console.log('[useScadaRuntime] Emitting subscribe:device for:', id);
         emit('subscribe:device', { deviceId: id });
       }
       subscribedRef.current = deviceIds;
+    } else {
+      console.log('[useScadaRuntime] WebSocket NOT connected, skipping WS subscription');
     }
 
     // --- HTTP polling fallback (every 5 s) ---

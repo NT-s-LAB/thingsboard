@@ -50,18 +50,43 @@ export class DeviceMapper {
 
   /**
    * Map telemetry data from ThingsBoard format to a simplified format
+   * Handles both WebSocket format [[ts, value]] and REST API format [{ts, value}]
    */
-  mapTelemetryData(tbData: Record<string, Array<{ ts: number; value: string }>>): Record<string, any> {
+  mapTelemetryData(tbData: Record<string, any[]>): Record<string, any> {
+    console.log('[DeviceMapper] Input tbData:', JSON.stringify(tbData, null, 2));
+    
     const result: Record<string, any> = {};
     for (const [key, values] of Object.entries(tbData)) {
+      console.log(`[DeviceMapper] Processing key "${key}":`, JSON.stringify(values));
+      
       if (values && values.length > 0) {
         const latest = values[0];
-        result[key] = {
-          value: this.parseValue(latest.value),
-          timestamp: latest.ts,
-        };
+        console.log(`[DeviceMapper] Latest value for "${key}":`, latest, 'isArray:', Array.isArray(latest));
+        
+        // Handle WebSocket format: [[timestamp, value]]
+        if (Array.isArray(latest)) {
+          const parsedValue = this.parseValue(String(latest[1]));
+          result[key] = {
+            value: parsedValue,
+            timestamp: latest[0],
+          };
+          console.log(`[DeviceMapper] Parsed (WebSocket format) "${key}":`, result[key]);
+        }
+        // Handle REST API format: [{ ts, value }]
+        else if (typeof latest === 'object' && 'value' in latest) {
+          const parsedValue = this.parseValue(String(latest.value));
+          result[key] = {
+            value: parsedValue,
+            timestamp: latest.ts,
+          };
+          console.log(`[DeviceMapper] Parsed (REST format) "${key}":`, result[key]);
+        } else {
+          console.log(`[DeviceMapper] Unknown format for "${key}":`, typeof latest, latest);
+        }
       }
     }
+    
+    console.log('[DeviceMapper] Final result:', JSON.stringify(result, null, 2));
     return result;
   }
 
