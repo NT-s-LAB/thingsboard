@@ -117,12 +117,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       icon: <MapPin className="w-5 h-5" />,
       label: 'Areas'
     },
-    {
-      href: '/templates',
-      icon: <Template className="w-5 h-5" />,
-      label: 'Templates',
-      minRole: 'TENANT_ADMIN' as UserRoleEnum,
-    },
+    // Templates — temporarily hidden
+    // {
+    //   href: '/templates',
+    //   icon: <Template className="w-5 h-5" />,
+    //   label: 'Templates',
+    //   minRole: 'TENANT_ADMIN' as UserRoleEnum,
+    // },
     {
       href: '/device-scada-templates',
       icon: <ScreenShare className="w-5 h-5" />,

@@ -173,7 +173,7 @@ function HealthRing({ online, total }: { online: number; total: number }) {
 
 function UsageBar({ label, icon, used, limit, addon }: {
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   used: number;
   limit: number | null;
   addon: number;
@@ -193,7 +193,7 @@ function UsageBar({ label, icon, used, limit, addon }: {
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-xs">
         <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
-          <span>{icon}</span>
+          <span className="w-3.5 h-3.5 flex items-center justify-center">{icon}</span>
           {label}
         </span>
         <span className="font-semibold tabular-nums">
@@ -221,6 +221,7 @@ function UsageBar({ label, icon, used, limit, addon }: {
 
 function QuotaCard({ quota }: { quota: TenantQuotaInfo }) {
   const allFeatures = [...quota.features, ...quota.addonFeatures];
+  const [showFeatures, setShowFeatures] = React.useState(false);
 
   return (
     <Card className="border border-blue-200/60 dark:border-blue-800/40 bg-gradient-to-r from-blue-50/50 to-white dark:from-blue-950/20 dark:to-background">
@@ -244,25 +245,55 @@ function QuotaCard({ quota }: { quota: TenantQuotaInfo }) {
               {quota.addons.length} add-on{quota.addons.length > 1 ? 's' : ''}
             </span>
           )}
+          {allFeatures.length > 0 && (
+            <button
+              onClick={() => setShowFeatures((v) => !v)}
+              title={showFeatures ? 'Ẩn tính năng' : 'Xem tính năng'}
+              className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Usage Bars */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <UsageBar label="Users" icon="👥" used={quota.usage.users} limit={quota.effectiveLimits.maxUsers} addon={quota.addonExtras.users} />
-          <UsageBar label="Thiết bị" icon="📟" used={quota.usage.devices} limit={quota.effectiveLimits.maxDevices} addon={quota.addonExtras.devices} />
-          <UsageBar label="Dự án" icon="📁" used={quota.usage.projects} limit={quota.effectiveLimits.maxProjects} addon={quota.addonExtras.projects} />
-          <UsageBar label="Dashboard" icon="📊" used={quota.usage.dashboards} limit={quota.effectiveLimits.maxDashboards} addon={quota.addonExtras.dashboards} />
+          <UsageBar label="Users" icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+            </svg>
+          } used={quota.usage.users} limit={quota.effectiveLimits.maxUsers} addon={quota.addonExtras.users} />
+          <UsageBar label="Thiết bị" icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 0 0 2.25-2.25V6.75a2.25 2.25 0 0 0-2.25-2.25H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25Zm.75-12h9v9h-9v-9Z" />
+            </svg>
+          } used={quota.usage.devices} limit={quota.effectiveLimits.maxDevices} addon={quota.addonExtras.devices} />
+          <UsageBar label="Dự án" icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v8.25m19.5 0v.75A2.25 2.25 0 0 1 19.5 17.25h-15A2.25 2.25 0 0 1 2.25 15.75v-.75m19.5 0h-19.5" />
+            </svg>
+          } used={quota.usage.projects} limit={quota.effectiveLimits.maxProjects} addon={quota.addonExtras.projects} />
+          <UsageBar label="Dashboard" icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+            </svg>
+          } used={quota.usage.dashboards} limit={quota.effectiveLimits.maxDashboards} addon={quota.addonExtras.dashboards} />
         </div>
 
         {/* Features */}
-        {allFeatures.length > 0 && (
+        {showFeatures && allFeatures.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-1">
             {allFeatures.map((f) => (
               <span
                 key={f}
                 className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100/60 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
               >
-                ✓ {f}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-2.5 h-2.5 flex-shrink-0">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+                {f}
               </span>
             ))}
           </div>
@@ -698,8 +729,8 @@ const DashboardPage: React.FC = () => {
               </button>
             )}
 
-            {/* Templates — TA+ only */}
-            {canManageTemplates && (
+            {/* Templates — TA+ only — temporarily hidden */}
+            {false && canManageTemplates && (
               <button
                 onClick={navigate('/templates')}
                 className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 hover:bg-purple-100/70 dark:hover:bg-purple-950/40 transition-colors text-left group"
