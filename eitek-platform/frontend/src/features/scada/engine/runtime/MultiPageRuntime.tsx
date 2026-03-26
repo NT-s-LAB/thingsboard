@@ -25,6 +25,10 @@ import type { ScadaProject, ScadaPage, WidgetEvent } from '../../core/types/proj
 import type { WidgetInstance, ScreenDefinition } from '../../core/types';
 import '../../styles/scada.css';
 
+// Debug logging - disabled in production build
+const DEBUG = process.env.NODE_ENV !== 'production';
+const log = (...args: any[]) => DEBUG && console.log('[MultiPageRuntime]', ...args);
+
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface MultiPageRuntimeProps {
@@ -133,16 +137,20 @@ const PageRenderer: React.FC<{
 
   // Collect data points from page widgets
   const dataPoints = useMemo(() => {
-    console.log('[MultiPageRuntime] Collecting dataPoints from widgets:', page.widgets.length);
+    log('Collecting dataPoints from widgets:', page.widgets.length);
     page.widgets.forEach((w, i) => {
-      console.log(`[MultiPageRuntime] Widget[${i}] "${w.name}" type=${w.type} bindings:`, w.bindings);
+      log(`Widget[${i}] "${w.name}" type=${w.type} bindings:`, w.bindings);
     });
     return collectDataPoints(screenForBinding);
-  }, [screenForBinding]);
+  }, [screenForBinding, page.widgets]);
+
+  // Stable refs for WebSocket callbacks to prevent effect re-runs
+  const wsRef = useRef({ subscribe, unsubscribe, emit, connected });
+  wsRef.current = { subscribe, unsubscribe, emit, connected };
 
   // Set up subscription manager and subscribe to data points
   useEffect(() => {
-    console.log('[MultiPageRuntime] Effect triggered:', {
+    log('Subscription effect triggered:', {
       dataPointsCount: dataPoints.length,
       connected,
       pageId: page.id,
@@ -155,13 +163,18 @@ const PageRenderer: React.FC<{
 
     const manager = subscriptionManager.current;
 
-    // Set up WebSocket handle
-    console.log('[MultiPageRuntime] Setting WebSocket handle, connected:', connected);
-    manager.setWebSocket({ subscribe, unsubscribe, emit, connected });
+    // Set up WebSocket handle using stable ref
+    log('Setting WebSocket handle, connected:', connected);
+    manager.setWebSocket({
+      subscribe: wsRef.current.subscribe,
+      unsubscribe: wsRef.current.unsubscribe,
+      emit: wsRef.current.emit,
+      connected: wsRef.current.connected,
+    });
 
     // Set up update callback
     manager.onUpdate((updates: DataUpdate[]) => {
-      console.log('[MultiPageRuntime] Received updates from SubscriptionManager:', updates);
+      log('Received updates:', updates);
       setDataCache((prev) => {
         const next = new Map(prev);
         for (const update of updates) {
@@ -173,16 +186,28 @@ const PageRenderer: React.FC<{
 
     // Subscribe to data points
     if (dataPoints.length > 0) {
-      console.log('[MultiPageRuntime] Subscribing to dataPoints:', dataPoints);
+      log('Subscribing to dataPoints:', dataPoints);
       manager.subscribe(dataPoints);
     } else {
-      console.log('[MultiPageRuntime] No dataPoints to subscribe');
+      log('No dataPoints to subscribe');
     }
 
     return () => {
       manager.unsubscribeAll();
     };
-  }, [dataPoints, subscribe, unsubscribe, emit, connected]);
+  }, [dataPoints, connected, page.id]); // Only re-run when dataPoints change
+
+  // Update WebSocket state when connection changes
+  useEffect(() => {
+    if (subscriptionManager.current) {
+      subscriptionManager.current.setWebSocket({
+        subscribe: wsRef.current.subscribe,
+        unsubscribe: wsRef.current.unsubscribe,
+        emit: wsRef.current.emit,
+        connected,
+      });
+    }
+  }, [connected]);
 
   // Provide getLatest function for binding resolution
   const getLatest = useCallback(
@@ -258,14 +283,38 @@ const PageRenderer: React.FC<{
 
   // Handle widget action (new event system)
   const handleWidgetAction = useCallback((widget: WidgetInstance, trigger: string) => {
+    log('handleWidgetAction called:', {
+      widgetId: widget.id,
+      widgetType: widget.type,
+      trigger,
+      hasEvents: !!(widget as any).events?.length,
+      hasActions: !!widget.actions?.length,
+      events: (widget as any).events,
+      actions: widget.actions,
+    });
+
+    // Extract deviceId from bindings (fallback for actions without deviceId)
+    const getDeviceIdFromBindings = (): string => {
+      const binding = widget.bindings.find((b) => b.targetProperty === 'state');
+      if (binding?.source.entityId) return binding.source.entityId;
+      // Try any binding with entityId
+      for (const b of widget.bindings) {
+        if (b.source.entityId) return b.source.entityId;
+      }
+      return '';
+    };
+
     const widgetWithEvents = widget as WidgetInstance & { events?: WidgetEvent[] };
     const events = widgetWithEvents.events ?? [];
     
     // Normalize trigger: 'click' → 'onClick'
     const normalizedTrigger = normalizeToEventTrigger(trigger);
+    log('Looking for event/action with trigger:', normalizedTrigger, 'or', trigger);
+    
     const event = events.find((e) => e.trigger === normalizedTrigger || e.trigger === trigger);
     
     if (event && event.actions.length > 0) {
+      log('Found event, executing actions:', event.actions);
       executeActions(event.actions, { widgetId: widget.id });
       return;
     }
@@ -273,11 +322,16 @@ const PageRenderer: React.FC<{
     // Fallback: check legacy actions array
     const legacyAction = widget.actions.find((a) => a.trigger === trigger || a.trigger === normalizedTrigger);
     if (legacyAction) {
+      log('Found legacy action:', legacyAction);
       // Map legacy action to new action system for execution
-      const mapped = mapLegacyAction(legacyAction);
+      const fallbackDeviceId = getDeviceIdFromBindings();
+      const mapped = mapLegacyAction(legacyAction, fallbackDeviceId);
       if (mapped) {
+        log('Mapped to:', mapped);
         executeActions([mapped], { widgetId: widget.id });
       }
+    } else {
+      log('No action found for trigger:', trigger);
     }
   }, []);
 
@@ -461,7 +515,10 @@ import type { WidgetActionInstance } from '../../core/types';
 import type { ScadaAction } from '../../core/types/project.types';
 import { ACTION_TYPES } from '../../core/types/project.types';
 
-function mapLegacyAction(legacy: WidgetActionInstance): ScadaAction | null {
+function mapLegacyAction(legacy: WidgetActionInstance, fallbackDeviceId: string = ''): ScadaAction | null {
+  // Use action's deviceId if available, otherwise fallback to binding's deviceId
+  const deviceId = legacy.config.deviceId || fallbackDeviceId;
+  
   switch (legacy.actionType) {
     case 'navigate':
       if (legacy.config.targetWindowId) {
@@ -477,7 +534,7 @@ function mapLegacyAction(legacy: WidgetActionInstance): ScadaAction | null {
       return {
         id: legacy.id,
         type: ACTION_TYPES.RPC_CALL,
-        deviceId: legacy.config.deviceId ?? '',
+        deviceId,
         rpcMethod: legacy.config.rpcMethod ?? '',
         rpcParams: legacy.config.rpcParams ?? {},
       };
@@ -485,7 +542,7 @@ function mapLegacyAction(legacy: WidgetActionInstance): ScadaAction | null {
       return {
         id: legacy.id,
         type: ACTION_TYPES.SET_ATTRIBUTE,
-        deviceId: legacy.config.deviceId ?? '',
+        deviceId,
         attributeScope: legacy.config.attributeScope ?? 'SHARED_SCOPE',
         attributeKey: legacy.config.attributeKey ?? '',
         attributeValue: legacy.config.attributeValue,

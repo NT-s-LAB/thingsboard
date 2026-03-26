@@ -30,7 +30,18 @@ export const SwitchRenderer: React.FC<WidgetRendererProps> = ({
   onAction,
 }) => {
   // State comes from binding (telemetry) - no local state
-  const state = Boolean(p.state);
+  // Handle string values: "true", "false", "1", "0", etc.
+  const parseState = (val: unknown): boolean => {
+    if (val === undefined || val === null) return false;
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'number') return val !== 0;
+    if (typeof val === 'string') {
+      const lower = val.toLowerCase().trim();
+      return lower === 'true' || lower === '1' || lower === 'on';
+    }
+    return Boolean(val);
+  };
+  const state = parseState(p.state);
   
   const label = (p.label as string) || '';
   const onColor = (p.onColor as string) || '#22C55E';

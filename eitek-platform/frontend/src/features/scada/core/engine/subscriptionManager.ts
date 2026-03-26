@@ -20,6 +20,10 @@
 
 import { deviceService } from '@/features/devices/services/deviceService';
 
+// Debug logging - disabled in production build
+const DEBUG = process.env.NODE_ENV !== 'production';
+const log = (...args: any[]) => DEBUG && console.log('[SubscriptionManager]', ...args);
+
 // ─── Public types ────────────────────────────────────────────────────────────
 
 export interface DataPoint {
@@ -91,7 +95,7 @@ export class SubscriptionManager {
    * Previous subscriptions are replaced.
    */
   subscribe(points: DataPoint[]): void {
-    console.log('[SubscriptionManager] subscribe() called with', points.length, 'points');
+    log('subscribe() called with', points.length, 'points');
     
     // Unsubscribe existing first
     this.teardown();
@@ -107,22 +111,22 @@ export class SubscriptionManager {
       }
     }
 
-    console.log('[SubscriptionManager] After dedup:', this.points.length, 'points');
-    console.log('[SubscriptionManager] Device IDs:', Array.from(new Set(this.points.map(p => p.entityId))));
+    log('After dedup:', this.points.length, 'points');
+    log('Device IDs:', Array.from(new Set(this.points.map(p => p.entityId))));
 
     if (this.points.length === 0) {
-      console.log('[SubscriptionManager] No points to subscribe, returning');
+      log('No points to subscribe, returning');
       return;
     }
 
-    // Initial fetch via HTTP
-    this.fetchAll();
+    // Initial fetch via HTTP - ALWAYS run to get current state
+    this.fetchAll(true);
 
     // WebSocket subscriptions
     this.setupWebSocket();
 
-    // HTTP polling as fallback
-    this.pollTimer = setInterval(() => this.fetchAll(), this.pollIntervalMs);
+    // HTTP polling as fallback (only runs if WS disconnected)
+    this.pollTimer = setInterval(() => this.fetchAll(false), this.pollIntervalMs);
   }
 
   /** Stop all subscriptions and clear cache. */
@@ -179,25 +183,23 @@ export class SubscriptionManager {
   }
 
   private setupWebSocket(): void {
-    console.log('[SubscriptionManager] setupWebSocket() called');
-    console.log('[SubscriptionManager] ws exists:', !!this.ws);
-    console.log('[SubscriptionManager] ws.connected:', this.ws?.connected);
+    log('setupWebSocket() called');
+    log('ws exists:', !!this.ws);
+    log('ws.connected:', this.ws?.connected);
     
     if (!this.ws || !this.ws.connected) {
-      console.log('[SubscriptionManager] WebSocket not ready, skipping WS subscription');
+      log('WebSocket not ready, skipping WS subscription');
       return;
     }
 
     this.wsHandler = (event: any) => {
-      // Log raw telemetry event from WebSocket
-      console.log('[SubscriptionManager] RAW Telemetry Event:', JSON.stringify(event, null, 2));
+      log('RAW Telemetry Event:', JSON.stringify(event, null, 2));
 
       if (!event?.deviceId || !event?.data) return;
 
       const updates: DataUpdate[] = [];
 
-      // Log telemetry data structure
-      console.log('[SubscriptionManager] Telemetry Data Structure:', {
+      log('Telemetry Data Structure:', {
         deviceId: event.deviceId,
         dataKeys: Object.keys(event.data),
         rawData: event.data,
@@ -207,9 +209,8 @@ export class SubscriptionManager {
       for (const [key, values] of Object.entries(event.data)) {
         let value: DataValue = null;
         let timestamp: number = Date.now();
-        
-        // Log each key's raw value structure
-        console.log(`[SubscriptionManager] Key "${key}" raw value:`, {
+
+        log(`Key "${key}" raw value:`, {
           type: typeof values,
           isArray: Array.isArray(values),
           rawValue: values,
@@ -219,13 +220,13 @@ export class SubscriptionManager {
         if (values && typeof values === 'object' && !Array.isArray(values) && 'value' in (values as any)) {
           value = (values as any).value;
           timestamp = (values as any).timestamp || Date.now();
-          console.log(`[SubscriptionManager] Key "${key}" extracted value (object format):`, value, 'ts:', timestamp);
+          log(`Key "${key}" extracted value (object format):`, value, 'ts:', timestamp);
         }
         // Handle array format: [{ value: ..., timestamp: ... }]
         else if (Array.isArray(values) && values.length > 0) {
           value = (values[0] as any).value ?? null;
           timestamp = (values[0] as any).ts || (values[0] as any).timestamp || Date.now();
-          console.log(`[SubscriptionManager] Key "${key}" extracted value (array format):`, value, 'ts:', timestamp);
+          log(`Key "${key}" extracted value (array format):`, value, 'ts:', timestamp);
         }
 
         const cacheKey = `${event.deviceId}::${key}`;
@@ -233,7 +234,7 @@ export class SubscriptionManager {
         
         // Only update if new data is newer than cached data
         if (existing && existing.timestamp >= timestamp) {
-          console.log(`[SubscriptionManager] Key "${key}" skipped - cached data is newer (cached: ${existing.timestamp}, new: ${timestamp})`);
+          log(`Key "${key}" skipped - cached data is newer (cached: ${existing.timestamp}, new: ${timestamp})`);
           continue;
         }
 
@@ -249,32 +250,32 @@ export class SubscriptionManager {
       }
 
       if (updates.length > 0) {
-        console.log('[SubscriptionManager] Final Updates to UI:', updates);
+        log('Final Updates to UI:', updates);
         this.listener?.(updates);
       }
     };
 
     this.ws.subscribe('telemetry', this.wsHandler);
-    console.log('[SubscriptionManager] Subscribed to telemetry event');
+    log('Subscribed to telemetry event');
 
     // Subscribe to each device
     const deviceIds = new Set(
       this.points.filter((p) => p.entityType === 'DEVICE').map((p) => p.entityId),
     );
-    console.log('[SubscriptionManager] Device IDs to subscribe:', Array.from(deviceIds));
+    log('Device IDs to subscribe:', Array.from(deviceIds));
     Array.from(deviceIds).forEach((id) => {
-      console.log('[SubscriptionManager] Emitting subscribe:device for:', id);
+      log('Emitting subscribe:device for:', id);
       this.ws!.emit('subscribe:device', { deviceId: id });
     });
   }
 
-  private async fetchAll(): Promise<void> {
-    // Skip HTTP polling if WebSocket is connected - realtime is sufficient
-    if (this.ws?.connected) {
-      console.log('[SubscriptionManager] fetchAll() skipped - WebSocket connected, using realtime updates');
+  private async fetchAll(isInitial: boolean = false): Promise<void> {
+    // Skip HTTP polling if WebSocket is connected - but ALWAYS run initial fetch
+    if (!isInitial && this.ws?.connected) {
+      log('fetchAll() skipped - WebSocket connected');
       return;
     }
-    console.log('[SubscriptionManager] fetchAll() running - WebSocket disconnected, using HTTP fallback');
+    log(`fetchAll() running - ${isInitial ? 'initial fetch' : 'HTTP fallback'}`);
 
     // Group points by entityId
     const byEntity = new Map<string, DataPoint[]>();

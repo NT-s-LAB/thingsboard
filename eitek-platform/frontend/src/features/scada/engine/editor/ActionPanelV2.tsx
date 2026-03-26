@@ -32,7 +32,11 @@ import '../../styles/scada.css';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Ensure an action for a given trigger exists, return it. */
-function ensureAction(actions: WidgetActionInstance[], trigger: ActionTrigger): WidgetActionInstance[] {
+function ensureAction(
+  actions: WidgetActionInstance[],
+  trigger: ActionTrigger,
+  defaultDeviceId?: string,
+): WidgetActionInstance[] {
   if (actions.some((a) => a.trigger === trigger)) return actions;
   return [
     ...actions,
@@ -40,7 +44,7 @@ function ensureAction(actions: WidgetActionInstance[], trigger: ActionTrigger): 
       id: `action_${trigger}_${Date.now()}`,
       trigger,
       actionType: 'rpcCall' as ActionType,
-      config: {},
+      config: { deviceId: defaultDeviceId || '' },
     },
   ];
 }
@@ -118,7 +122,18 @@ export const ActionPanelV2: React.FC = () => {
   const updateAction = useCallback(
     (trigger: ActionTrigger, patch: Partial<WidgetActionInstance>) => {
       if (!selectedWidget) return;
-      let actions = ensureAction([...selectedWidget.actions], trigger);
+      
+      // Get deviceId from bindings or existing actions
+      const getDeviceId = (): string => {
+        const binding = selectedWidget.bindings.find((b) => b.targetProperty === 'state');
+        if (binding?.source.entityId) return binding.source.entityId;
+        for (const a of selectedWidget.actions) {
+          if (a.config.deviceId) return a.config.deviceId;
+        }
+        return '';
+      };
+      
+      let actions = ensureAction([...selectedWidget.actions], trigger, getDeviceId());
       actions = actions.map((a) =>
         a.trigger === trigger ? { ...a, ...patch, config: { ...a.config, ...(patch.config ?? {}) } } : a,
       );
@@ -1025,9 +1040,19 @@ const GenericActionEditor: React.FC<{
   action: WidgetActionInstance | undefined;
   deviceId: string;
   onUpdate: (patch: Partial<WidgetActionInstance>) => void;
-}> = ({ label, description, action, onUpdate }) => {
+}> = ({ label, description, action, deviceId, onUpdate }) => {
   const [expanded, setExpanded] = useState(false);
   const windows = useScadaRuntimeStore((s) => s.screen?.windows ?? []);
+
+  // Auto-set deviceId when action is created/updated
+  const handleUpdate = useCallback((patch: Partial<WidgetActionInstance>) => {
+    // Ensure deviceId is set if available
+    if (deviceId && !action?.config.deviceId) {
+      onUpdate({ ...patch, config: { ...action?.config, ...patch.config, deviceId } });
+    } else {
+      onUpdate(patch);
+    }
+  }, [deviceId, action, onUpdate]);
 
   return (
     <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
@@ -1067,7 +1092,7 @@ const GenericActionEditor: React.FC<{
           <Row label="Type">
             <select
               value={action?.actionType ?? 'rpcCall'}
-              onChange={(e) => onUpdate({ actionType: e.target.value as ActionType })}
+              onChange={(e) => handleUpdate({ actionType: e.target.value as ActionType })}
               style={inputStyle}
             >
               <option value="rpcCall">RPC Call</option>
@@ -1083,7 +1108,7 @@ const GenericActionEditor: React.FC<{
                   type="text"
                   value={action?.config.rpcMethod ?? ''}
                   placeholder="RPC method..."
-                  onChange={(e) => onUpdate({ config: { rpcMethod: e.target.value } })}
+                  onChange={(e) => handleUpdate({ config: { rpcMethod: e.target.value } })}
                   style={inputStyle}
                 />
               </Row>
@@ -1094,7 +1119,7 @@ const GenericActionEditor: React.FC<{
                   placeholder="{}"
                   onChange={(e) => {
                     try {
-                      onUpdate({ config: { rpcParams: JSON.parse(e.target.value) } });
+                      handleUpdate({ config: { rpcParams: JSON.parse(e.target.value) } });
                     } catch {
                       /* keep raw until valid */
                     }
@@ -1108,7 +1133,7 @@ const GenericActionEditor: React.FC<{
             <Row label="Window">
               <select
                 value={action?.config.targetWindowId ?? ''}
-                onChange={(e) => onUpdate({ config: { targetWindowId: e.target.value } })}
+                onChange={(e) => handleUpdate({ config: { targetWindowId: e.target.value } })}
                 style={inputStyle}
               >
                 <option value="">-- Select window --</option>

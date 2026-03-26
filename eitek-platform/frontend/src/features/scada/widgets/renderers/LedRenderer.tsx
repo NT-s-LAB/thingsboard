@@ -12,6 +12,18 @@ const resolveUrl = (url: string | undefined | null): string => {
   return url.startsWith('http') || url.startsWith('data:') ? url : `${API_BASE}${url}`;
 };
 
+/** Parse boolean from various formats (string/number/boolean) to avoid Boolean("false") === true */
+const parseState = (val: unknown): boolean => {
+  if (val === undefined || val === null) return false;
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val !== 0;
+  if (typeof val === 'string') {
+    const lower = val.toLowerCase().trim();
+    return lower === 'true' || lower === '1' || lower === 'on';
+  }
+  return Boolean(val);
+};
+
 export const LedRenderer: React.FC<WidgetRendererProps> = ({
   properties: p,
   width,
@@ -19,7 +31,7 @@ export const LedRenderer: React.FC<WidgetRendererProps> = ({
   isRuntime,
   alarmState,
 }) => {
-  const state = Boolean(p.state);
+  const state = parseState(p.state);
   const label = (p.label as string) || '';
   const onColor = (p.onColor as string) || '#22C55E';
   const offColor = (p.offColor as string) || '#6B7280';
