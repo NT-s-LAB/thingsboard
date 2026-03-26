@@ -554,4 +554,26 @@ export class RealtimeGateway
       ),
     };
   }
+
+  /**
+   * Send an event to a specific user (all their connected sockets)
+   */
+  sendToUser(userId: string, event: string, data: any): void {
+    for (const [, client] of this.connectedClients) {
+      if (client.user?.id === userId) {
+        client.emit(event, data);
+      }
+    }
+  }
+
+  /**
+   * Send an event to all users in a tenant
+   */
+  sendToTenant(tenantId: string, event: string, data: any): void {
+    for (const [, client] of this.connectedClients) {
+      if (client.user?.tenantId === tenantId) {
+        client.emit(event, data);
+      }
+    }
+  }
 }

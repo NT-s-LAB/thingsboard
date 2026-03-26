@@ -192,7 +192,10 @@ export class TenantsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      // 1. Audit logs (references tenant, user, project, device)
+      // 1. Notifications
+      await tx.notification.deleteMany({ where: { tenantId: id } });
+
+      // 2. Audit logs (references tenant, user, project, device)
       await tx.auditLog.deleteMany({ where: { tenantId: id } });
 
       // 2. Scada views & widgets (via project/area chain)

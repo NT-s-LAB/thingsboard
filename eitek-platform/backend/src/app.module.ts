@@ -24,6 +24,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AdminSettingsModule } from './modules/admin-settings/admin-settings.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AddonsModule } from './modules/addons/addons.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { DeviceScadaModule } from './modules/device-scada/device-scada.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
@@ -76,6 +77,7 @@ import thingsBoardConfig from './config/thingsboard.config';
     AdminModule,
     AdminSettingsModule,
     AddonsModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

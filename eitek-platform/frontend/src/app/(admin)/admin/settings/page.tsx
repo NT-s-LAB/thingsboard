@@ -156,7 +156,7 @@ export default function AdminSettingsPage() {
       setTestingEmail(true);
       setTestResult(null);
       const result = await adminSettingsService.testEmail({
-        recipient: testRecipient || undefined,
+        recipient: testRecipient || '',
         ...emailSettings,
       });
       setTestResult({ type: result.success ? 'success' : 'error', message: result.message });
