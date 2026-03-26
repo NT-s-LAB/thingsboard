@@ -80,8 +80,8 @@ export interface WidgetDefinition {
   type: string;
   /** Display name shown in the palette */
   name: string;
-  /** Emoji or icon identifier */
-  icon: string;
+  /** Emoji, icon identifier, or React element for icon */
+  icon: string | React.ReactNode;
   category: WidgetCategory;
 
   /** Default dimensions when first dropped on canvas */

@@ -10,6 +10,7 @@ import { widgetRegistry } from '../../core/registry';
 import type { WidgetCategory, WidgetDefinition } from '../../core/types';
 import { WidgetLibraryPanel } from './WidgetLibraryPanel';
 import type { WidgetItem } from '../../services/widgetLibraryService';
+import { ChevronRightIcon } from './EditorIcons';
 import '../../styles/scada.css';
 
 const CATEGORY_LABELS: Record<WidgetCategory, string> = {
@@ -162,7 +163,7 @@ export const WidgetPaletteV2: React.FC<WidgetPaletteV2Props> = ({
                       userSelect: 'none',
                     }}
                   >
-                    <span style={{ transform: expanded ? 'rotate(90deg)' : undefined, transition: 'transform 0.15s', fontSize: 10 }}>▶</span>
+                    <span style={{ transform: expanded ? 'rotate(90deg)' : undefined, transition: 'transform 0.15s', fontSize: 10, display: 'flex', alignItems: 'center' }}><ChevronRightIcon size={10} /></span>
                     {CATEGORY_LABELS[cat]} ({defs.length})
                   </div>
                   {expanded &&

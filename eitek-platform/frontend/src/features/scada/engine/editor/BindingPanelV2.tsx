@@ -486,7 +486,7 @@ const BindingFieldEditor: React.FC<BindingFieldEditorProps> = ({
                     </option>
                     {isDeviceTemplate && (
                       <option value={CURRENT_DEVICE_PLACEHOLDER} style={{ fontWeight: 600, color: '#8B5CF6' }}>
-                        🔗 Current Device (dynamic)
+                        Current Device (dynamic)
                       </option>
                     )}
                     {filteredDevices.map((d) => (
@@ -885,7 +885,7 @@ const ChartSeriesBindingEditor: React.FC<ChartSeriesBindingEditorProps> = ({
                 </option>
                 {isDeviceTemplate && (
                   <option value={CURRENT_DEVICE_PLACEHOLDER} style={{ fontWeight: 600, color: '#8B5CF6' }}>
-                    🔗 Current Device (dynamic)
+                    Current Device (dynamic)
                   </option>
                 )}
                 {filteredDevices.map((d) => (

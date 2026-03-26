@@ -10,7 +10,16 @@
  * - Renderer component
  */
 
+import React from 'react';
 import type { WidgetDefinition, PropField, BindingField, ActionField } from '../../core/types';
+import { 
+  TimeSeriesChartIcon, 
+  LineChartIcon, 
+  BarChartIcon, 
+  PieChartIcon, 
+  DoughnutChartIcon, 
+  ValueCardIcon 
+} from '../../engine/editor/EditorIcons';
 import { widgetRegistry } from '../../core/registry';
 
 import { TimeSeriesChartRenderer } from './renderers/TimeSeriesChartRenderer';
@@ -120,7 +129,7 @@ const chartActionSchema: ActionField[] = [
 const timeSeriesChart: WidgetDefinition = {
   type: 'time-series-chart',
   name: 'Time Series Chart',
-  icon: '📈',
+  icon: <TimeSeriesChartIcon size={16} />,
   category: 'chart',
   defaultSize: getDefaultSize('time-series'),
   supportsSvg: false,
@@ -148,7 +157,7 @@ const timeSeriesChart: WidgetDefinition = {
 const lineChart: WidgetDefinition = {
   type: 'line-chart',
   name: 'Line Chart',
-  icon: '📊',
+  icon: <LineChartIcon size={16} />,
   category: 'chart',
   defaultSize: getDefaultSize('line'),
   supportsSvg: false,
@@ -175,7 +184,7 @@ const lineChart: WidgetDefinition = {
 const barChart: WidgetDefinition = {
   type: 'bar-chart',
   name: 'Bar Chart',
-  icon: '📊',
+  icon: <BarChartIcon size={16} />,
   category: 'chart',
   defaultSize: getDefaultSize('bar'),
   supportsSvg: false,
@@ -206,7 +215,7 @@ const barChart: WidgetDefinition = {
 const barChartWithLabels: WidgetDefinition = {
   type: 'bar-chart-labels',
   name: 'Bar Chart with Labels',
-  icon: '📊',
+  icon: <BarChartIcon size={16} />,
   category: 'chart',
   defaultSize: getDefaultSize('bar-with-labels'),
   supportsSvg: false,
@@ -249,7 +258,7 @@ const pieChartProps: PropField[] = [
 const pieChart: WidgetDefinition = {
   type: 'pie-chart',
   name: 'Pie Chart',
-  icon: '🥧',
+  icon: <PieChartIcon size={16} />,
   category: 'chart',
   defaultSize: getDefaultSize('pie'),
   supportsSvg: false,
@@ -289,7 +298,7 @@ const doughnutChartProps: PropField[] = [
 const doughnutChart: WidgetDefinition = {
   type: 'doughnut-chart',
   name: 'Doughnut Chart',
-  icon: '🍩',
+  icon: <DoughnutChartIcon size={16} />,
   category: 'chart',
   defaultSize: getDefaultSize('doughnut'),
   supportsSvg: false,
@@ -346,7 +355,7 @@ const valueChartCardProps: PropField[] = [
 const valueChartCard: WidgetDefinition = {
   type: 'value-chart-card',
   name: 'Value Chart Card',
-  icon: '📋',
+  icon: <ValueCardIcon size={16} />,
   category: 'chart',
   defaultSize: getDefaultSize('value-chart-card'),
   supportsSvg: false,

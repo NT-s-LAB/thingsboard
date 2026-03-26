@@ -318,10 +318,14 @@ export function useChartData(options: UseChartDataOptions): UseChartDataResult {
           
           // Get the new value for this series key
           const keyData = event.data[seriesConfig.key];
-          if (!keyData || keyData.length === 0) return series;
+          if (!keyData) return series;
+          
+          // Ensure keyData is an array
+          const keyDataArray = Array.isArray(keyData) ? keyData : [keyData];
+          if (keyDataArray.length === 0) return series;
 
           // Parse new data points
-          const newPoints: ChartDataPoint[] = keyData.map(v => ({
+          const newPoints: ChartDataPoint[] = keyDataArray.map(v => ({
             ts: v.ts,
             value: parseFloat(v.value) || 0,
           }));

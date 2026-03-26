@@ -27,6 +27,7 @@ import type {
   ActionType,
   BindingSourceType,
 } from '../../core/types';
+import { EditIcon } from './EditorIcons';
 import '../../styles/scada.css';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -713,7 +714,7 @@ const BehaviorRow: React.FC<{
           >
             {summary}
           </span>
-          <span style={{ fontSize: 10, color: '#9CA3AF' }}>✏️</span>
+          <span style={{ fontSize: 10, color: '#9CA3AF', display: 'flex', alignItems: 'center' }}><EditIcon size={10} /></span>
         </div>
       </div>
 
@@ -1139,7 +1140,7 @@ const GenericActionEditor: React.FC<{
                 <option value="">-- Select window --</option>
                 {windows.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.name}{w.isMain ? ' ★' : ''}
+                    {w.name}{w.isMain ? ' (Main)' : ''}
                   </option>
                 ))}
               </select>

@@ -9,6 +9,7 @@
 
 import React from 'react';
 import { useScadaProjectStore } from '../../stores/scadaProjectStore';
+import { PopupIcon, StarIcon } from './EditorIcons';
 
 export const PageTabs: React.FC = () => {
   const project = useScadaProjectStore((s) => s.project);
@@ -71,9 +72,9 @@ const PageTab: React.FC<{
       transition: 'all 0.15s',
     }}
   >
-    {isPopup && <span style={{ fontSize: 10, opacity: 0.6 }}>◻</span>}
+    {isPopup && <span style={{ fontSize: 10, opacity: 0.6 }}><PopupIcon size={10} /></span>}
     <span>{name}</span>
-    {isHome && <span style={{ fontSize: 9, color: '#F59E0B' }}>★</span>}
+    {isHome && <span style={{ fontSize: 9, color: '#F59E0B' }}><StarIcon size={9} filled color="#F59E0B" /></span>}
   </button>
 );
 

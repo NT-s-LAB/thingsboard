@@ -14,6 +14,7 @@
 
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { useScadaProjectStore } from '../../stores/scadaProjectStore';
+import { EditIcon, DuplicateIcon, DeleteIcon, PageIcon, PopupIcon, StarIcon } from './EditorIcons';
 import '../../styles/scada.css';
 
 export const PageManagerPanel: React.FC = () => {
@@ -164,21 +165,21 @@ export const PageManagerPanel: React.FC = () => {
           }}
         >
           <ContextMenuItem onClick={() => handleContextAction('rename')}>
-            ✏️ Rename
+            <EditIcon size={12} /> Rename
           </ContextMenuItem>
           <ContextMenuItem onClick={() => handleContextAction('duplicate')}>
-            📋 Duplicate
+            <DuplicateIcon size={12} /> Duplicate
           </ContextMenuItem>
           {pages.find((p) => p.id === contextMenu.pageId)?.pageType === 'normal' && (
             <ContextMenuItem onClick={() => handleContextAction('setHome')}>
-              ⭐ Set as Home
+              <StarIcon size={12} filled /> Set as Home
             </ContextMenuItem>
           )}
           {pages.length > 1 && (
             <>
               <div style={{ borderTop: '1px solid #f3f4f6', margin: '2px 0' }} />
               <ContextMenuItem onClick={() => handleContextAction('delete')} danger>
-                🗑️ Delete
+                <DeleteIcon size={12} /> Delete
               </ContextMenuItem>
             </>
           )}
@@ -215,7 +216,7 @@ const PageRow: React.FC<{
   >
     {/* Icon */}
     <span style={{ fontSize: 12, opacity: 0.7, flexShrink: 0 }}>
-      {pageType === 'popup' ? '◻' : '📄'}
+      {pageType === 'popup' ? <PopupIcon size={12} /> : <PageIcon size={12} />}
     </span>
 
     {/* Name */}
@@ -235,8 +236,8 @@ const PageRow: React.FC<{
 
     {/* Home indicator */}
     {isHome && (
-      <span style={{ fontSize: 10, color: '#F59E0B', flexShrink: 0 }} title="Home page">
-        ★
+      <span style={{ fontSize: 10, color: '#F59E0B', flexShrink: 0, display: 'flex', alignItems: 'center' }} title="Home page">
+        <StarIcon size={10} filled color="#F59E0B" />
       </span>
     )}
 

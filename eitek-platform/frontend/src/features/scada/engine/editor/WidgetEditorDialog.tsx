@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { widgetService, widgetCategoryService } from '../../services/widgetLibraryService';
 import type { WidgetItem, WidgetCategoryItem } from '../../services/widgetLibraryService';
 import type { PropFieldType } from '../../core/types';
+import { BasicIcon, VisualIcon, SettingsIcon, ImageIcon, UploadIcon } from './EditorIcons';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ export const WidgetEditorDialog: React.FC<WidgetEditorDialogProps> = ({
   const [defaultWidth, setDefaultWidth] = useState(120);
   const [defaultHeight, setDefaultHeight] = useState(80);
   const [categoryId, setCategoryId] = useState('');
-  const [icon, setIcon] = useState('📦');
+  const [icon, setIcon] = useState('');
 
   // ── Visual ──
   const [svgContent, setSvgContent] = useState('');
@@ -134,7 +135,7 @@ export const WidgetEditorDialog: React.FC<WidgetEditorDialogProps> = ({
 
       setDefaultWidth((cfg.defaultWidth as number) || 120);
       setDefaultHeight((cfg.defaultHeight as number) || 80);
-      setIcon((cfg.icon as string) || '📦');
+      setIcon((cfg.icon as string) || '');
       setSvgContent((tpl.svg as string) || '');
       setImageUrl((tpl.imageUrl as string) || '');
       setPreviewSvg(editWidget.preview || '');
@@ -170,7 +171,7 @@ export const WidgetEditorDialog: React.FC<WidgetEditorDialogProps> = ({
       setCategoryId('');
       setDefaultWidth(120);
       setDefaultHeight(80);
-      setIcon('📦');
+      setIcon('');
       setSvgContent('');
       setImageUrl('');
       setPreviewSvg('');
@@ -372,7 +373,7 @@ export const WidgetEditorDialog: React.FC<WidgetEditorDialogProps> = ({
                 cursor: 'pointer', textTransform: 'capitalize',
               }}
             >
-              {t === 'basic' ? '📝 Basic' : t === 'visual' ? '🎨 Visual' : t === 'properties' ? '⚙️ Properties' : '{ } Config'}
+              {t === 'basic' ? <><BasicIcon size={12} /> Basic</> : t === 'visual' ? <><VisualIcon size={12} /> Visual</> : t === 'properties' ? <><SettingsIcon size={12} /> Properties</> : '{ } Config'}
             </button>
           ))}
         </div>
@@ -468,7 +469,7 @@ const BasicTab: React.FC<{
       <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} style={INPUT}>
         <option value="">— None —</option>
         {categories.map((c) => (
-          <option key={c.id} value={c.id}>{c.icon || '📁'} {c.name}</option>
+          <option key={c.id} value={c.id}>{c.name}</option>
         ))}
       </select>
     </Field>
@@ -527,16 +528,16 @@ const VisualTab: React.FC<{
         <div style={{ display: 'flex', gap: 8 }}>
           <label style={{
             padding: '5px 12px', fontSize: 11, border: '1px solid #D1D5DB',
-            borderRadius: 4, background: '#F9FAFB', cursor: 'pointer',
+            borderRadius: 4, background: '#F9FAFB', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
           }}>
-            📎 Upload SVG
+            <UploadIcon size={12} /> Upload SVG
             <input type="file" accept=".svg" onChange={handleSvgFile} style={{ display: 'none' }} />
           </label>
           <label style={{
             padding: '5px 12px', fontSize: 11, border: '1px solid #D1D5DB',
-            borderRadius: 4, background: '#F9FAFB', cursor: 'pointer',
+            borderRadius: 4, background: '#F9FAFB', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
           }}>
-            🖼️ Upload Image
+            <ImageIcon size={12} /> Upload Image
             <input type="file" accept="image/*" onChange={handleImageFile} style={{ display: 'none' }} />
           </label>
           {svgContent && (
@@ -837,7 +838,7 @@ const ConfigTab: React.FC<{
   ],
   "defaultWidth": 160,
   "defaultHeight": 90,
-  "icon": "🌡️",
+  "icon": "thermometer",
   "bindingSchema": [
     { "key": "value", "label": "Value", "valueType": "number", "suggestedKey": "temperature" },
     { "key": "label", "label": "Label", "valueType": "string" }

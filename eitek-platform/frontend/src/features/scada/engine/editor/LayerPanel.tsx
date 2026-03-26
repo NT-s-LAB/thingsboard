@@ -7,6 +7,7 @@
 import React, { useCallback } from 'react';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
 import type { ScreenLayer } from '../../core/types';
+import { EyeIcon, EyeOffIcon, LockIcon, UnlockIcon } from './EditorIcons';
 import '../../styles/scada.css';
 
 export const LayerPanel: React.FC = () => {
@@ -92,14 +93,14 @@ export const LayerPanel: React.FC = () => {
               title={layer.visible ? 'Hide' : 'Show'}
               style={iconBtnStyle}
             >
-              {layer.visible ? '👁' : '🚫'}
+              {layer.visible ? <EyeIcon size={12} /> : <EyeOffIcon size={12} />}
             </button>
             <button
               onClick={() => handleToggleLock(layer.id)}
               title={layer.locked ? 'Unlock' : 'Lock'}
               style={iconBtnStyle}
             >
-              {layer.locked ? '🔒' : '🔓'}
+              {layer.locked ? <LockIcon size={12} /> : <UnlockIcon size={12} />}
             </button>
             <input
               type="text"

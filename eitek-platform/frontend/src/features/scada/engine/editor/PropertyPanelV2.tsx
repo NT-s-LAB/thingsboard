@@ -16,6 +16,7 @@ import { imageLibraryService } from '../../services/imageLibraryService';
 import type { ImageItem, ImageCategoryItem } from '../../services/imageLibraryService';
 import type { PropField } from '../../core/types';
 import type { ScreenBackground, BackgroundType } from '../../core/types';
+import { LinkIcon, GridIcon, PageIcon, FolderIcon, WindowIcon } from './EditorIcons';
 import '../../styles/scada.css';
 
 /** Sanitize a color value for <input type="color"> — must be #rrggbb */
@@ -246,9 +247,9 @@ export const PropertyPanelV2: React.FC = () => {
         <div className="scada-panel__header">
           {selectedWidgetIds.length > 1 
             ? groupInfo.sameGroup 
-              ? '🔗 Group Selected' 
-              : `🔲 ${selectedWidgetIds.length} Widgets Selected`
-            : `📄 Page: ${activePage?.name || 'Properties'}`}
+              ? <><LinkIcon size={12} /> Group Selected</> 
+              : <><GridIcon size={12} /> {selectedWidgetIds.length} Widgets Selected</>
+            : <><PageIcon size={12} /> Page: {activePage?.name || 'Properties'}</>}
         </div>
         {selectedWidgetIds.length > 1 ? (
           <div className="scada-panel__body" style={{ padding: 16 }}>
@@ -678,11 +679,11 @@ const ImagePicker: React.FC<{ value: string; onChange: (url: string) => void }> 
           onClick={() => setShowPopup(true)}
           style={{
             padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: 4,
-            background: '#fff', cursor: 'pointer', fontSize: 11,
+            background: '#fff', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center',
           }}
           title="Browse image library"
         >
-          📁
+          <FolderIcon size={12} />
         </button>
       </div>
       {value && (
@@ -763,7 +764,7 @@ const ImagePickerPopup: React.FC<{
           padding: '12px 16px', borderBottom: '1px solid #e5e7eb',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>📁 Select Image</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}><FolderIcon size={14} /> Select Image</span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#6B7280',
           }}>✕</button>
@@ -1056,8 +1057,8 @@ const PagePropertiesPanel: React.FC<PagePropertiesPanelProps> = ({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <label style={{ fontSize: 11, color: '#6B7280', width: 70, flexShrink: 0 }}>Type</label>
-          <span style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'capitalize' }}>
-            {page.pageType === 'popup' ? '🪟 Popup' : '📄 Normal'}
+          <span style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {page.pageType === 'popup' ? <><WindowIcon size={11} /> Popup</> : <><PageIcon size={11} /> Normal</>}
           </span>
         </div>
       </FieldGroup>

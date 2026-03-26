@@ -10,6 +10,7 @@
  * Call `registerBuiltinWidgets()` once at app init.
  */
 
+import React from 'react';
 import type { WidgetDefinition } from '../core/types';
 import { widgetRegistry } from '../core/registry';
 
@@ -30,13 +31,32 @@ import { ProgressBarRenderer } from './renderers/ProgressBarRenderer';
 import { ImageWidgetRenderer } from './renderers/ImageWidgetRenderer';
 import { NumberInputRenderer } from './renderers/NumberInputRenderer';
 import { CustomWidgetRenderer } from './renderers/CustomWidgetRenderer';
+import {
+  ValueDisplayIcon,
+  GaugeMeterIcon,
+  TankIcon,
+  PumpIcon,
+  ValveIcon,
+  MotorIcon,
+  LedIcon,
+  SwitchIcon,
+  SliderIcon,
+  ButtonIcon,
+  PipeIcon,
+  SvgSymbolIcon,
+  StatusIndicatorIcon,
+  ProgressBarIcon,
+  ImageWidgetIcon,
+  NumberInputIcon,
+  CustomWidgetIcon,
+} from '../engine/editor/EditorIcons';
 
 // ─── VALUE DISPLAY ───────────────────────────────────────────────────────────
 
 const valueDisplay: WidgetDefinition = {
   type: 'valueDisplay',
   name: 'Value Display',
-  icon: '📊',
+  icon: <ValueDisplayIcon size={16} />,
   category: 'display',
   defaultSize: { width: 160, height: 80 },
   supportsSvg: false,
@@ -89,7 +109,7 @@ const valueDisplay: WidgetDefinition = {
 const gauge: WidgetDefinition = {
   type: 'gauge',
   name: 'Gauge',
-  icon: '🎯',
+  icon: <GaugeMeterIcon size={16} />,
   category: 'display',
   defaultSize: { width: 160, height: 160 },
   supportsSvg: false,
@@ -149,7 +169,7 @@ const gauge: WidgetDefinition = {
 const tank: WidgetDefinition = {
   type: 'tank',
   name: 'Tank',
-  icon: '🪣',
+  icon: <TankIcon size={16} />,
   category: 'industrial',
   defaultSize: { width: 100, height: 160 },
   supportsSvg: false,
@@ -182,7 +202,7 @@ const tank: WidgetDefinition = {
 const pump: WidgetDefinition = {
   type: 'pump',
   name: 'Pump',
-  icon: '⚙️',
+  icon: <PumpIcon size={16} />,
   category: 'industrial',
   defaultSize: { width: 100, height: 100 },
   supportsSvg: false,
@@ -214,7 +234,7 @@ const pump: WidgetDefinition = {
 const valve: WidgetDefinition = {
   type: 'valve',
   name: 'Valve',
-  icon: '🔧',
+  icon: <ValveIcon size={16} />,
   category: 'industrial',
   defaultSize: { width: 80, height: 80 },
   supportsSvg: false,
@@ -247,7 +267,7 @@ const valve: WidgetDefinition = {
 const motor: WidgetDefinition = {
   type: 'motor',
   name: 'Motor',
-  icon: '🔄',
+  icon: <MotorIcon size={16} />,
   category: 'industrial',
   defaultSize: { width: 100, height: 100 },
   supportsSvg: false,
@@ -286,7 +306,7 @@ const motor: WidgetDefinition = {
 const led: WidgetDefinition = {
   type: 'led',
   name: 'LED Indicator',
-  icon: '💡',
+  icon: <LedIcon size={16} />,
   category: 'indicator',
   defaultSize: { width: 50, height: 60 },
   supportsSvg: false,
@@ -314,7 +334,7 @@ const led: WidgetDefinition = {
 const switchWidget: WidgetDefinition = {
   type: 'switch',
   name: 'Toggle Switch',
-  icon: '🔘',
+  icon: <SwitchIcon size={16} />,
   category: 'control',
   defaultSize: { width: 80, height: 80 },
   supportsSvg: false,
@@ -355,7 +375,7 @@ const switchWidget: WidgetDefinition = {
 const slider: WidgetDefinition = {
   type: 'slider',
   name: 'Slider',
-  icon: '🎚️',
+  icon: <SliderIcon size={16} />,
   category: 'control',
   defaultSize: { width: 200, height: 60 },
   supportsSvg: false,
@@ -388,7 +408,7 @@ const slider: WidgetDefinition = {
 const button: WidgetDefinition = {
   type: 'button',
   name: 'Button',
-  icon: '🔲',
+  icon: <ButtonIcon size={16} />,
   category: 'control',
   defaultSize: { width: 120, height: 40 },
   supportsSvg: false,
@@ -418,7 +438,7 @@ const button: WidgetDefinition = {
 const pipe: WidgetDefinition = {
   type: 'pipe',
   name: 'Pipe',
-  icon: '➖',
+  icon: <PipeIcon size={16} />,
   category: 'industrial',
   defaultSize: { width: 200, height: 30 },
   supportsSvg: false,
@@ -444,7 +464,7 @@ const pipe: WidgetDefinition = {
 const svgSymbol: WidgetDefinition = {
   type: 'svgSymbol',
   name: 'SVG Symbol',
-  icon: '🖼️',
+  icon: <SvgSymbolIcon size={16} />,
   category: 'custom',
   defaultSize: { width: 100, height: 100 },
   supportsSvg: true,
@@ -469,7 +489,7 @@ const svgSymbol: WidgetDefinition = {
 const indicator: WidgetDefinition = {
   type: 'indicator',
   name: 'Status Indicator',
-  icon: '🔶',
+  icon: <StatusIndicatorIcon size={16} />,
   category: 'indicator',
   defaultSize: { width: 60, height: 80 },
   supportsSvg: false,
@@ -495,7 +515,7 @@ const indicator: WidgetDefinition = {
 const progressBar: WidgetDefinition = {
   type: 'progressBar',
   name: 'Progress Bar',
-  icon: '📶',
+  icon: <ProgressBarIcon size={16} />,
   category: 'display',
   defaultSize: { width: 200, height: 40 },
   supportsSvg: false,
@@ -531,7 +551,7 @@ const progressBar: WidgetDefinition = {
 const imageWidget: WidgetDefinition = {
   type: 'imageWidget',
   name: 'Image',
-  icon: '🏞️',
+  icon: <ImageWidgetIcon size={16} />,
   category: 'display',
   defaultSize: { width: 120, height: 120 },
   supportsSvg: false,
@@ -562,7 +582,7 @@ const imageWidget: WidgetDefinition = {
 const numberInput: WidgetDefinition = {
   type: 'numberInput',
   name: 'Number Input',
-  icon: '🔢',
+  icon: <NumberInputIcon size={16} />,
   category: 'control',
   defaultSize: { width: 140, height: 50 },
   supportsSvg: false,
@@ -598,7 +618,7 @@ const numberInput: WidgetDefinition = {
 const customWidget: WidgetDefinition = {
   type: 'customWidget',
   name: 'Custom Widget',
-  icon: '📦',
+  icon: <CustomWidgetIcon size={16} />,
   category: 'custom',
   defaultSize: { width: 120, height: 80 },
   supportsSvg: true,

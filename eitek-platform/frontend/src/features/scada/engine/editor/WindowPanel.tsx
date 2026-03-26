@@ -8,6 +8,7 @@
 import React, { useCallback } from 'react';
 import { useScadaRuntimeStore } from '../../stores/scadaRuntimeStore';
 import type { ScadaWindow } from '../../core/types';
+import { StarIcon } from './EditorIcons';
 import '../../styles/scada.css';
 
 export const WindowPanel: React.FC = () => {
@@ -121,7 +122,7 @@ export const WindowPanel: React.FC = () => {
                 fontSize: 13,
               }}
             >
-              {win.isMain ? '★' : '☆'}
+              {win.isMain ? <StarIcon size={13} filled color="#F59E0B" /> : <StarIcon size={13} color="#D1D5DB" />}
             </button>
 
             {/* Name input */}

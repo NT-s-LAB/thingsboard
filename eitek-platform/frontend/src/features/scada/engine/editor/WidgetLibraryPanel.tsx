@@ -9,6 +9,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { widgetService, widgetCategoryService } from '../../services/widgetLibraryService';
 import type { WidgetItem, WidgetCategoryItem } from '../../services/widgetLibraryService';
+import { ChevronRightIcon, FolderIcon, PackageIcon, getWidgetTypeIcon } from './EditorIcons';
 
 interface WidgetLibraryPanelProps {
   onAddLibraryWidget: (widget: WidgetItem) => void;
@@ -182,9 +183,10 @@ export const WidgetLibraryPanel: React.FC<WidgetLibraryPanelProps> = ({
                 background: selectedCategory === cat.id ? '#EFF6FF' : '#fff',
                 color: selectedCategory === cat.id ? '#2563EB' : '#6B7280',
                 cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 3,
               }}
             >
-              {cat.icon || '📁'} {cat.name}
+              {cat.icon ? cat.icon : <FolderIcon size={10} />} {cat.name}
             </button>
           ))}
         </div>
@@ -211,8 +213,8 @@ export const WidgetLibraryPanel: React.FC<WidgetLibraryPanelProps> = ({
                 >
                   <span style={{
                     transform: expanded ? 'rotate(90deg)' : undefined,
-                    transition: 'transform 0.15s', fontSize: 10,
-                  }}>▶</span>
+                    transition: 'transform 0.15s', fontSize: 10, display: 'flex', alignItems: 'center',
+                  }}><ChevronRightIcon size={10} /></span>
                   {label} ({catWidgets.length})
                 </div>
                 {expanded && catWidgets.map((w) => (
@@ -225,12 +227,12 @@ export const WidgetLibraryPanel: React.FC<WidgetLibraryPanelProps> = ({
                     title={w.description || w.name}
                   >
                     <span className="scada-palette-item__icon">
-                      {getWidgetIcon(w)}
+                      {getWidgetIconElement(w)}
                     </span>
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {w.name}
                     </span>
-                    <span style={{ fontSize: 9, color: '#D1D5DB' }}>📦</span>
+                    <span style={{ fontSize: 9, color: '#D1D5DB', display: 'flex', alignItems: 'center' }}><PackageIcon size={10} /></span>
                   </div>
                 ))}
               </div>
@@ -258,13 +260,7 @@ export const WidgetLibraryPanel: React.FC<WidgetLibraryPanelProps> = ({
   );
 };
 
-function getWidgetIcon(w: WidgetItem): string {
+function getWidgetIconElement(w: WidgetItem): React.ReactNode {
   if (w.category?.icon) return w.category.icon;
-  const t = (w.type || '').toLowerCase();
-  if (t.includes('svg') || t.includes('symbol')) return '🎨';
-  if (t.includes('chart') || t.includes('graph')) return '📊';
-  if (t.includes('button') || t.includes('switch')) return '🔘';
-  if (t.includes('gauge') || t.includes('meter')) return '⏱️';
-  if (t.includes('pump') || t.includes('motor') || t.includes('valve')) return '⚙️';
-  return '📦';
+  return getWidgetTypeIcon(w.type || '');
 }
