@@ -1,267 +1,484 @@
 'use client';
 
-import React, { useState } from 'react';
-import { 
-  Bell, 
-  CheckCircle,
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Bell,
+  Send,
+  Megaphone,
+  Users,
+  Building2,
+  CheckCheck,
+  Trash2,
+  Loader2,
   AlertTriangle,
   Info,
-  XCircle,
-  Trash2,
-  CheckCheck,
+  Wifi,
+  WifiOff,
+  Server,
+  Wrench,
+  UserCheck,
+  FolderOpen,
   Filter,
-  Settings,
-  Clock,
+  XCircle,
+  CheckCircle,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
+import {
+  notificationService,
+  type AppNotification,
+  type NotificationPriority,
+  type BroadcastDto,
+} from '@/shared/services/notificationService';
+import { tenantService, type Tenant } from '@/features/admin/services/tenantService';
 
-interface Notification {
-  id: string;
-  type: 'success' | 'warning' | 'error' | 'info';
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-  source: string;
-}
+// ==================== CONSTANTS ====================
 
-// Mock data
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'success',
-    title: 'Tenant Created Successfully',
-    message: 'New tenant "Acme Corp" has been created and is ready for use.',
-    timestamp: '2024-03-14T10:30:00',
-    read: false,
-    source: 'System',
-  },
-  {
-    id: '2',
-    type: 'warning',
-    title: 'High Resource Usage',
-    message: 'Tenant "EITEK Corporation" is approaching device limit (850/1000).',
-    timestamp: '2024-03-14T09:15:00',
-    read: false,
-    source: 'Monitoring',
-  },
-  {
-    id: '3',
-    type: 'error',
-    title: 'ThingsBoard Connection Failed',
-    message: 'Unable to connect to ThingsBoard server. Retrying in 5 minutes.',
-    timestamp: '2024-03-14T08:45:00',
-    read: true,
-    source: 'Integration',
-  },
-  {
-    id: '4',
-    type: 'info',
-    title: 'System Maintenance Scheduled',
-    message: 'Platform maintenance scheduled for March 15, 2024 at 02:00 UTC.',
-    timestamp: '2024-03-13T16:00:00',
-    read: true,
-    source: 'System',
-  },
-  {
-    id: '5',
-    type: 'success',
-    title: 'Backup Completed',
-    message: 'Daily database backup completed successfully. Size: 2.3GB',
-    timestamp: '2024-03-14T03:00:00',
-    read: true,
-    source: 'Backup',
-  },
+const PRIORITIES: { value: NotificationPriority; label: string; color: string }[] = [
+  { value: 'LOW', label: 'Thấp', color: 'bg-gray-100 text-gray-600' },
+  { value: 'NORMAL', label: 'Bình thường', color: 'bg-blue-100 text-blue-700' },
+  { value: 'HIGH', label: 'Cao', color: 'bg-orange-100 text-orange-700' },
+  { value: 'CRITICAL', label: 'Khẩn cấp', color: 'bg-red-100 text-red-700' },
 ];
 
-const typeConfig = {
-  success: { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200' },
-  warning: { icon: AlertTriangle, color: 'text-yellow-500', bg: 'bg-yellow-50', border: 'border-yellow-200' },
-  error: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
-  info: { icon: Info, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
+const TYPE_ICON: Record<string, React.ReactNode> = {
+  DEVICE_OFFLINE: <WifiOff className="w-4 h-4 text-red-500" />,
+  DEVICE_ONLINE: <Wifi className="w-4 h-4 text-green-500" />,
+  DEVICE_ALARM: <AlertTriangle className="w-4 h-4 text-yellow-500" />,
+  SYSTEM_UPDATE: <Server className="w-4 h-4 text-blue-500" />,
+  SYSTEM_MAINTENANCE: <Wrench className="w-4 h-4 text-orange-500" />,
+  ADMIN_MESSAGE: <Megaphone className="w-4 h-4 text-purple-500" />,
+  ACCOUNT_ACTIVITY: <UserCheck className="w-4 h-4 text-teal-500" />,
+  PROJECT_UPDATE: <FolderOpen className="w-4 h-4 text-indigo-500" />,
 };
 
-export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+// ==================== SEND NOTIFICATION FORM ====================
 
-  const filteredNotifications = notifications.filter(n => 
-    filter === 'all' || !n.read
-  );
+function SendNotificationForm({ onSent }: { onSent: () => void }) {
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [priority, setPriority] = useState<NotificationPriority>('NORMAL');
+  const [target, setTarget] = useState<'all' | 'selected'>('all');
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [selectedTenantIds, setSelectedTenantIds] = useState<string[]>([]);
+  const [loadingTenants, setLoadingTenants] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  useEffect(() => {
+    if (target === 'selected' && tenants.length === 0) {
+      setLoadingTenants(true);
+      tenantService
+        .getTenants({ limit: 100 })
+        .then((res) => setTenants(res.data))
+        .catch(() => {})
+        .finally(() => setLoadingTenants(false));
+    }
+  }, [target, tenants.length]);
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !message.trim()) return;
+
+    setSending(true);
+    setResult(null);
+    try {
+      const dto: BroadcastDto = {
+        title: title.trim(),
+        message: message.trim(),
+        priority,
+        ...(target === 'selected' ? { tenantIds: selectedTenantIds } : {}),
+      };
+      const res = await notificationService.broadcast(dto);
+      setResult({ type: 'success', message: `Đã gửi thông báo đến ${res.count} người dùng` });
+      setTitle('');
+      setMessage('');
+      setPriority('NORMAL');
+      setSelectedTenantIds([]);
+      onSent();
+    } catch (err: any) {
+      setResult({ type: 'error', message: err.message || 'Gửi thông báo thất bại' });
+    } finally {
+      setSending(false);
+    }
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    ));
-  };
-
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    
-    if (hours < 1) return 'Just now';
-    if (hours < 24) return `${hours}h ago`;
-    return date.toLocaleDateString();
+  const toggleTenant = (id: string) => {
+    setSelectedTenantIds((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+    );
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Notification Center</h1>
-          <p className="text-slate-500 mt-1">
-            {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
-          </p>
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+      <div className="p-5 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <Send className="w-5 h-5 text-blue-600" />
+          <h2 className="text-lg font-semibold text-slate-900">Gửi thông báo</h2>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={markAllAsRead} disabled={unreadCount === 0}>
-            <CheckCheck className="w-4 h-4 mr-2" />
-            Mark All Read
-          </Button>
-          <Button variant="outline">
-            <Settings className="w-4 h-4 mr-2" />
-            Settings
-          </Button>
-        </div>
+        <p className="text-sm text-slate-500 mt-1">Gửi thông báo đến tất cả hoặc một số tenant</p>
       </div>
+      <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        {result && (
+          <div
+            className={`p-3 rounded-lg text-sm flex items-center gap-2 ${
+              result.type === 'success'
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
+          >
+            {result.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />
+            ) : (
+              <XCircle className="w-4 h-4 flex-shrink-0" />
+            )}
+            {result.message}
+          </div>
+        )}
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <div className="flex items-center gap-4">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === 'all' 
-                  ? 'bg-slate-900 text-white' 
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              All ({notifications.length})
-            </button>
-            <button
-              onClick={() => setFilter('unread')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === 'unread' 
-                  ? 'bg-slate-900 text-white' 
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Unread ({unreadCount})
-            </button>
+        {/* Title */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Tiêu đề <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Nhập tiêu đề thông báo..."
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            required
+          />
+        </div>
+
+        {/* Message */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Nội dung <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Nhập nội dung thông báo..."
+            rows={4}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            required
+          />
+        </div>
+
+        {/* Priority */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Mức độ ưu tiên</label>
+          <div className="flex gap-2">
+            {PRIORITIES.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => setPriority(p.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                  priority === p.value
+                    ? `${p.color} border-current`
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
 
-      {/* Notifications List */}
-      <div className="space-y-3">
-        {filteredNotifications.map((notification) => {
-          const config = typeConfig[notification.type];
-          const Icon = config.icon;
-          
-          return (
-            <div
-              key={notification.id}
-              className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-all ${
-                notification.read ? 'border-slate-200' : `${config.border} ${config.bg}`
+        {/* Target */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Đối tượng nhận</label>
+          <div className="flex gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="target"
+                checked={target === 'all'}
+                onChange={() => setTarget('all')}
+                className="text-blue-600"
+              />
+              <Users className="w-4 h-4 text-slate-500" />
+              <span className="text-sm text-slate-700">Tất cả người dùng</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="target"
+                checked={target === 'selected'}
+                onChange={() => setTarget('selected')}
+                className="text-blue-600"
+              />
+              <Building2 className="w-4 h-4 text-slate-500" />
+              <span className="text-sm text-slate-700">Chọn tenant</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Tenant selector */}
+        {target === 'selected' && (
+          <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
+            {loadingTenants ? (
+              <div className="p-4 text-center text-sm text-slate-400">
+                <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                Đang tải danh sách tenant...
+              </div>
+            ) : tenants.length === 0 ? (
+              <div className="p-4 text-center text-sm text-slate-400">Không có tenant nào</div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {tenants.map((t) => (
+                  <label
+                    key={t.id}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedTenantIds.includes(t.id)}
+                      onChange={() => toggleTenant(t.id)}
+                      className="rounded text-blue-600"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{t.name}</p>
+                      <p className="text-xs text-slate-500">{t.code}</p>
+                    </div>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${
+                        t.isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {t.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            {selectedTenantIds.length > 0 && (
+              <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-xs text-slate-500">
+                Đã chọn {selectedTenantIds.length} tenant
+              </div>
+            )}
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+          disabled={sending || !title.trim() || !message.trim() || (target === 'selected' && selectedTenantIds.length === 0)}
+        >
+          {sending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Đang gửi...
+            </>
+          ) : (
+            <>
+              <Megaphone className="w-4 h-4 mr-2" />
+              Gửi thông báo
+            </>
+          )}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
+// ==================== NOTIFICATION HISTORY ====================
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Vừa xong';
+  if (mins < 60) return `${mins} phút trước`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} giờ trước`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} ngày trước`;
+  return new Date(dateStr).toLocaleDateString('vi-VN');
+}
+
+function NotificationHistory() {
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+
+  const fetchNotifications = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await notificationService.getMyNotifications(1, 50);
+      setNotifications(res.data);
+      setUnreadCount(res.unreadCount);
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  const handleMarkAsRead = async (id: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    setUnreadCount((c) => Math.max(0, c - 1));
+    try {
+      await notificationService.markAsRead(id);
+    } catch {}
+  };
+
+  const handleMarkAllAsRead = async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setUnreadCount(0);
+    try {
+      await notificationService.markAllAsRead();
+    } catch {}
+  };
+
+  const handleDelete = async (id: string) => {
+    const n = notifications.find((x) => x.id === id);
+    setNotifications((prev) => prev.filter((x) => x.id !== id));
+    if (n && !n.isRead) setUnreadCount((c) => Math.max(0, c - 1));
+    try {
+      await notificationService.deleteNotification(id);
+    } catch {}
+  };
+
+  const handleDeleteAllRead = async () => {
+    setNotifications((prev) => prev.filter((n) => !n.isRead));
+    try {
+      await notificationService.deleteAllRead();
+    } catch {}
+  };
+
+  const filtered = filter === 'unread' ? notifications.filter((n) => !n.isRead) : notifications;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+      <div className="p-5 border-b border-slate-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell className="w-5 h-5 text-slate-600" />
+            <h2 className="text-lg font-semibold text-slate-900">Thông báo của tôi</h2>
+            {unreadCount > 0 && (
+              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {unreadCount}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <Button variant="outline" size="sm" onClick={handleMarkAllAsRead}>
+                <CheckCheck className="w-3.5 h-3.5 mr-1" />
+                Đọc tất cả
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={handleDeleteAllRead} className="text-red-600">
+              <Trash2 className="w-3.5 h-3.5 mr-1" />
+              Xóa đã đọc
+            </Button>
+          </div>
+        </div>
+
+        {/* Filter */}
+        <div className="flex items-center gap-2 mt-3">
+          <Filter className="w-3.5 h-3.5 text-slate-400" />
+          {(['all', 'unread'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                filter === f ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              <div className="p-5">
-                <div className="flex items-start gap-4">
-                  <div className={`p-2 rounded-lg ${config.bg}`}>
-                    <Icon className={`w-5 h-5 ${config.color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className={`font-semibold ${notification.read ? 'text-slate-700' : 'text-slate-900'}`}>
-                          {notification.title}
-                        </h3>
-                        <p className="text-sm text-slate-500 mt-1">{notification.message}</p>
-                      </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        {!notification.read && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => markAsRead(notification.id)}
-                            title="Mark as read"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </Button>
-                        )}
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => deleteNotification(notification.id)}
-                          className="text-red-600 hover:text-red-700"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
-                      <span className="flex items-center">
-                        <Clock className="w-3 h-3 mr-1" />
-                        {formatTime(notification.timestamp)}
-                      </span>
-                      <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-500">
-                        {notification.source}
-                      </span>
-                    </div>
+              {f === 'all' ? `Tất cả (${notifications.length})` : `Chưa đọc (${unreadCount})`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-h-[500px] overflow-y-auto">
+        {loading ? (
+          <div className="p-8 text-center text-sm text-slate-400">
+            <Loader2 className="w-5 h-5 animate-spin inline mr-2" />
+            Đang tải...
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-8 text-center">
+            <Bell className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm text-slate-400">Không có thông báo</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {filtered.map((n) => (
+              <div
+                key={n.id}
+                className={`px-5 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors ${
+                  !n.isRead ? 'bg-blue-50/40' : ''
+                }`}
+              >
+                <div className="mt-0.5 flex-shrink-0">
+                  {TYPE_ICON[n.type] || <Info className="w-4 h-4 text-gray-400" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm ${!n.isRead ? 'font-medium text-slate-900' : 'text-slate-700'}`}>
+                    {n.title}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[11px] text-slate-400">{timeAgo(n.createdAt)}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        PRIORITIES.find((p) => p.value === n.priority)?.color || 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {n.priority}
+                    </span>
                   </div>
                 </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {!n.isRead && (
+                    <button
+                      onClick={() => handleMarkAsRead(n.id)}
+                      className="p-1 text-slate-400 hover:text-blue-600 rounded"
+                      title="Đánh dấu đã đọc"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(n.id)}
+                    className="p-1 text-slate-400 hover:text-red-600 rounded"
+                    title="Xóa"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
-
-        {filteredNotifications.length === 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-            <Bell className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500">
-              {filter === 'unread' ? 'No unread notifications' : 'No notifications'}
-            </p>
+            ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
 
-      {/* Notification Settings Summary */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h3 className="font-semibold text-slate-900 mb-4">Notification Preferences</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="email-notify" className="rounded" defaultChecked />
-            <label htmlFor="email-notify" className="text-sm text-slate-600">Email Alerts</label>
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="push-notify" className="rounded" defaultChecked />
-            <label htmlFor="push-notify" className="text-sm text-slate-600">Push Notifications</label>
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="slack-notify" className="rounded" />
-            <label htmlFor="slack-notify" className="text-sm text-slate-600">Slack Integration</label>
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="telegram-notify" className="rounded" />
-            <label htmlFor="telegram-notify" className="text-sm text-slate-600">Telegram Bot</label>
-          </div>
-        </div>
+// ==================== MAIN PAGE ====================
+
+export default function AdminNotificationsPage() {
+  const [historyKey, setHistoryKey] = useState(0);
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Notification Center</h1>
+        <p className="text-sm text-slate-500 mt-1">Quản lý và gửi thông báo đến người dùng trong hệ thống</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SendNotificationForm onSent={() => setHistoryKey((k) => k + 1)} />
+        <NotificationHistory key={historyKey} />
       </div>
     </div>
   );

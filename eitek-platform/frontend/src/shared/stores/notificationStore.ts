@@ -79,6 +79,11 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
 
 // ==================== HOOK ====================
 
+// Module-level tracker to ensure only one WebSocket subscription exists,
+// even when multiple components call useNotifications().
+let wsSubscriberCount = 0;
+let wsHandler: ((data: AppNotification) => void) | null = null;
+
 export function useNotifications() {
   const store = useNotificationStore();
   const { subscribe, unsubscribe } = useWebSocket();
@@ -155,13 +160,21 @@ export function useNotifications() {
       fetchNotifications(1);
     }
 
-    const handler = (data: AppNotification) => {
-      store.addNotification(data);
-    };
+    // Only the first subscriber registers the WebSocket handler
+    wsSubscriberCount++;
+    if (wsSubscriberCount === 1) {
+      wsHandler = (data: AppNotification) => {
+        useNotificationStore.getState().addNotification(data);
+      };
+      subscribe('notification:new', wsHandler);
+    }
 
-    subscribe('notification:new', handler);
     return () => {
-      unsubscribe('notification:new', handler);
+      wsSubscriberCount--;
+      if (wsSubscriberCount === 0 && wsHandler) {
+        unsubscribe('notification:new', wsHandler);
+        wsHandler = null;
+      }
     };
   }, [isAuthenticated, subscribe, unsubscribe, fetchNotifications]);
 
