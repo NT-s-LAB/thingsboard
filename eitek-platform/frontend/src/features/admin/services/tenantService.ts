@@ -27,6 +27,7 @@ export interface Tenant {
   tbSettings: Record<string, any> | null;
   profileId: string | null;
   profile?: TenantProfile | null;
+  adminEmail: string | null;
   createdAt: string;
   updatedAt: string;
   usersCount: number;

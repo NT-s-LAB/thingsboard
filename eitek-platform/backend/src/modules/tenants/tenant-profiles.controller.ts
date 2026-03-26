@@ -90,6 +90,17 @@ export class TenantProfilesController {
     return this.tenantProfilesService.findDefault();
   }
 
+  @Get('commercial')
+  @Roles(UserRole.TENANT_ADMIN)
+  @ApiOperation({ summary: 'Get commercial profiles available in tenant store' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of commercial tenant profiles',
+  })
+  findAllCommercial() {
+    return this.tenantProfilesService.findAllCommercial();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a tenant profile by ID' })
   @ApiParam({ name: 'id', description: 'Profile ID' })

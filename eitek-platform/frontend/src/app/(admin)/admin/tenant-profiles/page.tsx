@@ -21,6 +21,8 @@ import {
   RefreshCw,
   FolderKanban,
   Gauge,
+  DollarSign,
+  ShoppingBag,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
@@ -66,6 +68,8 @@ function CreateProfileModal({ isOpen, onClose, onSuccess }: CreateProfileModalPr
     features: [],
     isDefault: false,
     isActive: true,
+    price: 0,
+    isCommercial: false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +102,8 @@ function CreateProfileModal({ isOpen, onClose, onSuccess }: CreateProfileModalPr
       features: [],
       isDefault: false,
       isActive: true,
+      price: 0,
+      isCommercial: false,
     });
     setError(null);
   };
@@ -233,6 +239,42 @@ function CreateProfileModal({ isOpen, onClose, onSuccess }: CreateProfileModalPr
             </div>
           </div>
 
+          {/* Pricing */}
+          <div>
+            <h3 className="text-sm font-medium text-slate-700 mb-3">Pricing</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Giá hàng tháng (0 = Miễn phí)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={formData.price ?? 0}
+                  onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                />
+                {(formData.price ?? 0) === 0 && (
+                  <p className="text-xs text-emerald-600 mt-1">✓ Gói miễn phí</p>
+                )}
+              </div>
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.isCommercial ?? false}
+                    onChange={(e) => setFormData({ ...formData, isCommercial: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-slate-700">Gói thương mại</span>
+                </label>
+              </div>
+            </div>
+            {formData.isCommercial && (
+              <p className="text-xs text-blue-600 mt-2">
+                ℹ Gói này sẽ hiển thị trong trang Add-on của tenant để họ có thể lựa chọn mua.
+              </p>
+            )}
+          </div>
+
           {/* Options */}
           <div className="flex items-center gap-6">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -306,6 +348,8 @@ function EditProfileModal({ isOpen, profile, onClose, onSuccess }: EditProfileMo
         features: profile.features,
         isDefault: profile.isDefault,
         isActive: profile.isActive,
+        price: profile.price ?? 0,
+        isCommercial: profile.isCommercial ?? false,
       });
     }
   }, [profile]);
@@ -457,6 +501,42 @@ function EditProfileModal({ isOpen, profile, onClose, onSuccess }: EditProfileMo
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Pricing */}
+          <div>
+            <h3 className="text-sm font-medium text-slate-700 mb-3">Pricing</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Giá hàng tháng (0 = Miễn phí)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={formData.price ?? 0}
+                  onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                />
+                {(formData.price ?? 0) === 0 && (
+                  <p className="text-xs text-emerald-600 mt-1">✓ Gói miễn phí</p>
+                )}
+              </div>
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.isCommercial ?? false}
+                    onChange={(e) => setFormData({ ...formData, isCommercial: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-slate-700">Gói thương mại</span>
+                </label>
+              </div>
+            </div>
+            {formData.isCommercial && (
+              <p className="text-xs text-blue-600 mt-2">
+                ℹ Gói này sẽ hiển thị trong trang Add-on của tenant để họ có thể lựa chọn mua.
+              </p>
+            )}
           </div>
 
           {/* Options */}
@@ -770,9 +850,27 @@ export default function TenantProfilesPage() {
                   )}
                 </div>
 
-                <p className="text-sm text-slate-600 mb-4 line-clamp-2">
+                <p className="text-sm text-slate-600 mb-3 line-clamp-2">
                   {profile.description || 'No description'}
                 </p>
+
+                {/* Price & Commercial Badge */}
+                <div className="flex items-center gap-2 mb-4">
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    (profile.price ?? 0) === 0
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    <DollarSign className="w-3 h-3" />
+                    {(profile.price ?? 0) === 0 ? 'Miễn phí' : `${profile.price?.toLocaleString()}đ/tháng`}
+                  </span>
+                  {profile.isCommercial && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                      <ShoppingBag className="w-3 h-3" />
+                      Thương mại
+                    </span>
+                  )}
+                </div>
 
                 {/* Limits */}
                 <div className="space-y-2 mb-4">

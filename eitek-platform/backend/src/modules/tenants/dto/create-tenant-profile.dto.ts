@@ -98,6 +98,22 @@ export class CreateTenantProfileDto {
   addonEligible?: boolean;
 
   @ApiPropertyOptional({
+    description: 'Monthly price (0 = free)',
+    default: 0,
+  })
+  @IsOptional()
+  @Min(0)
+  price?: number;
+
+  @ApiPropertyOptional({
+    description: 'Show in tenant add-on store as a commercial plan',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isCommercial?: boolean;
+
+  @ApiPropertyOptional({
     description: 'Is profile active',
     default: true,
   })

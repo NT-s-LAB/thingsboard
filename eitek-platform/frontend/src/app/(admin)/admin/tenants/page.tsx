@@ -10,7 +10,6 @@ import {
   Trash2,
   Users,
   Server,
-  Eye,
   CheckCircle,
   XCircle,
   Loader2,
@@ -653,6 +652,17 @@ export default function TenantsPage() {
     setShowDeleteModal(true);
   };
 
+  const handleToggleActive = async (tenant: Tenant) => {
+    const action = tenant.isActive ? 'vô hiệu hóa' : 'kích hoạt';
+    if (!confirm(`Bạn có chắc muốn ${action} tenant "${tenant.name}"?`)) return;
+    try {
+      await tenantService.updateTenant(tenant.id, { isActive: !tenant.isActive });
+      fetchTenants();
+    } catch (err: any) {
+      alert(err.message || `Không thể ${action} tenant`);
+    }
+  };
+
   const handleSuccess = () => {
     fetchTenants();
   };
@@ -753,41 +763,59 @@ export default function TenantsPage() {
 
       {/* Tenants Table */}
       {!isLoading && !error && tenants.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <table className="w-full">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+          <table className="w-full min-w-[900px]">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Tenant</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Code</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Status</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Users</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Devices</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Created</th>
-                <th className="text-right px-6 py-4 text-sm font-semibold text-slate-600">Actions</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-slate-600">Tenant</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-slate-600">Email</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-slate-600">Code</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-slate-600">Profile</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-slate-600">Status</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-slate-600">Users</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-slate-600">Devices</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-slate-600">Created</th>
+                <th className="text-right px-4 py-3 text-sm font-semibold text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {tenants.map((tenant) => (
-                <tr key={tenant.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Building2 className="w-5 h-5 text-blue-600" />
+                <tr key={tenant.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => handleView(tenant)}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                        <Building2 className="w-4 h-4 text-blue-600" />
                       </div>
-                      <div>
-                        <p className="font-medium text-slate-900">{tenant.name}</p>
-                        <p className="text-sm text-slate-500 truncate max-w-xs">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{tenant.name}</p>
+                        <p className="text-xs text-slate-500 truncate">
                           {tenant.description || '-'}
                         </p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <code className="px-2 py-1 bg-slate-100 rounded text-sm text-slate-700">
+                  <td className="px-4 py-3">
+                    {tenant.adminEmail ? (
+                      <span className="text-sm text-slate-600 truncate block max-w-[200px]">{tenant.adminEmail}</span>
+                    ) : (
+                      <span className="text-sm text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <code className="px-1.5 py-0.5 bg-slate-100 rounded text-xs text-slate-700">
                       {tenant.code}
                     </code>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
+                    {tenant.profile ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                        {tenant.profile.name}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                       tenant.isActive 
                         ? 'bg-green-100 text-green-700' 
@@ -800,30 +828,31 @@ export default function TenantsPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center text-slate-600">
-                      <Users className="w-4 h-4 mr-1.5 text-slate-400" />
+                  <td className="px-4 py-3">
+                    <div className="flex items-center text-sm text-slate-600">
+                      <Users className="w-3.5 h-3.5 mr-1 text-slate-400" />
                       {tenant.usersCount}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center text-slate-600">
-                      <Server className="w-4 h-4 mr-1.5 text-slate-400" />
+                  <td className="px-4 py-3">
+                    <div className="flex items-center text-sm text-slate-600">
+                      <Server className="w-3.5 h-3.5 mr-1 text-slate-400" />
                       {tenant.devicesCount}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
+                  <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">
                     {new Date(tenant.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-end space-x-1">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end space-x-1" onClick={(e) => e.stopPropagation()}>
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        title="View Details"
-                        onClick={() => handleView(tenant)}
+                        title={tenant.isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
+                        className={tenant.isActive ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}
+                        onClick={() => handleToggleActive(tenant)}
                       >
-                        <Eye className="w-4 h-4" />
+                        {tenant.isActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
                       </Button>
                       <Button 
                         variant="ghost" 

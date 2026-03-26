@@ -68,6 +68,13 @@ export class TenantsService {
       this.prisma.tenant.findMany({
         where,
         include: {
+          profile: { select: { id: true, name: true } },
+          users: {
+            where: { role: 'TENANT_ADMIN' },
+            select: { email: true },
+            take: 1,
+            orderBy: { createdAt: 'asc' },
+          },
           _count: {
             select: { users: true, projects: true },
           },
@@ -96,6 +103,8 @@ export class TenantsService {
 
         return {
           ...tenant,
+          users: undefined,
+          adminEmail: tenant.users?.[0]?.email || null,
           usersCount: (tenant as any)._count?.users || 0,
           projectsCount: (tenant as any)._count?.projects || 0,
           devicesCount,

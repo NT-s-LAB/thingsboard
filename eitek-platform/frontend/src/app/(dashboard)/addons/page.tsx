@@ -14,7 +14,6 @@ import {
   Zap,
   X,
   RefreshCw,
-  Lock,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Card, CardContent } from '@/shared/components/ui/Card';
@@ -22,24 +21,26 @@ import {
   addonCatalogService,
   tenantAddonService,
 } from '@/features/addons/services/addonService';
+import { tenantProfileService, type TenantProfile } from '@/features/admin/services/tenantProfileService';
 import type { AddonCatalog, TenantQuotaInfo } from '@/shared/types';
+import { Crown, Users, Monitor, FolderOpen, LayoutDashboard, Star } from 'lucide-react';
 
 // ==================== CONSTANTS ====================
 
-const RESOURCE_LABELS: Record<string, { label: string; icon: string }> = {
-  DEVICES: { label: 'Thiết bị', icon: '📟' },
-  USERS: { label: 'Users', icon: '👥' },
-  PROJECTS: { label: 'Dự án', icon: '📁' },
-  DASHBOARDS: { label: 'Dashboard', icon: '📊' },
-  API_CALLS: { label: 'API Calls', icon: '⚡' },
-  STORAGE: { label: 'Storage', icon: '💾' },
+const RESOURCE_LABELS: Record<string, { label: string; icon: React.ReactNode }> = {
+  DEVICES: { label: 'Thiết bị', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 0 0 2.25-2.25V6.75a2.25 2.25 0 0 0-2.25-2.25H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25Zm.75-12h9v9h-9v-9Z" /></svg> },
+  USERS: { label: 'Users', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg> },
+  PROJECTS: { label: 'Dự án', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v8.25m19.5 0v.75A2.25 2.25 0 0 1 19.5 17.25h-15A2.25 2.25 0 0 1 2.25 15.75v-.75m19.5 0h-19.5" /></svg> },
+  DASHBOARDS: { label: 'Dashboard', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg> },
+  API_CALLS: { label: 'API Calls', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" /></svg> },
+  STORAGE: { label: 'Storage', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" /></svg> },
 };
 
 // ==================== USAGE BAR ====================
 
 function UsageBar({ label, icon, used, limit, addon }: {
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   used: number;
   limit: number | null;
   addon: number;
@@ -50,8 +51,8 @@ function UsageBar({ label, icon, used, limit, addon }: {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="flex items-center gap-1 text-slate-500 font-medium">
-          <span>{icon}</span> {label}
+        <span className="flex items-center gap-1.5 text-slate-500 font-medium">
+          <span className="w-3.5 h-3.5 flex items-center justify-center">{icon}</span> {label}
         </span>
         <span className="font-semibold text-slate-700 tabular-nums">
           {used} / {limit != null ? limit : '∞'}
@@ -227,6 +228,7 @@ function PurchaseModal({ isOpen, addon, onClose, onSuccess }: PurchaseModalProps
 export default function AddonsStorePage() {
   const [quota, setQuota] = useState<TenantQuotaInfo | null>(null);
   const [catalog, setCatalog] = useState<AddonCatalog[]>([]);
+  const [commercialProfiles, setCommercialProfiles] = useState<TenantProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -240,12 +242,14 @@ export default function AddonsStorePage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [quotaRes, catalogRes] = await Promise.all([
+      const [quotaRes, catalogRes, profilesRes] = await Promise.all([
         tenantAddonService.getMyQuota(),
         addonCatalogService.getActive(),
+        tenantProfileService.getCommercialProfiles(),
       ]);
       setQuota(quotaRes);
       setCatalog(catalogRes);
+      setCommercialProfiles(profilesRes);
     } catch (err: any) {
       setError(err.message || 'Failed to load data');
     } finally {
@@ -297,7 +301,6 @@ export default function AddonsStorePage() {
     );
   }
 
-  const isEligible = quota?.addonEligible ?? false;
   const myAddons = quota?.addons ?? [];
 
   // Addons not yet purchased
@@ -336,10 +339,10 @@ export default function AddonsStorePage() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <UsageBar label="Users" icon="👥" used={quota.usage.users} limit={quota.effectiveLimits.maxUsers} addon={quota.addonExtras.users} />
-              <UsageBar label="Thiết bị" icon="📟" used={quota.usage.devices} limit={quota.effectiveLimits.maxDevices} addon={quota.addonExtras.devices} />
-              <UsageBar label="Dự án" icon="📁" used={quota.usage.projects} limit={quota.effectiveLimits.maxProjects} addon={quota.addonExtras.projects} />
-              <UsageBar label="Dashboard" icon="📊" used={quota.usage.dashboards} limit={quota.effectiveLimits.maxDashboards} addon={quota.addonExtras.dashboards} />
+              <UsageBar label="Users" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>} used={quota.usage.users} limit={quota.effectiveLimits.maxUsers} addon={quota.addonExtras.users} />
+              <UsageBar label="Thiết bị" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 0 0 2.25-2.25V6.75a2.25 2.25 0 0 0-2.25-2.25H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25Zm.75-12h9v9h-9v-9Z" /></svg>} used={quota.usage.devices} limit={quota.effectiveLimits.maxDevices} addon={quota.addonExtras.devices} />
+              <UsageBar label="Dự án" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v8.25m19.5 0v.75A2.25 2.25 0 0 1 19.5 17.25h-15A2.25 2.25 0 0 1 2.25 15.75v-.75m19.5 0h-19.5" /></svg>} used={quota.usage.projects} limit={quota.effectiveLimits.maxProjects} addon={quota.addonExtras.projects} />
+              <UsageBar label="Dashboard" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>} used={quota.usage.dashboards} limit={quota.effectiveLimits.maxDashboards} addon={quota.addonExtras.dashboards} />
             </div>
             {(quota.features.length > 0 || quota.addonFeatures.length > 0) && (
               <div className="flex flex-wrap gap-1.5 pt-1">
@@ -359,15 +362,123 @@ export default function AddonsStorePage() {
         </Card>
       )}
 
-      {/* Not eligible warning */}
-      {!isEligible && (
-        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800">
-          <Lock className="w-5 h-5 shrink-0" />
-          <div>
-            <p className="font-medium">Gói hiện tại không hỗ trợ add-on</p>
-            <p className="text-sm text-amber-700 mt-0.5">
-              Vui lòng nâng cấp gói dịch vụ để có thể mua thêm tài nguyên và tính năng.
-            </p>
+      {/* Commercial Profiles / Upgrade Plans */}
+      {commercialProfiles.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Crown className="w-5 h-5 text-amber-500" />
+            <h2 className="text-lg font-semibold text-slate-900">Gói dịch vụ</h2>
+          </div>
+          <p className="text-sm text-slate-500 mb-4">
+            Nâng cấp gói dịch vụ để mở rộng tài nguyên và tính năng cho tổ chức của bạn.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {commercialProfiles.map((profile) => {
+              const isCurrent = quota?.profileName === profile.name;
+              const isFree = profile.price === 0;
+
+              return (
+                <div
+                  key={profile.id}
+                  className={`relative bg-white rounded-xl border-2 p-5 transition-all ${
+                    isCurrent
+                      ? 'border-blue-400 shadow-md ring-1 ring-blue-200'
+                      : 'border-slate-200 hover:border-amber-300 hover:shadow-sm'
+                  }`}
+                >
+                  {isCurrent && (
+                    <span className="absolute -top-2.5 left-4 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white">
+                      <Star className="w-3 h-3" /> Gói hiện tại
+                    </span>
+                  )}
+
+                  {/* Header */}
+                  <div className="mb-3 pt-1">
+                    <h3 className="font-bold text-slate-900 text-base">{profile.name}</h3>
+                    {profile.description && (
+                      <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{profile.description}</p>
+                    )}
+                  </div>
+
+                  {/* Price */}
+                  <div className="mb-4">
+                    {isFree ? (
+                      <span className="text-2xl font-bold text-emerald-600">Miễn phí</span>
+                    ) : (
+                      <div>
+                        <span className="text-2xl font-bold text-slate-900">
+                          {new Intl.NumberFormat('vi-VN').format(profile.price)}
+                        </span>
+                        <span className="text-sm text-slate-500 ml-1">đ/tháng</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Limits */}
+                  <div className="space-y-2 text-sm text-slate-600 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-slate-400" />
+                      <span>{profile.maxUsers} Users</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Monitor className="w-4 h-4 text-slate-400" />
+                      <span>{profile.maxDevices} Thiết bị</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-slate-400" />
+                      <span>{profile.maxProjects} Dự án</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <LayoutDashboard className="w-4 h-4 text-slate-400" />
+                      <span>{profile.maxDashboards} Dashboard</span>
+                    </div>
+                    {profile.maxApiCalls != null && (
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-slate-400" />
+                        <span>{profile.maxApiCalls.toLocaleString()} API Calls</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Features */}
+                  {profile.features.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {profile.features.map((f) => (
+                        <span
+                          key={f}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700"
+                        >
+                          <CheckCircle className="w-3 h-3" /> {f}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Addon eligible badge */}
+                  {profile.addonEligible && (
+                    <p className="text-xs text-blue-600 mb-3">
+                      <Package className="w-3 h-3 inline mr-1" />
+                      Hỗ trợ mua thêm Add-on
+                    </p>
+                  )}
+
+                  {/* CTA */}
+                  {isCurrent ? (
+                    <Button variant="outline" size="sm" className="w-full" disabled>
+                      Đang sử dụng
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+                      onClick={() => window.open(`mailto:support@eitek.vn?subject=Nâng cấp gói ${profile.name}`, '_blank')}
+                    >
+                      Liên hệ nâng cấp
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -414,8 +525,9 @@ export default function AddonsStorePage() {
                       </p>
                     )}
                     {!isQuota && ta.addon.featureFlag && (
-                      <p className="text-purple-600">
-                        ✓ <code className="bg-purple-50 px-1 rounded text-xs">{ta.addon.featureFlag}</code>
+                      <p className="text-purple-600 flex items-center gap-1">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                        <code className="bg-purple-50 px-1 rounded text-xs">{ta.addon.featureFlag}</code>
                       </p>
                     )}
                     <p className="text-emerald-600 font-medium">
@@ -430,14 +542,10 @@ export default function AddonsStorePage() {
       )}
 
       {/* Available Add-ons Store */}
-      {isEligible && (
+      {availableAddons.length > 0 ? (
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-3">
-            {availableAddons.length > 0 ? 'Mua thêm' : 'Tất cả add-on đã được kích hoạt'}
-          </h2>
-
-          {availableAddons.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <h2 className="text-lg font-semibold text-slate-900 mb-3">Mua thêm</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {availableAddons.map((addon) => {
                 const isQuota = addon.type === 'QUOTA';
                 const resource = addon.resourceType ? RESOURCE_LABELS[addon.resourceType] : null;
@@ -479,15 +587,17 @@ export default function AddonsStorePage() {
                   </div>
                 );
               })}
-            </div>
-          ) : myAddons.length > 0 ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center">
-              <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-              <p className="text-emerald-700 font-medium">Bạn đã kích hoạt tất cả add-on có sẵn!</p>
-            </div>
-          ) : null}
+          </div>
         </div>
-      )}
+      ) : myAddons.length > 0 ? (
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900 mb-3">Mua thêm</h2>
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center">
+            <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+            <p className="text-emerald-700 font-medium">Bạn đã kích hoạt tất cả add-on có sẵn!</p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Empty state if nothing at all */}
       {catalog.length === 0 && myAddons.length === 0 && (

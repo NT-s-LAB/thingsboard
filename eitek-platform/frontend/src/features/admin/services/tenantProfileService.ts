@@ -13,6 +13,8 @@ export interface TenantProfile {
   maxApiCalls: number | null;
   features: string[];
   addonEligible: boolean;
+  price: number;
+  isCommercial: boolean;
   isDefault: boolean;
   isActive: boolean;
   createdAt: string;
@@ -30,6 +32,8 @@ export interface CreateTenantProfileDto {
   maxApiCalls?: number | undefined;
   features?: string[];
   addonEligible?: boolean;
+  price?: number;
+  isCommercial?: boolean;
   isDefault?: boolean;
   isActive?: boolean;
 }
@@ -44,6 +48,8 @@ export interface UpdateTenantProfileDto {
   maxApiCalls?: number | undefined;
   features?: string[];
   addonEligible?: boolean;
+  price?: number;
+  isCommercial?: boolean;
   isDefault?: boolean;
   isActive?: boolean;
 }
@@ -155,6 +161,13 @@ class TenantProfileService {
    */
   async duplicateProfile(id: string): Promise<TenantProfileResponse> {
     return apiClient.post<TenantProfileResponse>(`${this.baseUrl}/${id}/duplicate`, {});
+  }
+
+  /**
+   * Get commercial profiles available in tenant store
+   */
+  async getCommercialProfiles(): Promise<TenantProfile[]> {
+    return apiClient.get<TenantProfile[]>(`${this.baseUrl}/commercial`);
   }
 }
 

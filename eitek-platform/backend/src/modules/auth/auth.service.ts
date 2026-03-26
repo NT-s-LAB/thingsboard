@@ -47,6 +47,13 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
+    // Check tenant is active
+    if (user.tenant && !user.tenant.isActive) {
+      throw new UnauthorizedException(
+        'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên hoặc gửi mail đến admin@eitek.vn',
+      );
+    }
+
     // Check activation
     if (!user.isActivated) {
       throw new UnauthorizedException('Tài khoản chưa được kích hoạt. Vui lòng kiểm tra email để kích hoạt.');
@@ -355,10 +362,14 @@ export class AuthService {
    * Validate user by ID (for JWT strategy)
    */
   async validateUser(userId: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId, isActive: true },
       include: { tenant: { include: { profile: true } } },
     });
+    if (user && user.tenant && !user.tenant.isActive) {
+      return null;
+    }
+    return user;
   }
 
   /**

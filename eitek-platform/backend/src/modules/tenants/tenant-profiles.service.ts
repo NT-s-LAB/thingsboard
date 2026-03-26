@@ -112,6 +112,16 @@ export class TenantProfilesService {
     });
   }
 
+  /**
+   * Get all commercial profiles visible in tenant addon store
+   */
+  async findAllCommercial(): Promise<TenantProfile[]> {
+    return this.prisma.tenantProfile.findMany({
+      where: { isActive: true, isCommercial: true },
+      orderBy: { price: 'asc' },
+    });
+  }
+
   async findOne(id: string): Promise<TenantProfileWithCounts> {
     const profile = await this.prisma.tenantProfile.findUnique({
       where: { id },

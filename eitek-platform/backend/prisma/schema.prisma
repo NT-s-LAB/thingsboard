@@ -95,6 +95,8 @@ model TenantProfile {
   maxApiCalls   Int?     // null = unlimited
   features      String[] @default([])
   addonEligible Boolean  @default(false) // Starter = false → force upgrade
+  price         Float    @default(0)     // 0 = free
+  isCommercial  Boolean  @default(false) // true = visible in tenant add-on store
   isDefault     Boolean  @default(false)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())

@@ -82,13 +82,6 @@ export class TenantAddonService {
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    // Check addon eligibility
-    if (!tenant.profile?.addonEligible) {
-      throw new ForbiddenException(
-        'Gói hiện tại không hỗ trợ mua thêm add-on. Vui lòng nâng gói.',
-      );
-    }
-
     const addon = await this.prisma.addonCatalog.findUnique({
       where: { id: dto.addonId },
     });
